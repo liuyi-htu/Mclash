@@ -16,7 +16,7 @@ void showTopSnackBar(BuildContext context, SnackBar snackBar) {
   late final OverlayEntry entry;
   entry = OverlayEntry(
     builder: (overlayContext) => Positioned(
-      top: MediaQuery.paddingOf(overlayContext).top + 12,
+      top: MediaQuery.paddingOf(overlayContext).top + kToolbarHeight + 8,
       left: 16,
       right: 16,
       child: Material(
