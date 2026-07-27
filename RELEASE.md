@@ -7,14 +7,14 @@ current version is persisted to `mclash/pubspec.yaml` and the manual build
 form's pre-filled version. Equal, lower, and failed builds do not change the
 stored version.
 
-## Test Pre-releases
+## Pre-releases
 
 - Use the pre-filled version or enter a higher version such as `1.2.0+5`.
-- Use `build_channel=test`.
-- The workflow publishes signed test builds as GitHub Pre-releases (内测版)
-  using the fixed `mclash-test` tag.
-- The test tag is overwritten by newer signed test builds.
-- Unsigned test builds only upload Actions artifacts.
+- Use `build_channel=prerelease`.
+- The workflow publishes signed builds as GitHub Pre-releases (内测版) using
+  the fixed `mclash-prerelease` tag.
+- The pre-release tag is overwritten by newer signed pre-release builds.
+- Unsigned pre-release builds only upload Actions artifacts.
 
 ## Official Releases
 

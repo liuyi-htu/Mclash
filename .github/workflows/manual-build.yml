@@ -10,10 +10,10 @@ on:
       build_channel:
         description: "Build channel"
         required: true
-        default: "test"
+        default: "prerelease"
         type: choice
         options:
-          - "test"
+          - "prerelease"
           - "release"
 
 permissions:
@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          case "${BUILD_CHANNEL}" in test|release) ;; *) exit 1 ;; esac
+          case "${BUILD_CHANNEL}" in prerelease|release) ;; *) exit 1 ;; esac
           source_version="$(sed -n -E 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' mclash/pubspec.yaml)"
           [[ "${source_version}" =~ ^[0-9]+[.][0-9]+[.]0[+][0-9]+$ ]] || {
             echo "mclash/pubspec.yaml contains an invalid version: ${source_version}" >&2
@@ -81,9 +81,9 @@ jobs:
           }
           app_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${BASH_REMATCH[3]:-}"
 
-          if [[ "${BUILD_CHANNEL}" == "test" ]]; then
-            tag="mclash-test"
-            version_label="test"
+          if [[ "${BUILD_CHANNEL}" == "prerelease" ]]; then
+            tag="mclash-prerelease"
+            version_label="prerelease"
             title="Mclash for Android 内测版"
           else
             version_label="v${app_version}"
@@ -649,10 +649,10 @@ jobs:
           set -Eeuo pipefail
           rm -f "${RUNNER_TEMP}/release.jks" mclash/android/key.properties
 
-  publish-test:
-    name: Publish Test Pre-release
+  publish-prerelease:
+    name: Publish Pre-release
     needs: build
-    if: needs.build.outputs.build_channel == 'test' && needs.build.outputs.signing_mode == 'signed'
+    if: needs.build.outputs.build_channel == 'prerelease' && needs.build.outputs.signing_mode == 'signed'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -665,7 +665,7 @@ jobs:
           name: ${{ needs.build.outputs.artifact_name }}
           path: release-apks
 
-      - name: Publish test pre-release
+      - name: Publish pre-release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -677,7 +677,7 @@ jobs:
           SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
         run: |
           set -Eeuo pipefail
-          tag="mclash-test"
+          tag="mclash-prerelease"
           title="Mclash for Android 内测版"
           notes="$(mktemp)"
           {

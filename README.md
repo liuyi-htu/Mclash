@@ -144,7 +144,7 @@ The workflow uses:
 - a repository-scoped write deploy key only for synchronizing the app version.
 
 The `version` input is pre-filled with the current checked-in app version. Enter
-a higher Flutter version when needed, then choose `build_channel=test` or
+a higher Flutter version when needed, then choose `build_channel=prerelease` or
 `build_channel=release`. Architecture, ABI splitting, Hev handling, signing
 detection, and publishing behavior are fixed internally. Builds target ARM64
 (`arm64-v8a`) only; ARMv7 APKs are not generated.
@@ -155,11 +155,11 @@ form's pre-filled version. Equal or lower build versions never downgrade the
 repository, and failed builds do not change it. The deploy key private half is
 stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
-Test builds always use the fixed `mclash-test` tag and are published as GitHub
-Pre-releases (内测版). Signed test builds update that same release and overwrite
-old APK files plus `SHA256SUMS`; unsigned test builds only upload an Actions
-artifact and do not create a public release. `mclash-test` always points at the
-newest signed test build, and test APKs are not guaranteed to be stable.
+Pre-release builds always use the fixed `mclash-prerelease` tag. Signed
+pre-release builds update that same GitHub Pre-release (内测版) and overwrite old
+APK files plus `SHA256SUMS`; unsigned pre-release builds only upload an Actions
+artifact and do not create a public release. `mclash-prerelease` always points
+at the newest signed pre-release build, which is not guaranteed to be stable.
 
 Official release tags are derived automatically from the version input. For
 example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates
@@ -167,7 +167,7 @@ example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates
 an existing tag, and only signed official builds can create a GitHub Release.
 
 Artifacts are named by channel and signing state, for example
-`Mclash-for-Android-test-signed` or `Mclash-for-Android-v1.0-signed`.
+`Mclash-for-Android-prerelease-signed` or `Mclash-for-Android-v1.0-signed`.
 Release APK filenames include the channel/version, ABI, and signing state.
 
 Every build includes `SHA256SUMS` generated from the final APK filenames.
