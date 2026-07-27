@@ -150,7 +150,7 @@ jobs:
             echo "VERSION_LABEL=${version_label}"
           } >> "${GITHUB_ENV}"
 
-      - name: Require pre-release version newer than latest official release
+      - name: Require next version after latest official release
         if: inputs.build_channel == 'prerelease'
         shell: bash
         env:
@@ -177,16 +177,13 @@ jobs:
 
           latest_major="${latest%%.*}"
           latest_minor="${latest#*.}"
+          expected_major="${latest_major}"
+          expected_minor="$((latest_minor + 1))"
           if ((
-            requested_major < latest_major ||
-            (
-              requested_major == latest_major &&
-              requested_minor <= latest_minor
-            )
+            requested_major != expected_major ||
+            requested_minor != expected_minor
           )); then
-            echo \
-              "Pre-release ${requested} must be newer than official v${latest}." \
-              >&2
+            echo "Pre-release ${requested} must use v${expected_major}.${expected_minor}, the next version after official v${latest}." >&2
             exit 1
           fi
 

@@ -159,8 +159,9 @@ Pre-release builds use the same version tag as the future official release.
 For example, `1.8.0+14` uses `mclash-v1.8`. Signed builds of the same pre-release
 version update that GitHub Pre-release (预发布版) and overwrite its APK files plus
 `SHA256SUMS`; unsigned builds only upload an Actions artifact. The pre-release
-major/minor version must be newer than the latest official release. For example,
-after official `v1.7`, use `1.8.0+14` or newer.
+major/minor version is based only on the latest official release. For example,
+after official `v1.7`, every pre-release must use `v1.8`; build numbers such as
+`1.8.0+15` and `1.8.0+16` update the same `mclash-v1.8` Release.
 
 Official release tags are derived automatically from the version input. For
 example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates

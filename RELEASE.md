@@ -15,8 +15,9 @@ stored version.
   the future official version tag, such as `mclash-v1.8`.
 - The same version tag is updated by newer signed pre-release builds.
 - Unsigned pre-release builds only upload Actions artifacts.
-- The pre-release major/minor version must be newer than the latest official
-  release. For example, after official `v1.7`, use `1.8.0+14` or newer.
+- The pre-release major/minor version is based only on the latest official
+  release. After official `v1.7`, every pre-release uses `v1.8`; build numbers
+  such as `1.8.0+15` and `1.8.0+16` overwrite the same `mclash-v1.8` Release.
 
 ## Official Releases
 
