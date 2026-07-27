@@ -156,10 +156,12 @@ repository, and failed builds do not change it. The deploy key private half is
 stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
 Pre-release builds always use the fixed `mclash-prerelease` tag. Signed
-pre-release builds update that same GitHub Pre-release (内测版) and overwrite old
+pre-release builds update that same GitHub Pre-release (预发布版) and overwrite old
 APK files plus `SHA256SUMS`; unsigned pre-release builds only upload an Actions
 artifact and do not create a public release. `mclash-prerelease` always points
 at the newest signed pre-release build, which is not guaranteed to be stable.
+The pre-release major/minor version must be newer than the latest official
+release. For example, after official `v1.7`, use `1.8.0+14` or newer.
 
 Official release tags are derived automatically from the version input. For
 example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates

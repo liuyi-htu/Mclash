@@ -84,7 +84,7 @@ jobs:
           if [[ "${BUILD_CHANNEL}" == "prerelease" ]]; then
             tag="mclash-prerelease"
             version_label="prerelease"
-            title="Mclash for Android 内测版"
+            title="Mclash for Android 预发布版"
           else
             version_label="v${app_version}"
             tag="mclash-${version_label}"
@@ -110,6 +110,46 @@ jobs:
             echo "RELEASE_TITLE=${title}"
             echo "VERSION_LABEL=${version_label}"
           } >> "${GITHUB_ENV}"
+
+      - name: Require pre-release version newer than latest official release
+        if: inputs.build_channel == 'prerelease'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          requested="$(
+            sed -n -E 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' \
+              mclash/pubspec.yaml
+          )"
+          [[ "${requested}" =~ ^([0-9]+)[.]([0-9]+)[.]0[+][0-9]+$ ]]
+          requested_major="${BASH_REMATCH[1]}"
+          requested_minor="${BASH_REMATCH[2]}"
+
+          latest="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              sed -n -E 's/^mclash-v([0-9]+)[.]([0-9]+)$/\1.\2/p' |
+              sort -t. -k1,1n -k2,2n |
+              tail -n1
+          )"
+          [[ -n "${latest}" ]] || exit 0
+
+          latest_major="${latest%%.*}"
+          latest_minor="${latest#*.}"
+          if ((
+            requested_major < latest_major ||
+            (
+              requested_major == latest_major &&
+              requested_minor <= latest_minor
+            )
+          )); then
+            echo \
+              "Pre-release ${requested} must be newer than official v${latest}." \
+              >&2
+            exit 1
+          fi
 
       - name: Resolve latest stable mihomo
         id: mihomo
@@ -678,10 +718,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           tag="mclash-prerelease"
-          title="Mclash for Android 内测版"
+          title="Mclash for Android 预发布版"
           notes="$(mktemp)"
           {
-            echo "Mclash 内测版。新的签名内测构建会覆盖此标签中的旧文件。"
+            echo "Mclash 预发布版。新的签名预发布构建会覆盖此标签中的旧文件。"
             echo
             echo "- Build time: ${BUILD_TIME}"
             echo "- Git commit: ${GITHUB_SHA}"

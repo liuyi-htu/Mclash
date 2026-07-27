@@ -11,10 +11,12 @@ stored version.
 
 - Use the pre-filled version or enter a higher version such as `1.2.0+5`.
 - Use `build_channel=prerelease`.
-- The workflow publishes signed builds as GitHub Pre-releases (内测版) using
+- The workflow publishes signed builds as GitHub Pre-releases (预发布版) using
   the fixed `mclash-prerelease` tag.
 - The pre-release tag is overwritten by newer signed pre-release builds.
 - Unsigned pre-release builds only upload Actions artifacts.
+- The pre-release major/minor version must be newer than the latest official
+  release. For example, after official `v1.7`, use `1.8.0+14` or newer.
 
 ## Official Releases
 
