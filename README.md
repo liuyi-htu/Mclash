@@ -150,9 +150,11 @@ and publishing behavior are fixed internally. Builds target ARM64
 (`arm64-v8a`) only; ARMv7 APKs are not generated.
 
 After a successful build from `main`, the automatically calculated version is
-written back to `mclash/pubspec.yaml`. Each pre-release build increments the
-Flutter build number by one. Failed builds do not change it. The deploy key
-private half is stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
+written back to `mclash/pubspec.yaml`. Repeated builds for the same pre-release
+keep the same Flutter build number. The build number increases once only when
+the latest official release advances and starts a new pre-release version.
+Failed builds do not change it. The deploy key private half is stored only in
+the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
 Pre-release builds use the same version tag as the future official release.
 For example, `1.8.0+14` uses `mclash-v1.8`. Signed builds of the same pre-release
@@ -160,7 +162,8 @@ version update that GitHub Pre-release (预发布版) and overwrite its APK file
 `SHA256SUMS`; unsigned builds only upload an Actions artifact. The pre-release
 major/minor version is calculated only from the latest official release. For
 example, after official `v1.7`, every pre-release automatically uses `v1.8`;
-successive build numbers update the same `mclash-v1.8` Release.
+successive builds keep the same app version and update the same
+`mclash-v1.8` Release.
 
 Choosing the `release` channel calculates the same next-version tag from the
 latest official release. It does not rebuild or replace any files; it only

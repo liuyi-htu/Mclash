@@ -112,11 +112,13 @@ jobs:
           set -Eeuo pipefail
           [[ "${BUILD_CHANNEL}" == "prerelease" ]]
           source_version="$(sed -n -E 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' mclash/pubspec.yaml)"
-          [[ "${source_version}" =~ ^[0-9]+[.][0-9]+[.]0[+]([0-9]+)$ ]] || {
+          [[ "${source_version}" =~ ^([0-9]+)[.]([0-9]+)[.]0[+]([0-9]+)$ ]] || {
             echo "mclash/pubspec.yaml contains an invalid version: ${source_version}" >&2
             exit 1
           }
-          next_build_number="$((BASH_REMATCH[1] + 1))"
+          source_major="${BASH_REMATCH[1]}"
+          source_minor="${BASH_REMATCH[2]}"
+          source_build_number="${BASH_REMATCH[3]}"
 
           latest="$(
             gh api --paginate \
@@ -133,7 +135,14 @@ jobs:
           latest_major="${latest%%.*}"
           latest_minor="${latest#*.}"
           app_version="${latest_major}.$((latest_minor + 1))"
-          APP_VERSION="${app_version}.0+${next_build_number}"
+          build_number="${source_build_number}"
+          if ((
+            source_major != latest_major ||
+            source_minor != latest_minor + 1
+          )); then
+            build_number="$((source_build_number + 1))"
+          fi
+          APP_VERSION="${app_version}.0+${build_number}"
 
           sed -i -E "s/^version: .*/version: ${APP_VERSION}/" mclash/pubspec.yaml
 
