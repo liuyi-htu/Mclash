@@ -892,10 +892,10 @@ class _HomePageState extends State<HomePage> {
       value: value,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: Container(
-        constraints: const BoxConstraints(minWidth: 250),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(14)),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 38,
@@ -907,12 +907,7 @@ class _HomePageState extends State<HomePage> {
               child: Icon(icon, size: 21, color: colors.onPrimaryContainer),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
       ),
