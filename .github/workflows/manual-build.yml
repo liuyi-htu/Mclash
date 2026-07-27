@@ -124,11 +124,7 @@ jobs:
           release_version_label="v${app_version}"
           tag="mclash-${release_version_label}"
           version_label="${release_version_label}"
-          if [[ "${BUILD_CHANNEL}" == "prerelease" ]]; then
-            title="Mclash for Android ${release_version_label} 预发布版"
-          else
-            title="Mclash for Android ${release_version_label}"
-          fi
+          title="Mclash for Android ${release_version_label}"
 
           build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           core_archs_key="${CORE_ARCHS//,/-}"
