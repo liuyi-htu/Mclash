@@ -437,15 +437,17 @@ class _HomePageState extends State<HomePage> {
                         ),
                         keyboardType: TextInputType.text,
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: ipv6DnsController,
-                        decoration: const InputDecoration(
-                          labelText: 'IPv6 DNS',
-                          hintText: '2606:4700:4700::1111',
+                      if (ipv6Enabled) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: ipv6DnsController,
+                          decoration: const InputDecoration(
+                            labelText: 'IPv6 DNS',
+                            hintText: '2606:4700:4700::1111',
+                          ),
+                          keyboardType: TextInputType.text,
                         ),
-                        keyboardType: TextInputType.text,
-                      ),
+                      ],
                       const SizedBox(height: 12),
                       TextField(
                         controller: mtuController,
