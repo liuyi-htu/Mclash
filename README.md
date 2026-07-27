@@ -155,22 +155,23 @@ form's pre-filled version. Equal or lower build versions never downgrade the
 repository, and failed builds do not change it. The deploy key private half is
 stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
-Pre-release builds always use the fixed `mclash-prerelease` tag. Signed
-pre-release builds update that same GitHub Pre-release (预发布版) and overwrite old
-APK files plus `SHA256SUMS`; unsigned pre-release builds only upload an Actions
-artifact and do not create a public release. `mclash-prerelease` always points
-at the newest signed pre-release build, which is not guaranteed to be stable.
-The pre-release major/minor version must be newer than the latest official
-release. For example, after official `v1.7`, use `1.8.0+14` or newer.
+Pre-release builds use the same version tag as the future official release.
+For example, `1.8.0+14` uses `mclash-v1.8`. Signed builds of the same pre-release
+version update that GitHub Pre-release (预发布版) and overwrite its APK files plus
+`SHA256SUMS`; unsigned builds only upload an Actions artifact. The pre-release
+major/minor version must be newer than the latest official release. For example,
+after official `v1.7`, use `1.8.0+14` or newer.
 
 Official release tags are derived automatically from the version input. For
 example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates
-`mclash-v1.1`. Versions must use patch `0`. Official releases never overwrite
-an existing tag, and only signed official builds can create a GitHub Release.
+`mclash-v1.1`. Versions must use patch `0`. Choosing the `release` channel does
+not rebuild or replace any files; it only changes the matching Pre-release to an
+official Release and marks it Latest. An existing official Release is never
+overwritten.
 
-Artifacts are named by channel and signing state, for example
-`Mclash-for-Android-prerelease-signed` or `Mclash-for-Android-v1.0-signed`.
-Release APK filenames include the channel/version, ABI, and signing state.
+Artifacts are named by version and signing state, for example
+`Mclash-for-Android-v1.8-signed`.
+Release APK filenames include the version, ABI, and signing state.
 
 Every build includes `SHA256SUMS` generated from the final APK filenames.
 Verify downloads with:

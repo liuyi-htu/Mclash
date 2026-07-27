@@ -20,8 +20,48 @@ permissions:
   contents: read
 
 jobs:
+  promote-release:
+    name: Promote Pre-release to Official
+    if: inputs.build_channel == 'release'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Promote existing pre-release
+        shell: bash
+        env:
+          APP_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${APP_VERSION}" =~ ^([0-9]+)[.]([0-9]+)[.]0[+][0-9]+$ ]] || {
+            echo "version must look like 1.8.0+15" >&2
+            exit 1
+          }
+          version_label="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          tag="mclash-${version_label}"
+          if ! gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Pre-release ${tag} does not exist; refusing to publish an official release." >&2
+            exit 1
+          fi
+          is_prerelease="$(
+            gh release view "${tag}" --json isPrerelease --jq '.isPrerelease'
+          )"
+          if [[ "${is_prerelease}" != "true" ]]; then
+            echo "Official release ${tag} already exists; refusing to overwrite." >&2
+            exit 1
+          fi
+          gh release edit "${tag}" \
+            --title "Mclash for Android ${version_label}" \
+            --prerelease=false \
+            --latest
+
   build:
     name: Build APK
+    if: inputs.build_channel == 'prerelease'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     outputs:
@@ -81,14 +121,13 @@ jobs:
           }
           app_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${BASH_REMATCH[3]:-}"
 
+          release_version_label="v${app_version}"
+          tag="mclash-${release_version_label}"
+          version_label="${release_version_label}"
           if [[ "${BUILD_CHANNEL}" == "prerelease" ]]; then
-            tag="mclash-prerelease"
-            version_label="prerelease"
-            title="Mclash for Android 预发布版"
+            title="Mclash for Android ${release_version_label} 预发布版"
           else
-            version_label="v${app_version}"
-            tag="mclash-${version_label}"
-            title="Mclash for Android ${version_label}"
+            title="Mclash for Android ${release_version_label}"
           fi
 
           build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
@@ -304,27 +343,6 @@ jobs:
           done <<< "${metadata}"
           bundle_id="$(printf '%s\n' "${metadata}" | awk -F= '$1 == "GEODATA_BUNDLE_ID" { print $2 }')"
           [[ "${bundle_id}" =~ ^[0-9]+-[0-9]+-[0-9]+$ ]]
-
-      - name: Refuse existing official release
-        if: inputs.build_channel == 'release'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -Eeuo pipefail
-          status="$(
-            curl -sS -o /dev/null -w '%{http_code}' \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H 'Accept: application/vnd.github+json' \
-              -H 'X-GitHub-Api-Version: 2022-11-28' \
-              "https://api.github.com/repos/${GH_REPO}/releases/tags/${RELEASE_TAG_RESOLVED}"
-          )"
-          case "${status}" in
-            404) ;;
-            200) echo "Official release ${RELEASE_TAG_RESOLVED} already exists; refusing to overwrite." >&2; exit 1 ;;
-            *) echo "Failed to check release ${RELEASE_TAG_RESOLVED}; GitHub API status ${status}" >&2; exit 1 ;;
-          esac
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -714,14 +732,16 @@ jobs:
           CORE_ARCHS: ${{ needs.build.outputs.core_archs }}
           HEV_REF: ${{ needs.build.outputs.hev_ref }}
           MIHOMO_VERSION: ${{ needs.build.outputs.mihomo_version }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_TITLE: ${{ needs.build.outputs.release_title }}
           SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
         run: |
           set -Eeuo pipefail
-          tag="mclash-prerelease"
-          title="Mclash for Android 预发布版"
+          tag="${RELEASE_TAG}"
+          title="${RELEASE_TITLE}"
           notes="$(mktemp)"
           {
-            echo "Mclash 预发布版。新的签名预发布构建会覆盖此标签中的旧文件。"
+            echo "Mclash 预发布版。新的同版本签名预发布构建会覆盖此标签中的旧文件。"
             echo
             echo "- Build time: ${BUILD_TIME}"
             echo "- Git commit: ${GITHUB_SHA}"
@@ -738,6 +758,10 @@ jobs:
             echo '```'
           } > "${notes}"
           if gh release view "${tag}" >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/${GH_REPO}/git/refs/tags/${tag}" \
+              -f sha="${GITHUB_SHA}" \
+              -F force=true >/dev/null
             gh release edit "${tag}" --title "${title}" --notes-file "${notes}" --prerelease
             while IFS= read -r asset; do
               case "${asset}" in
@@ -892,59 +916,3 @@ jobs:
           git add mclash/pubspec.yaml .github/workflows/manual-build.yml
           git commit -m "Persist app version ${REQUESTED_VERSION}"
           git push origin HEAD:main
-
-  publish-release:
-    name: Publish Official Release
-    needs: build
-    if: needs.build.outputs.build_channel == 'release' && needs.build.outputs.signing_mode == 'signed'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download APK artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.artifact_name }}
-          path: release-apks
-
-      - name: Publish official release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          BUILD_TIME: ${{ needs.build.outputs.build_time }}
-          CORE_ARCHS: ${{ needs.build.outputs.core_archs }}
-          HEV_REF: ${{ needs.build.outputs.hev_ref }}
-          MIHOMO_VERSION: ${{ needs.build.outputs.mihomo_version }}
-          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
-          RELEASE_TITLE: ${{ needs.build.outputs.release_title }}
-          SIGNING_MODE: ${{ needs.build.outputs.signing_mode }}
-        run: |
-          set -Eeuo pipefail
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "Official release ${RELEASE_TAG} already exists; refusing to overwrite." >&2
-            exit 1
-          fi
-          notes="$(mktemp)"
-          {
-            echo "Mclash official Android release."
-            echo
-            echo "- Build time: ${BUILD_TIME}"
-            echo "- Git commit: ${GITHUB_SHA}"
-            echo "- mihomo: ${MIHOMO_VERSION}"
-            echo "- HevSocks5Tunnel: ${HEV_REF}"
-            echo "- Target architectures: ${CORE_ARCHS}"
-            echo "- Signing status: ${SIGNING_MODE}"
-            echo "- GitHub Actions run number: ${GITHUB_RUN_NUMBER}"
-            echo
-            echo "Verify downloads with:"
-            echo
-            echo '```bash'
-            echo "sha256sum -c SHA256SUMS"
-            echo '```'
-          } > "${notes}"
-          gh release create "${RELEASE_TAG}" release-apks/*.apk release-apks/SHA256SUMS \
-            --title "${RELEASE_TITLE}" \
-            --notes-file "${notes}"
