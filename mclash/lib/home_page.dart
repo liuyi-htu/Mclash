@@ -433,7 +433,7 @@ class _HomePageState extends State<HomePage> {
                         controller: ipv4DnsController,
                         decoration: const InputDecoration(
                           labelText: 'IPv4 DNS',
-                          hintText: '1.1.1.1, 8.8.8.8',
+                          hintText: '1.1.1.1',
                         ),
                         keyboardType: TextInputType.text,
                       ),
