@@ -143,32 +143,29 @@ The workflow uses:
 - `contents: write` only for release publishing;
 - a repository-scoped write deploy key only for synchronizing the app version.
 
-The `version` input is pre-filled with the current checked-in app version. Enter
-a higher Flutter version when needed, then choose `build_channel=prerelease` or
-`build_channel=release`. Architecture, ABI splitting, Hev handling, signing
-detection, and publishing behavior are fixed internally. Builds target ARM64
+Choose `build_channel=prerelease` to build the next pre-release or
+`build_channel=release` to promote it to official. The version is calculated
+automatically. Architecture, ABI splitting, Hev handling, signing detection,
+and publishing behavior are fixed internally. Builds target ARM64
 (`arm64-v8a`) only; ARMv7 APKs are not generated.
 
-After a successful build from `main`, a version higher than the one currently
-stored in `mclash/pubspec.yaml` is written back to that file and to the build
-form's pre-filled version. Equal or lower build versions never downgrade the
-repository, and failed builds do not change it. The deploy key private half is
-stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
+After a successful build from `main`, the automatically calculated version is
+written back to `mclash/pubspec.yaml`. Each pre-release build increments the
+Flutter build number by one. Failed builds do not change it. The deploy key
+private half is stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
 Pre-release builds use the same version tag as the future official release.
 For example, `1.8.0+14` uses `mclash-v1.8`. Signed builds of the same pre-release
 version update that GitHub Pre-release (预发布版) and overwrite its APK files plus
 `SHA256SUMS`; unsigned builds only upload an Actions artifact. The pre-release
-major/minor version is based only on the latest official release. For example,
-after official `v1.7`, every pre-release must use `v1.8`; build numbers such as
-`1.8.0+15` and `1.8.0+16` update the same `mclash-v1.8` Release.
+major/minor version is calculated only from the latest official release. For
+example, after official `v1.7`, every pre-release automatically uses `v1.8`;
+successive build numbers update the same `mclash-v1.8` Release.
 
-Official release tags are derived automatically from the version input. For
-example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates
-`mclash-v1.1`. Versions must use patch `0`. Choosing the `release` channel does
-not rebuild or replace any files; it only changes the matching Pre-release to an
-official Release and marks it Latest. An existing official Release is never
-overwritten.
+Choosing the `release` channel calculates the same next-version tag from the
+latest official release. It does not rebuild or replace any files; it only
+changes the matching Pre-release to an official Release and marks it Latest.
+An existing official Release is never overwritten.
 
 Artifacts are named by version and signing state, for example
 `Mclash-for-Android-v1.8-signed`.

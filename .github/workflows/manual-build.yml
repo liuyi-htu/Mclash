@@ -3,10 +3,6 @@
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "App version, for example 1.0.0+1"
-        required: true
-        default: "1.8.0+17"
       build_channel:
         description: "Build channel"
         required: true
@@ -18,6 +14,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: mclash-manual-release
+  cancel-in-progress: false
 
 jobs:
   promote-release:
@@ -32,16 +32,25 @@ jobs:
       - name: Promote existing pre-release
         shell: bash
         env:
-          APP_VERSION: ${{ inputs.version }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
-          [[ "${APP_VERSION}" =~ ^([0-9]+)[.]([0-9]+)[.]0[+][0-9]+$ ]] || {
-            echo "version must look like 1.8.0+15" >&2
+          latest="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              sed -n -E 's/^mclash-v([0-9]+)[.]([0-9]+)$/\1.\2/p' |
+              sort -t. -k1,1n -k2,2n |
+              tail -n1
+          )"
+          [[ -n "${latest}" ]] || {
+            echo "No official release was found." >&2
             exit 1
           }
-          version_label="v${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          latest_major="${latest%%.*}"
+          latest_minor="${latest#*.}"
+          version_label="v${latest_major}.$((latest_minor + 1))"
           tag="mclash-${version_label}"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             echo "Pre-release ${tag} does not exist; refusing to publish an official release." >&2
@@ -66,6 +75,7 @@ jobs:
     timeout-minutes: 90
     outputs:
       artifact_name: ${{ steps.outputs.outputs.artifact_name }}
+      app_version: ${{ steps.meta.outputs.app_version }}
       build_channel: ${{ steps.meta.outputs.build_channel }}
       build_time: ${{ steps.meta.outputs.build_time }}
       core_archs: ${{ steps.meta.outputs.core_archs }}
@@ -88,7 +98,6 @@ jobs:
       REBUILD_HEV: "auto"
       SPLIT_PER_ABI: "1"
       BUILD_CHANNEL: ${{ inputs.build_channel }}
-      APP_VERSION: ${{ inputs.version }}
 
     steps:
       - name: Checkout
@@ -97,29 +106,36 @@ jobs:
       - name: Compute build metadata
         id: meta
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          case "${BUILD_CHANNEL}" in prerelease|release) ;; *) exit 1 ;; esac
+          [[ "${BUILD_CHANNEL}" == "prerelease" ]]
           source_version="$(sed -n -E 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' mclash/pubspec.yaml)"
-          [[ "${source_version}" =~ ^[0-9]+[.][0-9]+[.]0[+][0-9]+$ ]] || {
+          [[ "${source_version}" =~ ^[0-9]+[.][0-9]+[.]0[+]([0-9]+)$ ]] || {
             echo "mclash/pubspec.yaml contains an invalid version: ${source_version}" >&2
             exit 1
           }
-          if [[ "${APP_VERSION}" == "source" ]]; then
-            APP_VERSION="${source_version}"
-          fi
-          [[ "${APP_VERSION}" =~ ^[0-9]+[.][0-9]+[.]0[+][0-9]+$ ]] || {
-            echo "version must be source or look like 1.0.0+1 or 1.1.0+3" >&2
+          next_build_number="$((BASH_REMATCH[1] + 1))"
+
+          latest="$(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
+              sed -n -E 's/^mclash-v([0-9]+)[.]([0-9]+)$/\1.\2/p' |
+              sort -t. -k1,1n -k2,2n |
+              tail -n1
+          )"
+          [[ -n "${latest}" ]] || {
+            echo "No official release was found." >&2
             exit 1
           }
+          latest_major="${latest%%.*}"
+          latest_minor="${latest#*.}"
+          app_version="${latest_major}.$((latest_minor + 1))"
+          APP_VERSION="${app_version}.0+${next_build_number}"
+
           sed -i -E "s/^version: .*/version: ${APP_VERSION}/" mclash/pubspec.yaml
-          pubspec_version="${APP_VERSION}"
-          app_version_full="${pubspec_version%%+*}"
-          [[ "${app_version_full}" =~ ^([0-9]+)[.]([0-9]+)[.]0([.-][A-Za-z0-9._-]+)?$ ]] || {
-            echo "pubspec.yaml version must use patch 0 for two-part release tags: ${pubspec_version}" >&2
-            exit 1
-          }
-          app_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${BASH_REMATCH[3]:-}"
 
           release_version_label="v${app_version}"
           tag="mclash-${release_version_label}"
@@ -129,6 +145,7 @@ jobs:
           build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
           core_archs_key="${CORE_ARCHS//,/-}"
           {
+            echo "app_version=${APP_VERSION}"
             echo "build_channel=${BUILD_CHANNEL}"
             echo "build_time=${build_time}"
             echo "core_archs=${CORE_ARCHS}"
@@ -145,43 +162,6 @@ jobs:
             echo "RELEASE_TITLE=${title}"
             echo "VERSION_LABEL=${version_label}"
           } >> "${GITHUB_ENV}"
-
-      - name: Require next version after latest official release
-        if: inputs.build_channel == 'prerelease'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          requested="$(
-            sed -n -E 's/^version:[[:space:]]*([^[:space:]]+).*/\1/p' \
-              mclash/pubspec.yaml
-          )"
-          [[ "${requested}" =~ ^([0-9]+)[.]([0-9]+)[.]0[+][0-9]+$ ]]
-          requested_major="${BASH_REMATCH[1]}"
-          requested_minor="${BASH_REMATCH[2]}"
-
-          latest="$(
-            gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' |
-              sed -n -E 's/^mclash-v([0-9]+)[.]([0-9]+)$/\1.\2/p' |
-              sort -t. -k1,1n -k2,2n |
-              tail -n1
-          )"
-          [[ -n "${latest}" ]] || exit 0
-
-          latest_major="${latest%%.*}"
-          latest_minor="${latest#*.}"
-          expected_major="${latest_major}"
-          expected_minor="$((latest_minor + 1))"
-          if ((
-            requested_major != expected_major ||
-            requested_minor != expected_minor
-          )); then
-            echo "Pre-release ${requested} must use v${expected_major}.${expected_minor}, the next version after official v${latest}." >&2
-            exit 1
-          fi
 
       - name: Resolve latest stable mihomo
         id: mihomo
@@ -768,7 +748,7 @@ jobs:
           fi
 
   persist-version:
-    name: Persist App and Build Form Version
+    name: Persist App Version
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
@@ -791,7 +771,7 @@ jobs:
         id: version
         shell: bash
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_VERSION: ${{ needs.build.outputs.app_version }}
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
@@ -836,29 +816,7 @@ jobs:
               pubspec_path.write_text(updated_pubspec, encoding="utf-8")
               changed = True
 
-          workflow_path = Path(".github/workflows/manual-build.yml")
-          workflow_lines = workflow_path.read_text(encoding="utf-8").splitlines(keepends=True)
-          in_version_input = False
-          default_found = False
-          for index, line in enumerate(workflow_lines):
-              if line.rstrip("\r\n") == "      version:":
-                  in_version_input = True
-                  continue
-              if in_version_input and re.match(r"^      [A-Za-z0-9_-]+:", line):
-                  break
-              if in_version_input and re.match(r"^        default:", line):
-                  default_found = True
-                  newline = "\r\n" if line.endswith("\r\n") else "\n"
-                  replacement = f'        default: "{target}"{newline}'
-                  if line != replacement:
-                      workflow_lines[index] = replacement
-                      changed = True
-                  break
-          if not default_found:
-              raise SystemExit("workflow version input default was not found")
-          workflow_path.write_text("".join(workflow_lines), encoding="utf-8")
-
-          print(f"Persisted app and build form version: {target}; changed={changed}.")
+          print(f"Persisted app version: {target}; changed={changed}.")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               output.write(f"changed={'true' if changed else 'false'}\n")
           PY
@@ -867,7 +825,7 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         shell: bash
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_VERSION: ${{ needs.build.outputs.app_version }}
           VERSION_SYNC_DEPLOY_KEY: ${{ secrets.VERSION_SYNC_DEPLOY_KEY }}
         run: |
           set -Eeuo pipefail
@@ -904,6 +862,6 @@ jobs:
           git config user.name "liuyi-htu"
           git config user.email "293212179+liuyi-htu@users.noreply.github.com"
           git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git add mclash/pubspec.yaml .github/workflows/manual-build.yml
+          git add mclash/pubspec.yaml
           git commit -m "Persist app version ${REQUESTED_VERSION}"
           git push origin HEAD:main
