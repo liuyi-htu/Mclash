@@ -6,7 +6,7 @@ on:
       version:
         description: "App version, for example 1.0.0+1"
         required: true
-        default: "1.6.0+12"
+        default: "1.7.0+13"
       build_channel:
         description: "Build channel"
         required: true
