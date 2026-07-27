@@ -155,11 +155,11 @@ form's pre-filled version. Equal or lower build versions never downgrade the
 repository, and failed builds do not change it. The deploy key private half is
 stored only in the `VERSION_SYNC_DEPLOY_KEY` Actions secret.
 
-Test builds always use the fixed `mclash-test` tag. Signed test builds update
-that same release and overwrite old APK files plus `SHA256SUMS`; unsigned test
-builds only upload an Actions artifact and do not create a public release.
-`mclash-test` always points at the newest signed test build, and test APKs are
-not guaranteed to be stable.
+Test builds always use the fixed `mclash-test` tag and are published as GitHub
+Pre-releases (内测版). Signed test builds update that same release and overwrite
+old APK files plus `SHA256SUMS`; unsigned test builds only upload an Actions
+artifact and do not create a public release. `mclash-test` always points at the
+newest signed test build, and test APKs are not guaranteed to be stable.
 
 Official release tags are derived automatically from the version input. For
 example, `1.0.0+1` creates `mclash-v1.0`, while `1.1.0+3` creates

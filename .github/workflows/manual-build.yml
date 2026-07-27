@@ -84,7 +84,7 @@ jobs:
           if [[ "${BUILD_CHANNEL}" == "test" ]]; then
             tag="mclash-test"
             version_label="test"
-            title="Mclash for Android Test Build"
+            title="Mclash for Android 内测版"
           else
             version_label="v${app_version}"
             tag="mclash-${version_label}"
@@ -650,7 +650,7 @@ jobs:
           rm -f "${RUNNER_TEMP}/release.jks" mclash/android/key.properties
 
   publish-test:
-    name: Publish Test Release
+    name: Publish Test Pre-release
     needs: build
     if: needs.build.outputs.build_channel == 'test' && needs.build.outputs.signing_mode == 'signed'
     runs-on: ubuntu-24.04
@@ -665,7 +665,7 @@ jobs:
           name: ${{ needs.build.outputs.artifact_name }}
           path: release-apks
 
-      - name: Publish test release
+      - name: Publish test pre-release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -678,10 +678,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           tag="mclash-test"
-          title="Mclash for Android Test Build"
+          title="Mclash for Android 内测版"
           notes="$(mktemp)"
           {
-            echo "Mclash test build. This tag is overwritten by newer signed test builds."
+            echo "Mclash 内测版。新的签名内测构建会覆盖此标签中的旧文件。"
             echo
             echo "- Build time: ${BUILD_TIME}"
             echo "- Git commit: ${GITHUB_SHA}"
@@ -698,7 +698,7 @@ jobs:
             echo '```'
           } > "${notes}"
           if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release edit "${tag}" --title "${title}" --notes-file "${notes}"
+            gh release edit "${tag}" --title "${title}" --notes-file "${notes}" --prerelease
             while IFS= read -r asset; do
               case "${asset}" in
                 *.apk|SHA256SUMS) gh release delete-asset "${tag}" "${asset}" --yes ;;
@@ -708,7 +708,8 @@ jobs:
           else
             gh release create "${tag}" release-apks/*.apk release-apks/SHA256SUMS \
               --title "${title}" \
-              --notes-file "${notes}"
+              --notes-file "${notes}" \
+              --prerelease
           fi
 
   persist-version:
