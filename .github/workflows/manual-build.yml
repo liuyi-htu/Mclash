@@ -734,8 +734,6 @@ jobs:
           title="${RELEASE_TITLE}"
           notes="$(mktemp)"
           {
-            echo "Mclash 预发布版。新的同版本签名预发布构建会覆盖此标签中的旧文件。"
-            echo
             echo "- Build time: ${BUILD_TIME}"
             echo "- Git commit: ${GITHUB_SHA}"
             echo "- mihomo: ${MIHOMO_VERSION}"
