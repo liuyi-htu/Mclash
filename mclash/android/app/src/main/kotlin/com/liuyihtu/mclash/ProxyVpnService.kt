@@ -100,7 +100,7 @@ class ProxyVpnService : VpnService() {
                     .setBlocking(false)
 
                 if (ipv6Enabled) {
-                    builder.addAddress(IPV6_TUN_ADDRESS, 126)
+                    builder.addAddress(IPV6_TUN_ADDRESS, 128)
                 }
                 addVpnRoutes(builder, ipv6Enabled, bypassLan)
                 ipv4DnsServers.forEach(builder::addDnsServer)
@@ -313,7 +313,7 @@ class ProxyVpnService : VpnService() {
 
         private const val CHANNEL_ID = "proxy"
         private const val NOTIFICATION_ID = 1001
-        private const val IPV6_TUN_ADDRESS = "fdfe:dcba:9876::1"
+        private const val IPV6_TUN_ADDRESS = "fc00::1"
 
         fun start(context: android.content.Context) {
             lastError = null

@@ -194,9 +194,10 @@ The app does not enable global cleartext traffic. It uses Network Security
 Config to keep cleartext disabled by default and allow only localhost/loopback
 addresses needed for the local mihomo proxy and controller.
 
-The IPv6 switch in VPN settings controls both mihomo's top-level `ipv6` option
-and the Android VPN/HevSocks5Tunnel IPv6 address and routes. DNS-specific
-behavior remains controlled by the imported profile's `dns` section.
+The IPv6 switch in VPN settings controls mihomo's top-level `ipv6` option,
+the active profile's runtime `dns.ipv6` value, and the Android
+VPN/HevSocks5Tunnel IPv6 address and routes. The imported profile itself is
+never modified.
 
 ## Third-party licenses
 

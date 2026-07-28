@@ -178,7 +178,8 @@ internal object MihomoProcess {
         val original = importedConfig.readText(Charsets.UTF_8)
             .removePrefix("\uFEFF")
 
-        val filtered = removeTopLevelKeys(original, controlledKeys).trimEnd()
+        val ipv6Adjusted = overrideDnsIpv6(original, ipv6Enabled)
+        val filtered = removeTopLevelKeys(ipv6Adjusted, controlledKeys).trimEnd()
 
         val runtime = File(home, "runtime.yaml")
         runtime.writeText(
@@ -206,6 +207,86 @@ internal object MihomoProcess {
             Charsets.UTF_8,
         )
         return runtime
+    }
+
+    private fun overrideDnsIpv6(yaml: String, enabled: Boolean): String {
+        val lines = yaml.lines()
+        val output = mutableListOf<String>()
+        var index = 0
+
+        while (index < lines.size) {
+            val line = lines[index]
+            val trimmed = line.trimStart()
+            val isTopLevelDns = line.isNotBlank() &&
+                line.firstOrNull()?.isWhitespace() == false &&
+                !trimmed.startsWith("#") &&
+                line.substringBefore(':', missingDelimiterValue = "").trim() == "dns"
+
+            if (!isTopLevelDns) {
+                output += line
+                index++
+                continue
+            }
+
+            val inlineValue = line.substringAfter(':').trim()
+            if (inlineValue.startsWith("{") && inlineValue.endsWith("}")) {
+                val ipv6Pattern = Regex("""(?i)(\bipv6\s*:\s*)(true|false|yes|no|on|off|1|0)""")
+                output += if (inlineValue == "{}") {
+                    "${line.substringBefore(':')}: {ipv6: $enabled}"
+                } else if (ipv6Pattern.containsMatchIn(line)) {
+                    line.replace(ipv6Pattern) { match ->
+                        "${match.groupValues[1]}$enabled"
+                    }
+                } else {
+                    line.replaceFirst("{", "{ ipv6: $enabled,")
+                }
+                index++
+                continue
+            }
+
+            if (inlineValue.isNotEmpty()) {
+                output += line
+                index++
+                continue
+            }
+
+            var childIndentation = 2
+            var probe = index + 1
+            while (probe < lines.size) {
+                val child = lines[probe]
+                val childTrimmed = child.trimStart()
+                val isNextTopLevel = child.isNotBlank() &&
+                    child.firstOrNull()?.isWhitespace() == false &&
+                    !childTrimmed.startsWith("#")
+                if (isNextTopLevel) break
+                if (child.isNotBlank() && !childTrimmed.startsWith("#")) {
+                    childIndentation = child.length - childTrimmed.length
+                    break
+                }
+                probe++
+            }
+
+            output += line
+            output += "${" ".repeat(childIndentation)}ipv6: $enabled"
+            index++
+            while (index < lines.size) {
+                val child = lines[index]
+                val childTrimmed = child.trimStart()
+                val isNextTopLevel = child.isNotBlank() &&
+                    child.firstOrNull()?.isWhitespace() == false &&
+                    !childTrimmed.startsWith("#")
+                if (isNextTopLevel) break
+
+                val indentation = child.length - childTrimmed.length
+                val isDirectIpv6 = child.isNotBlank() &&
+                    indentation == childIndentation &&
+                    childTrimmed.substringBefore(':', missingDelimiterValue = "").trim() == "ipv6"
+                if (!isDirectIpv6) output += child
+                index++
+            }
+        }
+
+        return output.joinToString("\n")
     }
 
     private fun removeTopLevelKeys(
