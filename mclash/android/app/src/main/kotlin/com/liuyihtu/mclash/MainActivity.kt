@@ -108,6 +108,7 @@ class MainActivity : FlutterActivity() {
                 "clearDebugLogs" -> {
                     StartupLog.clear(this)
                     MihomoProcess.clearDebugLog(this)
+                    runCatching { File(filesDir, "runtime/hev.log").delete() }
                     ProxyVpnService.clearLastError()
                     result.success(null)
                 }
@@ -348,6 +349,7 @@ class MainActivity : FlutterActivity() {
         val home = File(filesDir, "mihomo")
         val runtime = File(home, "runtime.yaml")
         val mihomoLog = File(home, "mihomo.log")
+        val hevLog = File(filesDir, "runtime/hev.log")
 
         fun describe(file: File): String =
             "path=${file.absolutePath}\n" +
@@ -432,6 +434,16 @@ class MainActivity : FlutterActivity() {
                     "调试日志已关闭，且没有已有 mihomo 日志"
                 },
             )
+
+            appendLine()
+            appendLine("----- hev.log 最后 200 行 -----")
+            appendLine(
+                if (preferences.debugLoggingEnabled || hevLog.length() > 0) {
+                    tail(hevLog, 200)
+                } else {
+                    "调试日志已关闭，且没有已有 HEV 日志"
+                },
+            )
         }
     }
 
@@ -440,6 +452,7 @@ class MainActivity : FlutterActivity() {
         val file = when (name) {
             "Mclash.log" -> File(filesDir, "runtime/startup.log")
             "mihomo.log" -> File(filesDir, "mihomo/mihomo.log")
+            "hev.log" -> File(filesDir, "runtime/hev.log")
             else -> error("未知日志：$name")
         }
         if (!file.isFile) return "$name 尚未生成"

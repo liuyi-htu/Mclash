@@ -165,8 +165,12 @@ class ProxyVpnService : VpnService() {
     ): File {
         val directory = File(filesDir, "runtime").apply { mkdirs() }
         val debugLoggingEnabled = AppPreferences(this).debugLoggingEnabled
-        val logTarget = if (debugLoggingEnabled) "stderr" else "/dev/null"
-        val logLevel = if (debugLoggingEnabled) "warn" else "error"
+        val hevLog = File(directory, "hev.log")
+        if (debugLoggingEnabled) {
+            runCatching { hevLog.delete() }
+        }
+        val logTarget = if (debugLoggingEnabled) hevLog.absolutePath else "/dev/null"
+        val logLevel = if (debugLoggingEnabled) "debug" else "error"
         val taskStackSize = tcpBufferSize + 20480
 
         val ipv6Line = if (ipv6Enabled) "\n  ipv6: '$IPV6_TUN_ADDRESS'" else ""

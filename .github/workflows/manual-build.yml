@@ -95,7 +95,7 @@ jobs:
       FLUTTER_VERSION: "3.32.8"
       JAVA_VERSION: "17.0.12+7"
       ANDROID_NDK_VERSION: "27.2.12479018"
-      HEV_REF: "c6e4c72246fb0f20bda299f0efc7814bb3098d57"
+      HEV_REF: "0a05221275a51a884d93328c55fc2fbc9e9b6974"
       HEV_REPO: "https://github.com/heiher/hev-socks5-tunnel.git"
       CACHE_DIR: /tmp/clash-cache
       PROJECT_DIR: mclash
