@@ -15,7 +15,8 @@ version.
 - Unsigned pre-release builds only upload Actions artifacts.
 - The pre-release major/minor version is calculated automatically from the
   latest official release. After official `v1.7`, every pre-release uses
-  `v1.8`; successive builds overwrite the same `mclash-v1.8` Release.
+  `v1.8`; successive builds overwrite the same `mclash-v1.8` Release. After
+  official `v1.9`, the next pre-release is `v2.0`, not `v1.10`.
 - Repeated builds of the same pre-release keep the same Flutter build number.
 - The build number increases once only when a new official release starts the
   next pre-release version.

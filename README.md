@@ -163,7 +163,8 @@ version update that GitHub Pre-release (预发布版) and overwrite its APK file
 major/minor version is calculated only from the latest official release. For
 example, after official `v1.7`, every pre-release automatically uses `v1.8`;
 successive builds keep the same app version and update the same
-`mclash-v1.8` Release.
+`mclash-v1.8` Release. Minor versions roll over after 9, so official `v1.9`
+starts the `v2.0` pre-release instead of `v1.10`.
 
 Choosing the `release` channel calculates the same next-version tag from the
 latest official release. It does not rebuild or replace any files; it only

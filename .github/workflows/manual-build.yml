@@ -50,7 +50,13 @@ jobs:
           }
           latest_major="${latest%%.*}"
           latest_minor="${latest#*.}"
-          version_label="v${latest_major}.$((latest_minor + 1))"
+          next_major="${latest_major}"
+          next_minor="$((latest_minor + 1))"
+          if (( next_minor >= 10 )); then
+            next_major="$((latest_major + 1))"
+            next_minor=0
+          fi
+          version_label="v${next_major}.${next_minor}"
           tag="mclash-${version_label}"
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             echo "Pre-release ${tag} does not exist; refusing to publish an official release." >&2
@@ -134,11 +140,17 @@ jobs:
           }
           latest_major="${latest%%.*}"
           latest_minor="${latest#*.}"
-          app_version="${latest_major}.$((latest_minor + 1))"
+          next_major="${latest_major}"
+          next_minor="$((latest_minor + 1))"
+          if (( next_minor >= 10 )); then
+            next_major="$((latest_major + 1))"
+            next_minor=0
+          fi
+          app_version="${next_major}.${next_minor}"
           build_number="${source_build_number}"
           if ((
-            source_major != latest_major ||
-            source_minor != latest_minor + 1
+            source_major != next_major ||
+            source_minor != next_minor
           )); then
             build_number="$((source_build_number + 1))"
           fi
