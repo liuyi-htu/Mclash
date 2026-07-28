@@ -78,8 +78,13 @@
         <item>255.255.255.254/32</item>
     </string-array>
 
-    <!-- IPv6 space excluding unique-local, link-local and multicast ranges. -->
+    <!--
+      IPv6 space excluding unique-local, link-local and multicast ranges.
+      Mihomo's default IPv6 fake-IP range is unique-local, but it must still
+      enter the VPN so fake-IP connections can be restored to domain names.
+    -->
     <string-array name="bypass_lan_ipv6_routes" translatable="false">
+        <item>fdfe:dcba:9876::/64</item>
         <item>::/1</item>
         <item>8000::/2</item>
         <item>c000::/3</item>
