@@ -72,7 +72,6 @@ class ProxyVpnService : VpnService() {
                 val vpnMtu = preferences.vpnMtu
                 val tcpBufferSize = preferences.tcpBufferSize
                 val ipv4DnsServers = preferences.vpnIpv4DnsServers
-                val ipv6DnsServers = preferences.vpnIpv6DnsServers
                 val ipv6Enabled = preferences.vpnIpv6Enabled
                 val bypassLan = preferences.vpnBypassLan
                 StartupLog.append(
@@ -105,7 +104,6 @@ class ProxyVpnService : VpnService() {
                 }
                 addVpnRoutes(builder, ipv6Enabled, bypassLan)
                 ipv4DnsServers.forEach(builder::addDnsServer)
-                if (ipv6Enabled) ipv6DnsServers.forEach(builder::addDnsServer)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     builder.setMetered(false)
@@ -117,9 +115,8 @@ class ProxyVpnService : VpnService() {
                 tunDescriptor = tun
                 StartupLog.append(
                     this,
-                    "VPN TUN 创建成功：fd=${tun.fd}, mtu=$vpnMtu, " +
+                        "VPN TUN 创建成功：fd=${tun.fd}, mtu=$vpnMtu, " +
                         "dns4=${ipv4DnsServers.joinToString()}, " +
-                        "dns6=${if (ipv6Enabled) ipv6DnsServers.joinToString() else "disabled"}, " +
                         "ipv6=$ipv6Enabled, bypassLan=$bypassLan",
                 )
 

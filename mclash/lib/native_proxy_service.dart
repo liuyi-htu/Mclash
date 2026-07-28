@@ -200,7 +200,6 @@ class NativeProxyService {
     required int mtu,
     required int tcpBufferSize,
     required List<String> ipv4DnsServers,
-    required List<String> ipv6DnsServers,
     required bool ipv6Enabled,
     required bool bypassLan,
   }) async {
@@ -210,7 +209,6 @@ class NativeProxyService {
         'mtu': mtu,
         'tcpBufferSize': tcpBufferSize,
         'ipv4DnsServers': ipv4DnsServers,
-        'ipv6DnsServers': ipv6DnsServers,
         'ipv6Enabled': ipv6Enabled,
         'bypassLan': bypassLan,
       },

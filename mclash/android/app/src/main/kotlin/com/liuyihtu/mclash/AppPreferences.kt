@@ -64,15 +64,6 @@ internal class AppPreferences(context: Context) {
             .putString(KEY_VPN_IPV4_DNS_SERVERS, value.joinToString(","))
             .apply()
 
-    var vpnIpv6DnsServers: List<String>
-        get() = readDnsServers(KEY_VPN_IPV6_DNS_SERVERS) ?: run {
-            val legacy = readDnsServers(KEY_VPN_DNS_SERVERS)
-            legacy?.filter { ':' in it } ?: DEFAULT_VPN_IPV6_DNS_SERVERS
-        }
-        set(value) = preferences.edit()
-            .putString(KEY_VPN_IPV6_DNS_SERVERS, value.joinToString(","))
-            .apply()
-
     var vpnIpv6Enabled: Boolean
         get() = preferences.getBoolean(KEY_VPN_IPV6_ENABLED, DEFAULT_VPN_IPV6_ENABLED)
         set(value) = preferences.edit().putBoolean(KEY_VPN_IPV6_ENABLED, value).apply()
@@ -98,7 +89,6 @@ internal class AppPreferences(context: Context) {
         const val DEFAULT_VPN_MTU = 1500
         const val DEFAULT_TCP_BUFFER_SIZE = 262144
         val DEFAULT_VPN_IPV4_DNS_SERVERS = listOf("1.1.1.1")
-        val DEFAULT_VPN_IPV6_DNS_SERVERS = listOf("2606:4700:4700::1111")
         const val DEFAULT_VPN_IPV6_ENABLED = false
         const val DEFAULT_VPN_BYPASS_LAN = true
 
@@ -117,10 +107,9 @@ internal class AppPreferences(context: Context) {
         private const val KEY_DELAY_RESULTS_JSON = "delay_results_json"
         private const val KEY_VPN_MTU = "vpn_mtu"
         private const val KEY_TCP_BUFFER_SIZE = "tcp_buffer_size"
-        // Kept to migrate settings saved before IPv4 and IPv6 DNS were separated.
+        // Kept to migrate IPv4 entries from the original shared DNS setting.
         private const val KEY_VPN_DNS_SERVERS = "vpn_dns_servers"
         private const val KEY_VPN_IPV4_DNS_SERVERS = "vpn_ipv4_dns_servers"
-        private const val KEY_VPN_IPV6_DNS_SERVERS = "vpn_ipv6_dns_servers"
         private const val KEY_VPN_IPV6_ENABLED = "vpn_ipv6_enabled"
         private const val KEY_VPN_BYPASS_LAN = "vpn_bypass_lan"
         private const val KEY_ACCEPTED_USAGE_NOTICE_VERSION =

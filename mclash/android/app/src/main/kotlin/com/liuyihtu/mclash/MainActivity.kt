@@ -14,7 +14,6 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.net.Inet4Address
-import java.net.Inet6Address
 import java.net.InetAddress
 
 class MainActivity : FlutterActivity() {
@@ -131,7 +130,6 @@ class MainActivity : FlutterActivity() {
         "mtu" to preferences.vpnMtu,
         "tcpBufferSize" to preferences.tcpBufferSize,
         "ipv4DnsServers" to preferences.vpnIpv4DnsServers,
-        "ipv6DnsServers" to preferences.vpnIpv6DnsServers,
         "ipv6Enabled" to preferences.vpnIpv6Enabled,
         "bypassLan" to preferences.vpnBypassLan,
     )
@@ -251,11 +249,6 @@ class MainActivity : FlutterActivity() {
             ?.filter(String::isNotEmpty)
             ?.distinct()
             ?: error("IPv4 DNS 不能为空")
-        val ipv6DnsServers = call.argument<List<String>>("ipv6DnsServers")
-            ?.map(String::trim)
-            ?.filter(String::isNotEmpty)
-            ?.distinct()
-            ?: emptyList()
         val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
         val bypassLan = call.argument<Boolean>("bypassLan") ?: true
 
@@ -273,23 +266,9 @@ class MainActivity : FlutterActivity() {
                 "IPv4 DNS 地址无效：$address"
             }
         }
-        require(!ipv6Enabled || ipv6DnsServers.isNotEmpty()) {
-            "启用 IPv6 时至少需要一个 IPv6 DNS 地址"
-        }
-        ipv6DnsServers.forEach { address ->
-            require(address.matches(Regex("[0-9a-fA-F:]+"))) {
-                "IPv6 DNS 必须填写 IP 地址：$address"
-            }
-            val parsed = runCatching { InetAddress.getByName(address) }.getOrNull()
-            require(parsed is Inet6Address) {
-                "IPv6 DNS 地址无效：$address"
-            }
-        }
-
         preferences.vpnMtu = mtu
         preferences.tcpBufferSize = tcpBufferSize
         preferences.vpnIpv4DnsServers = ipv4DnsServers
-        preferences.vpnIpv6DnsServers = ipv6DnsServers
         preferences.vpnIpv6Enabled = ipv6Enabled
         preferences.vpnBypassLan = bypassLan
         result.success(vpnTunnelSettings())

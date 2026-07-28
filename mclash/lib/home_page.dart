@@ -385,9 +385,6 @@ class _HomePageState extends State<HomePage> {
       final ipv4DnsController = TextEditingController(
         text: current.ipv4DnsServers.join(', '),
       );
-      final ipv6DnsController = TextEditingController(
-        text: current.ipv6DnsServers.join(', '),
-      );
       final mtuController = TextEditingController(text: '${current.mtu}');
       final bufferController = TextEditingController(
         text: '${current.tcpBufferSize}',
@@ -437,17 +434,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                         keyboardType: TextInputType.text,
                       ),
-                      if (ipv6Enabled) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: ipv6DnsController,
-                          decoration: const InputDecoration(
-                            labelText: 'IPv6 DNS',
-                            hintText: '2606:4700:4700::1111',
-                          ),
-                          keyboardType: TextInputType.text,
-                        ),
-                      ],
                       const SizedBox(height: 12),
                       TextField(
                         controller: mtuController,
@@ -489,7 +475,6 @@ class _HomePageState extends State<HomePage> {
                   TextButton(
                     onPressed: () {
                       ipv4DnsController.text = '1.1.1.1';
-                      ipv6DnsController.text = '2606:4700:4700::1111';
                       mtuController.text = '1500';
                       bufferController.text = '262144';
                       setDialogState(() {
@@ -507,7 +492,6 @@ class _HomePageState extends State<HomePage> {
                         bufferController.text.trim(),
                       );
                       final ipv4DnsServers = parseDnsServers(ipv4DnsController);
-                      final ipv6DnsServers = parseDnsServers(ipv6DnsController);
                       if (ipv4DnsServers.isEmpty ||
                           ipv4DnsServers.any(
                             (address) =>
@@ -516,22 +500,6 @@ class _HomePageState extends State<HomePage> {
                           )) {
                         setDialogState(
                           () => validationMessage = '请填写有效的 IPv4 DNS 地址',
-                        );
-                        return;
-                      }
-                      if (ipv6DnsServers.any(
-                        (address) =>
-                            InternetAddress.tryParse(address)?.type !=
-                            InternetAddressType.IPv6,
-                      )) {
-                        setDialogState(
-                          () => validationMessage = '请填写有效的 IPv6 DNS 地址',
-                        );
-                        return;
-                      }
-                      if (ipv6Enabled && ipv6DnsServers.isEmpty) {
-                        setDialogState(
-                          () => validationMessage = '启用 IPv6 时请填写 IPv6 DNS 地址',
                         );
                         return;
                       }
@@ -563,9 +531,7 @@ class _HomePageState extends State<HomePage> {
       final mtu = int.tryParse(mtuController.text.trim());
       final tcpBuffer = int.tryParse(bufferController.text.trim());
       final ipv4DnsServers = parseDnsServers(ipv4DnsController);
-      final ipv6DnsServers = parseDnsServers(ipv6DnsController);
       ipv4DnsController.dispose();
-      ipv6DnsController.dispose();
       mtuController.dispose();
       bufferController.dispose();
 
@@ -576,7 +542,6 @@ class _HomePageState extends State<HomePage> {
         mtu: mtu,
         tcpBufferSize: tcpBuffer,
         ipv4DnsServers: ipv4DnsServers,
-        ipv6DnsServers: ipv6DnsServers,
         ipv6Enabled: ipv6Enabled,
         bypassLan: bypassLan,
       );
