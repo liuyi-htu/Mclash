@@ -952,132 +952,165 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 86,
-                    height: 86,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.24),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final statusHeader = Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 86,
+                        height: 86,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.24),
+                          ),
+                        ),
+                        child: Icon(
+                          running
+                              ? Icons.shield_rounded
+                              : Icons.shield_outlined,
+                          size: 46,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    child: Icon(
-                      running ? Icons.shield_rounded : Icons.shield_outlined,
-                      size: 46,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    _statusText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 25,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.16),
+                      const SizedBox(height: 18),
+                      Text(
+                        _statusText,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                    ),
-                    child: Row(
+                    ],
+                  );
+
+                  final controls = Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.13),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.16),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.description_outlined,
+                              size: 18,
+                              color: Colors.white.withValues(alpha: 0.82),
+                            ),
+                            const SizedBox(width: 9),
+                            Text(
+                              '当前配置',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.72),
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _config.exists
+                                    ? (_config.fileName ?? '未命名配置')
+                                    : '未选择',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: FilledButton.icon(
+                          onPressed: busy ? null : _toggle,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: running
+                                ? colors.error
+                                : const Color(0xFF2859C5),
+                            disabledBackgroundColor: Colors.white.withValues(
+                              alpha: 0.72,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          icon: busy
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Icon(
+                                  running
+                                      ? Icons.stop_circle_outlined
+                                      : Icons.play_circle_outline_rounded,
+                                ),
+                          label: Text(_buttonText),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _openProxyPanel,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.38),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          icon: const Icon(Icons.account_tree_outlined),
+                          label: const Text('代理面板'),
+                        ),
+                      ),
+                    ],
+                  );
+
+                  if (constraints.maxWidth >= 440) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.description_outlined,
-                          size: 18,
-                          color: Colors.white.withValues(alpha: 0.82),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          '当前配置',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.72),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _config.exists
-                                ? (_config.fileName ?? '未命名配置')
-                                : '未选择',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
+                        SizedBox(width: 140, child: statusHeader),
+                        const SizedBox(width: 22),
+                        Expanded(child: controls),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: FilledButton.icon(
-                      onPressed: busy ? null : _toggle,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: running
-                            ? colors.error
-                            : const Color(0xFF2859C5),
-                        disabledBackgroundColor: Colors.white.withValues(
-                          alpha: 0.72,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      icon: busy
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              running
-                                  ? Icons.stop_circle_outlined
-                                  : Icons.play_circle_outline_rounded,
-                            ),
-                      label: Text(_buttonText),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: _openProxyPanel,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.38),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      icon: const Icon(Icons.account_tree_outlined),
-                      label: const Text('代理面板'),
-                    ),
-                  ),
-                ],
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      statusHeader,
+                      const SizedBox(height: 8),
+                      controls,
+                    ],
+                  );
+                },
               ),
             ),
           ],
