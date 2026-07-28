@@ -410,13 +410,6 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'IPv6 由当前配置文件的顶层 ipv6 字段控制',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('绕过局域网'),
