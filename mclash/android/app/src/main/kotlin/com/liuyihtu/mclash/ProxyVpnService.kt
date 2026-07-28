@@ -72,7 +72,7 @@ class ProxyVpnService : VpnService() {
                 val vpnMtu = preferences.vpnMtu
                 val tcpBufferSize = preferences.tcpBufferSize
                 val ipv4DnsServers = preferences.vpnIpv4DnsServers
-                val ipv6Enabled = MihomoProcess.isIpv6Enabled(configStore.configFile)
+                val ipv6Enabled = preferences.vpnIpv6Enabled
                 val bypassLan = preferences.vpnBypassLan
                 StartupLog.append(
                     this,
@@ -100,7 +100,7 @@ class ProxyVpnService : VpnService() {
                     .setBlocking(false)
 
                 if (ipv6Enabled) {
-                    builder.addAddress("fc00::1", 126)
+                    builder.addAddress(IPV6_TUN_ADDRESS, 126)
                 }
                 addVpnRoutes(builder, ipv6Enabled, bypassLan)
                 ipv4DnsServers.forEach(builder::addDnsServer)
@@ -117,7 +117,7 @@ class ProxyVpnService : VpnService() {
                     this,
                         "VPN TUN 创建成功：fd=${tun.fd}, mtu=$vpnMtu, " +
                         "dns4=${ipv4DnsServers.joinToString()}, " +
-                        "ipv6=$ipv6Enabled (config), bypassLan=$bypassLan",
+                        "ipv6=$ipv6Enabled (setting), bypassLan=$bypassLan",
                 )
 
                 val hevConfig = writeHevConfig(socksPort, vpnMtu, tcpBufferSize, ipv6Enabled)
@@ -169,7 +169,7 @@ class ProxyVpnService : VpnService() {
         val logLevel = if (debugLoggingEnabled) "warn" else "error"
         val taskStackSize = tcpBufferSize + 20480
 
-        val ipv6Line = if (ipv6Enabled) "\n  ipv6: 'fc00::1'" else ""
+        val ipv6Line = if (ipv6Enabled) "\n  ipv6: '$IPV6_TUN_ADDRESS'" else ""
         return File(directory, "hev.yml").apply {
             writeText(
                 """
@@ -313,6 +313,7 @@ class ProxyVpnService : VpnService() {
 
         private const val CHANNEL_ID = "proxy"
         private const val NOTIFICATION_ID = 1001
+        private const val IPV6_TUN_ADDRESS = "fdfe:dcba:9876::1"
 
         fun start(context: android.content.Context) {
             lastError = null

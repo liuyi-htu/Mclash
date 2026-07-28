@@ -40,6 +40,7 @@ internal object MihomoProcess {
         val runtimeConfig = prepareRuntimeConfig(
             importedConfig = importedConfig,
             home = home,
+            ipv6Enabled = preferences.vpnIpv6Enabled,
         )
 
         val debugLoggingEnabled = preferences.debugLoggingEnabled
@@ -150,6 +151,7 @@ internal object MihomoProcess {
     private fun prepareRuntimeConfig(
         importedConfig: File,
         home: File,
+        ipv6Enabled: Boolean,
     ): File {
         val controlledKeys = setOf(
             "mixed-port",
@@ -158,6 +160,7 @@ internal object MihomoProcess {
             "redir-port",
             "tproxy-port",
             "allow-lan",
+            "ipv6",
             "bind-address",
             "log-level",
             "external-controller",
@@ -187,6 +190,7 @@ internal object MihomoProcess {
                     # Injected by Mclash for Android VpnService.
                     mixed-port: $LOCAL_PROXY_PORT
                     allow-lan: false
+                    ipv6: $ipv6Enabled
                     bind-address: 127.0.0.1
                     log-level: error
                     external-controller: "$LOCAL_CONTROLLER_HOST:$LOCAL_CONTROLLER_PORT"
@@ -202,36 +206,6 @@ internal object MihomoProcess {
             Charsets.UTF_8,
         )
         return runtime
-    }
-
-    fun isIpv6Enabled(importedConfig: File): Boolean {
-        val original = importedConfig.readText(Charsets.UTF_8)
-            .removePrefix("\uFEFF")
-
-        for (line in original.lineSequence()) {
-            val trimmed = line.trimStart()
-            val isTopLevel = line.isNotBlank() &&
-                line.firstOrNull()?.isWhitespace() == false &&
-                !trimmed.startsWith("#")
-            if (!isTopLevel) continue
-
-            val key = line.substringBefore(':', missingDelimiterValue = "").trim()
-            if (key != "ipv6") continue
-
-            val value = line.substringAfter(':')
-                .substringBefore('#')
-                .trim()
-                .trim('"', '\'')
-                .lowercase()
-            return when (value) {
-                "true", "yes", "on", "1" -> true
-                "false", "no", "off", "0" -> false
-                else -> error("配置文件顶层 ipv6 必须为 true 或 false")
-            }
-        }
-
-        // Match mihomo's default when the top-level option is omitted.
-        return true
     }
 
     private fun removeTopLevelKeys(

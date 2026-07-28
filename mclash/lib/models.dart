@@ -104,6 +104,7 @@ class VpnTunnelSettings {
     required this.mtu,
     required this.tcpBufferSize,
     required this.ipv4DnsServers,
+    required this.ipv6Enabled,
     required this.bypassLan,
   });
 
@@ -115,13 +116,15 @@ class VpnTunnelSettings {
           (map['ipv4DnsServers'] as List<Object?>?)
               ?.whereType<String>()
               .toList() ??
-          const ['1.1.1.1'],
-      bypassLan: map['bypassLan'] as bool? ?? true,
+            const ['1.1.1.1'],
+        ipv6Enabled: map['ipv6Enabled'] as bool? ?? false,
+        bypassLan: map['bypassLan'] as bool? ?? true,
     );
   }
 
   final int mtu;
   final int tcpBufferSize;
   final List<String> ipv4DnsServers;
+  final bool ipv6Enabled;
   final bool bypassLan;
 }

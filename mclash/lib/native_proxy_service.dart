@@ -200,15 +200,17 @@ class NativeProxyService {
     required int mtu,
     required int tcpBufferSize,
     required List<String> ipv4DnsServers,
+    required bool ipv6Enabled,
     required bool bypassLan,
   }) async {
     final result = await _channel.invokeMapMethod<Object?, Object?>(
       'saveVpnTunnelSettings',
       <String, Object>{
         'mtu': mtu,
-        'tcpBufferSize': tcpBufferSize,
-        'ipv4DnsServers': ipv4DnsServers,
-        'bypassLan': bypassLan,
+          'tcpBufferSize': tcpBufferSize,
+          'ipv4DnsServers': ipv4DnsServers,
+          'ipv6Enabled': ipv6Enabled,
+          'bypassLan': bypassLan,
       },
     );
     return VpnTunnelSettings.fromMap(result ?? const <Object?, Object?>{});
