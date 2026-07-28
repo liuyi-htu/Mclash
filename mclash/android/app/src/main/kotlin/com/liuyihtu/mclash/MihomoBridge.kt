@@ -36,14 +36,15 @@ internal object MihomoProcess {
         val home = File(context.filesDir, "mihomo").apply { mkdirs() }
         installBundledGeodata(context, home)
         val preferences = AppPreferences(context)
+        val debugLoggingEnabled = preferences.debugLoggingEnabled
         // Keep the selected profile unchanged. Create a shared runtime copy.
         val runtimeConfig = prepareRuntimeConfig(
             importedConfig = importedConfig,
             home = home,
             ipv6Enabled = preferences.vpnIpv6Enabled,
+            debugLoggingEnabled = debugLoggingEnabled,
         )
 
-        val debugLoggingEnabled = preferences.debugLoggingEnabled
         val logFile = File(home, "mihomo.log")
         if (debugLoggingEnabled) {
             logFile.writeText(
@@ -152,6 +153,7 @@ internal object MihomoProcess {
         importedConfig: File,
         home: File,
         ipv6Enabled: Boolean,
+        debugLoggingEnabled: Boolean,
     ): File {
         val controlledKeys = setOf(
             "mixed-port",
@@ -193,7 +195,7 @@ internal object MihomoProcess {
                     allow-lan: false
                     ipv6: $ipv6Enabled
                     bind-address: 127.0.0.1
-                    log-level: error
+                    log-level: ${if (debugLoggingEnabled) "debug" else "error"}
                     external-controller: "$LOCAL_CONTROLLER_HOST:$LOCAL_CONTROLLER_PORT"
                     secret: ""
                     external-controller-cors:

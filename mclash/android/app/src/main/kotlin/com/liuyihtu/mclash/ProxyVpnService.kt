@@ -260,12 +260,34 @@ class ProxyVpnService : VpnService() {
     @Synchronized
     private fun stopNativeComponents() {
         if (tunnelStarted) {
+            logTunnelStats()
             runCatching { TProxyService.TProxyStopService() }
             tunnelStarted = false
         }
         runCatching { tunDescriptor?.close() }
         tunDescriptor = null
         runCatching { MihomoProcess.stop() }
+    }
+
+    private fun logTunnelStats() {
+        runCatching { TProxyService.TProxyGetStats() }
+            .onSuccess { stats ->
+                if (stats.size >= 4) {
+                    StartupLog.append(
+                        this,
+                        "HEV 统计：txPackets=${stats[0]}, txBytes=${stats[1]}, " +
+                            "rxPackets=${stats[2]}, rxBytes=${stats[3]}",
+                    )
+                } else {
+                    StartupLog.append(this, "HEV 统计返回长度异常：${stats.size}")
+                }
+            }
+            .onFailure { error ->
+                StartupLog.append(
+                    this,
+                    "读取 HEV 统计失败：${error.javaClass.simpleName}: ${error.message}",
+                )
+            }
     }
 
     private fun createNotificationChannel() {
