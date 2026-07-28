@@ -194,6 +194,11 @@ The app does not enable global cleartext traffic. It uses Network Security
 Config to keep cleartext disabled by default and allow only localhost/loopback
 addresses needed for the local mihomo proxy and controller.
 
+IPv6 is controlled by the imported mihomo profile's top-level `ipv6` field.
+Mclash mirrors that effective value when creating the Android VPN interface
+and does not override it with a separate app setting. If the field is omitted,
+mihomo's default (`true`) applies.
+
 ## Third-party licenses
 
 See [NOTICE](NOTICE). In short:

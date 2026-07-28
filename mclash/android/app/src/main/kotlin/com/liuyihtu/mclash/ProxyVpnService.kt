@@ -72,7 +72,7 @@ class ProxyVpnService : VpnService() {
                 val vpnMtu = preferences.vpnMtu
                 val tcpBufferSize = preferences.tcpBufferSize
                 val ipv4DnsServers = preferences.vpnIpv4DnsServers
-                val ipv6Enabled = preferences.vpnIpv6Enabled
+                val ipv6Enabled = MihomoProcess.isIpv6Enabled(configStore.configFile)
                 val bypassLan = preferences.vpnBypassLan
                 StartupLog.append(
                     this,
@@ -117,7 +117,7 @@ class ProxyVpnService : VpnService() {
                     this,
                         "VPN TUN 创建成功：fd=${tun.fd}, mtu=$vpnMtu, " +
                         "dns4=${ipv4DnsServers.joinToString()}, " +
-                        "ipv6=$ipv6Enabled, bypassLan=$bypassLan",
+                        "ipv6=$ipv6Enabled (config), bypassLan=$bypassLan",
                 )
 
                 val hevConfig = writeHevConfig(socksPort, vpnMtu, tcpBufferSize, ipv6Enabled)

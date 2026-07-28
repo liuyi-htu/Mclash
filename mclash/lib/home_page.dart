@@ -389,7 +389,6 @@ class _HomePageState extends State<HomePage> {
       final bufferController = TextEditingController(
         text: '${current.tcpBufferSize}',
       );
-      var ipv6Enabled = current.ipv6Enabled;
       var bypassLan = current.bypassLan;
       String? validationMessage;
 
@@ -411,13 +410,13 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('启用 IPv6'),
-                        value: ipv6Enabled,
-                        onChanged: (value) =>
-                            setDialogState(() => ipv6Enabled = value),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'IPv6 由当前配置文件的顶层 ipv6 字段控制',
+                        ),
                       ),
+                      const SizedBox(height: 8),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('绕过局域网'),
@@ -478,7 +477,6 @@ class _HomePageState extends State<HomePage> {
                       mtuController.text = '1500';
                       bufferController.text = '262144';
                       setDialogState(() {
-                        ipv6Enabled = false;
                         bypassLan = true;
                         validationMessage = null;
                       });
@@ -542,7 +540,6 @@ class _HomePageState extends State<HomePage> {
         mtu: mtu,
         tcpBufferSize: tcpBuffer,
         ipv4DnsServers: ipv4DnsServers,
-        ipv6Enabled: ipv6Enabled,
         bypassLan: bypassLan,
       );
       if (!mounted) return;

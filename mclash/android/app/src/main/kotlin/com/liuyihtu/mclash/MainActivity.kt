@@ -130,7 +130,6 @@ class MainActivity : FlutterActivity() {
         "mtu" to preferences.vpnMtu,
         "tcpBufferSize" to preferences.tcpBufferSize,
         "ipv4DnsServers" to preferences.vpnIpv4DnsServers,
-        "ipv6Enabled" to preferences.vpnIpv6Enabled,
         "bypassLan" to preferences.vpnBypassLan,
     )
 
@@ -249,7 +248,6 @@ class MainActivity : FlutterActivity() {
             ?.filter(String::isNotEmpty)
             ?.distinct()
             ?: error("IPv4 DNS 不能为空")
-        val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
         val bypassLan = call.argument<Boolean>("bypassLan") ?: true
 
         require(mtu in 576..9000) { "MTU 必须在 576 到 9000 之间" }
@@ -269,7 +267,6 @@ class MainActivity : FlutterActivity() {
         preferences.vpnMtu = mtu
         preferences.tcpBufferSize = tcpBufferSize
         preferences.vpnIpv4DnsServers = ipv4DnsServers
-        preferences.vpnIpv6Enabled = ipv6Enabled
         preferences.vpnBypassLan = bypassLan
         result.success(vpnTunnelSettings())
     }
@@ -375,7 +372,8 @@ class MainActivity : FlutterActivity() {
                         val trimmed = line.trim()
                         trimmed.startsWith("mixed-port:") ||
                             trimmed.startsWith("socks-port:") ||
-                            trimmed.startsWith("allow-lan:") ||
+                        trimmed.startsWith("allow-lan:") ||
+                            trimmed.startsWith("ipv6:") ||
                             trimmed.startsWith("bind-address:") ||
                             trimmed.startsWith("external-controller:") ||
                             trimmed.startsWith("external-ui:") ||
