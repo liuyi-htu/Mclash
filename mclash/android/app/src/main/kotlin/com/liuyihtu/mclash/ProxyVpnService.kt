@@ -167,29 +167,32 @@ class ProxyVpnService : VpnService() {
         val debugLoggingEnabled = AppPreferences(this).debugLoggingEnabled
         val hevLog = File(directory, "hev.log")
         if (debugLoggingEnabled) {
-            runCatching { hevLog.delete() }
+            hevLog.writeText("", Charsets.UTF_8)
         }
         val logTarget = if (debugLoggingEnabled) hevLog.absolutePath else "/dev/null"
         val logLevel = if (debugLoggingEnabled) "debug" else "error"
         val taskStackSize = tcpBufferSize + 20480
 
-        val ipv6Line = if (ipv6Enabled) "\n  ipv6: '$IPV6_TUN_ADDRESS'" else ""
         return File(directory, "hev.yml").apply {
             writeText(
-                """
-                tunnel:
-                  mtu: $mtu
-                  ipv4: 198.18.0.1$ipv6Line
-                socks5:
-                  address: 127.0.0.1
-                  port: $socksPort
-                  udp: 'udp'
-                misc:
-                  log-file: $logTarget
-                  log-level: $logLevel
-                  task-stack-size: $taskStackSize
-                  tcp-buffer-size: $tcpBufferSize
-                """.trimIndent() + "\n",
+                buildString {
+                    appendLine("tunnel:")
+                    appendLine("  mtu: $mtu")
+                    appendLine("  ipv4: 198.18.0.1")
+                    if (ipv6Enabled) {
+                        appendLine("  ipv6: '$IPV6_TUN_ADDRESS'")
+                    }
+                    appendLine("socks5:")
+                    appendLine("  address: 127.0.0.1")
+                    appendLine("  port: $socksPort")
+                    appendLine("  udp: 'udp'")
+                    appendLine("misc:")
+                    appendLine("  log-file: '$logTarget'")
+                    appendLine("  log-level: $logLevel")
+                    appendLine("  task-stack-size: $taskStackSize")
+                    appendLine("  tcp-buffer-size: $tcpBufferSize")
+                },
+                Charsets.UTF_8,
             )
         }
     }
