@@ -19,8 +19,9 @@ on:
         default: 2.1.0
         type: string
       build_number:
-        description: Positive integer; leave blank to increment the latest build
+        description: Latest build number; unchanged values advance automatically
         required: false
+        default: "23"
         type: string
 
 permissions:
@@ -101,18 +102,29 @@ jobs:
 
           requested_version = os.environ["REQUESTED_VERSION"].strip()
           requested_build = os.environ["REQUESTED_BUILD_NUMBER"].strip()
+          if requested_build and not build_pattern.fullmatch(requested_build):
+              raise SystemExit("build_number must be a positive integer")
           version = requested_version or previous_version
-          if requested_build:
-              build_number = requested_build
+          matching_builds = [build for _, item_version, build in candidates
+                             if item_version == version]
+          if matching_builds:
+              selected_previous_build = max(matching_builds)
+          elif version == source_version:
+              selected_previous_build = source_build
           else:
-              matching_builds = [build for _, item_version, build in candidates
-                                 if item_version == version]
-              if matching_builds:
-                  build_number = str(max(matching_builds) + 1)
-              elif version == source_version:
-                  build_number = str(source_build + 1)
+              selected_previous_build = 0
+
+          default_values_unchanged = (
+              version != previous_version and requested_build == str(previous_build)
+          )
+          if not requested_build or default_values_unchanged:
+              build_number = str(selected_previous_build + 1)
+          else:
+              requested_build_number = int(requested_build)
+              if requested_build_number <= selected_previous_build:
+                  build_number = str(selected_previous_build + 1)
               else:
-                  build_number = "1"
+                  build_number = requested_build
 
           if not version_pattern.fullmatch(version):
               raise SystemExit("version must use x.y.z format")
@@ -494,6 +506,12 @@ jobs:
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -533,3 +551,53 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Mclash ${APP_VERSION} Build ${BUILD_NUMBER}" \
             --generate-notes
+
+      - name: Store latest build defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --ff-only origin main
+          python3 <<'PY'
+          import os
+          import pathlib
+          import re
+
+          path = pathlib.Path(".github/workflows/build-all.yml")
+          lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+          values = {
+              "version": os.environ["APP_VERSION"],
+              "build_number": os.environ["BUILD_NUMBER"],
+          }
+          current_input = None
+          updated = set()
+          inside_inputs = False
+
+          for index, line in enumerate(lines):
+              if line.rstrip("\r\n") == "    inputs:":
+                  inside_inputs = True
+                  continue
+              if inside_inputs and line and not line[0].isspace():
+                  break
+              match = re.fullmatch(r"      (version|build_number):\s*", line.rstrip("\r\n"))
+              if match:
+                  current_input = match.group(1)
+                  continue
+              if current_input and re.match(r"^        default:\s*", line):
+                  newline = "\r\n" if line.endswith("\r\n") else "\n"
+                  lines[index] = f'        default: "{values[current_input]}"{newline}'
+                  updated.add(current_input)
+                  current_input = None
+
+          if updated != set(values):
+              raise SystemExit(f"Failed to update workflow defaults: {sorted(updated)}")
+          path.write_text("".join(lines), encoding="utf-8", newline="")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- .github/workflows/build-all.yml
+          if git diff --cached --quiet; then
+            echo "Workflow defaults already match ${APP_VERSION}+${BUILD_NUMBER}."
+            exit 0
+          fi
+          git commit -m "[skip ci] Update build defaults to ${APP_VERSION}+${BUILD_NUMBER}"
+          git push origin HEAD:main
