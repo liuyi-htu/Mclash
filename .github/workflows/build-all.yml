@@ -196,25 +196,31 @@ jobs:
       - name: Configure Android release signing
         shell: bash
         env:
-          SIGNING_JKS_BASE64: ${{ secrets.SIGNING_JKS_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in SIGNING_JKS_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [[ -n "${!name}" ]] || {
               echo "Missing repository secret: $name" >&2
               exit 1
             }
           done
-          printf '%s' "$SIGNING_JKS_BASE64" | base64 --decode > root/android/mclash-release.jks
+          keystore_file="$RUNNER_TEMP/mclash-root-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_file"
+          chmod 600 "$keystore_file"
+          keytool -list -keystore "$keystore_file" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
           {
-            echo 'storeFile=mclash-release.jks'
-            echo "storePassword=$STORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "storeFile=$keystore_file"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
           } > root/android/key.properties
+          chmod 600 root/android/key.properties
 
       - name: Build Root APK
         shell: bash
@@ -284,25 +290,31 @@ jobs:
       - name: Configure Android release signing
         shell: bash
         env:
-          SIGNING_JKS_BASE64: ${{ secrets.SIGNING_JKS_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          for name in SIGNING_JKS_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
             [[ -n "${!name}" ]] || {
               echo "Missing repository secret: $name" >&2
               exit 1
             }
           done
-          printf '%s' "$SIGNING_JKS_BASE64" | base64 --decode > android/android/mclash-release.jks
+          keystore_file="$RUNNER_TEMP/mclash-android-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_file"
+          chmod 600 "$keystore_file"
+          keytool -list -keystore "$keystore_file" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
           {
-            echo 'storeFile=mclash-release.jks'
-            echo "storePassword=$STORE_PASSWORD"
-            echo "keyAlias=$KEY_ALIAS"
-            echo "keyPassword=$KEY_PASSWORD"
+            echo "storeFile=$keystore_file"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
           } > android/android/key.properties
+          chmod 600 android/android/key.properties
 
       - name: Build HevSocks5Tunnel JNI library
         shell: bash
