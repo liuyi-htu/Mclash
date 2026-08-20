@@ -2,6 +2,8 @@ name: Windows checks
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "windows/**"
       - ".github/workflows/windows-check.yml"
@@ -13,6 +15,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-check-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
