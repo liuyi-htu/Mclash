@@ -58,8 +58,9 @@ class _RootCoreUpdatePageState extends State<RootCoreUpdatePage> {
       _stage = '正在下载并校验；代理会保持运行…';
       _progress = 0;
     });
-    _progressTimer =
-        Timer.periodic(const Duration(milliseconds: 500), (_) async {
+    _progressTimer = Timer.periodic(const Duration(milliseconds: 500), (
+      _,
+    ) async {
       try {
         final status = await _service.getRootCoreUpdateStatus();
         if (!mounted) return;

@@ -101,8 +101,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final urlController = TextEditingController(text: existing?.url ?? '');
     String? validationMessage;
 
-    final save =
-        await showDialog<bool>(
+    final save = await showDialog<bool>(
           context: context,
           barrierDismissible: !_working,
           builder: (dialogContext) => StatefulBuilder(
@@ -233,8 +232,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _delete(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
-    final confirmed =
-        await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('删除配置'),
@@ -372,8 +370,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final controller = TextEditingController(text: profile.name);
     String? validationMessage;
 
-    final shouldSave =
-        await showDialog<bool>(
+    final shouldSave = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => StatefulBuilder(
             builder: (dialogContext, setDialogState) => AlertDialog(
@@ -848,18 +845,18 @@ class _ConfigPageState extends State<ConfigPage> {
                                                 ),
                                                 if (profile.active)
                                                   Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 9,
-                                                          vertical: 4,
-                                                        ),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 9,
+                                                      vertical: 4,
+                                                    ),
                                                     decoration: BoxDecoration(
                                                       color: colors
                                                           .primaryContainer,
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            20,
-                                                          ),
+                                                        20,
+                                                      ),
                                                     ),
                                                     child: Text(
                                                       '当前',
@@ -878,11 +875,11 @@ class _ConfigPageState extends State<ConfigPage> {
                                             Text(
                                               widget.proxyRunning
                                                   ? (profile.isSubscription
-                                                        ? '机场订阅 · 点击查看'
-                                                        : '本地 YAML · 点击查看')
+                                                      ? '机场订阅 · 点击查看'
+                                                      : '本地 YAML · 点击查看')
                                                   : (profile.isSubscription
-                                                        ? '机场订阅 · 长按管理'
-                                                        : '本地 YAML · 长按管理'),
+                                                      ? '机场订阅 · 长按管理'
+                                                      : '本地 YAML · 长按管理'),
                                               style: TextStyle(
                                                 color: colors.onSurfaceVariant,
                                                 fontSize: 13,

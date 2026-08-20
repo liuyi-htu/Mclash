@@ -20,6 +20,7 @@ valid_pid() {
 }
 cleanup() {
   "$MODDIR/scripts/clear-tproxy.sh" >> "$LOG" 2>&1
+  "$MODDIR/scripts/clear-tun-hotspot.sh" >> "$LOG" 2>&1
   rm -f "$PIDFILE" "$STATUS"
 }
 start_proxy() {
@@ -44,13 +45,21 @@ start_proxy() {
   done
   [ "$ready" = 1 ] || { log "mihomo controller port did not become ready"; kill "$pid" 2>/dev/null; cleanup; return 16; }
   if [ "$PROXY_MODE" = tproxy ]; then
-    "$MODDIR/scripts/apply-tproxy.sh" >> "$LOG" 2>&1 || {
-      log "TProxy rule setup failed; cleaning up"
-      kill "$pid" 2>/dev/null
-      sleep 1
-      cleanup
-      return 15
-    }
+    ROUTE_SCRIPT="$MODDIR/scripts/apply-tproxy.sh"
+  else
+    ROUTE_SCRIPT="$MODDIR/scripts/apply-tun-hotspot.sh"
+  fi
+  "$ROUTE_SCRIPT" >> "$LOG" 2>&1 || {
+    log "transparent routing setup failed; cleaning up"
+    kill "$pid" 2>/dev/null
+    sleep 1
+    cleanup
+    return 15
+  }
+  if [ "$PROXY_MODE" = tproxy ]; then
+    ip rule show >> "$LOG" 2>&1
+    iptables -t mangle -S MCLASH_TPROXY >> "$LOG" 2>&1
+    iptables -t mangle -S MCLASH_OUTPUT >> "$LOG" 2>&1
   fi
   echo RUNNING > "$STATUS"
   log "mihomo started pid=$pid"

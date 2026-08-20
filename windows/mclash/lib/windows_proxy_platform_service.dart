@@ -9,8 +9,8 @@ import 'models.dart';
 import 'proxy_platform_service.dart';
 import 'windows_system_proxy_manager.dart';
 
-typedef ServiceProcessRunner =
-    Future<ProcessResult> Function(String executable, List<String> arguments);
+typedef ServiceProcessRunner = Future<ProcessResult> Function(
+    String executable, List<String> arguments);
 
 class WindowsProxyPlatformService implements ProxyPlatformService {
   WindowsProxyPlatformService({
@@ -18,10 +18,10 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
     String? systemProxyBackupPath,
     RegistryProcessRunner? registryProcessRunner,
     ServiceProcessRunner? serviceProcessRunner,
-  }) : _dataDirOverride = dataDir,
-       _systemProxyBackupPathOverride = systemProxyBackupPath,
-       _registryProcessRunner = registryProcessRunner,
-       _serviceProcessRunner = serviceProcessRunner;
+  })  : _dataDirOverride = dataDir,
+        _systemProxyBackupPathOverride = systemProxyBackupPath,
+        _registryProcessRunner = registryProcessRunner,
+        _serviceProcessRunner = serviceProcessRunner;
 
   final String? _dataDirOverride;
   final String? _systemProxyBackupPathOverride;
@@ -120,7 +120,8 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
   }
 
   Future<void> _updateSettings(Map<String, dynamic> changes) async {
-    final settings = await _readSettings()..addAll(changes);
+    final settings = await _readSettings()
+      ..addAll(changes);
     await _writeSettings(settings);
   }
 
@@ -237,9 +238,8 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
           for (final inbound in inbounds.whereType<Map>()) {
             if (inbound['type'] == 'mixed' || inbound['type'] == 'http') {
               final value = inbound['listen_port'];
-              final port = value is int
-                  ? value
-                  : int.tryParse(value?.toString() ?? '');
+              final port =
+                  value is int ? value : int.tryParse(value?.toString() ?? '');
               if (port != null && port > 0 && port <= 65535) return port;
             }
           }
@@ -275,12 +275,15 @@ public static class WinInetProxy {
 [WinInetProxy]::InternetSetOption([IntPtr]::Zero, 39, [IntPtr]::Zero, 0) | Out-Null
 [WinInetProxy]::InternetSetOption([IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null
 ''';
-    final result = await Process.run('powershell.exe', const <String>[
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      script,
-    ], runInShell: false);
+    final result = await Process.run(
+        'powershell.exe',
+        const <String>[
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          script,
+        ],
+        runInShell: false);
     if (result.exitCode != 0) {
       throw StateError('Windows 系统代理已写入，但刷新系统设置失败。');
     }
@@ -289,8 +292,8 @@ public static class WinInetProxy {
   @override
   Future<NetworkMode> getNetworkMode() async =>
       (await _readSettings())['networkMode'] == 'tun'
-      ? NetworkMode.tun
-      : NetworkMode.proxy;
+          ? NetworkMode.tun
+          : NetworkMode.proxy;
 
   @override
   Future<void> setNetworkMode(NetworkMode mode) async {
@@ -304,10 +307,9 @@ public static class WinInetProxy {
       final profile = File(_profilePath(active));
       if (await profile.exists()) source = profile;
     }
-    source ??=
-        await File(
-          core == CoreType.singBox ? _singBoxConfigPath : _configPath,
-        ).exists()
+    source ??= await File(
+      core == CoreType.singBox ? _singBoxConfigPath : _configPath,
+    ).exists()
         ? File(core == CoreType.singBox ? _singBoxConfigPath : _configPath)
         : null;
 
@@ -366,10 +368,11 @@ public static class WinInetProxy {
 
   _RuntimePreferences _runtimePreferencesFromState(
     Map<String, dynamic> state,
-  ) => _RuntimePreferences(
-    ipv6Enabled: state['ipv6Enabled'] == true,
-    bypassLanEnabled: state['bypassLanEnabled'] != false,
-  );
+  ) =>
+      _RuntimePreferences(
+        ipv6Enabled: state['ipv6Enabled'] == true,
+        bypassLanEnabled: state['bypassLanEnabled'] != false,
+      );
 
   List<String> _routeExcludes(Object? existing, bool bypassLanEnabled) {
     final result = existing is Iterable
@@ -393,9 +396,9 @@ public static class WinInetProxy {
   }
 
   Map<Object?, Object?> _plainYamlMap(YamlMap value) => <Object?, Object?>{
-    for (final key in value.keys)
-      _plainYamlValue(key): _plainYamlValue(value[key]),
-  };
+        for (final key in value.keys)
+          _plainYamlValue(key): _plainYamlValue(value[key]),
+      };
 
   Future<void> _refreshRuntimeConfig() async {
     final state = await _readSettings();
@@ -410,9 +413,8 @@ public static class WinInetProxy {
         source ?? File(singBox ? _singBoxConfigPath : _configPath);
     if (!await resolvedSource.exists()) return;
     final content = await resolvedSource.readAsString();
-    final mode = state['networkMode'] == 'tun'
-        ? NetworkMode.tun
-        : NetworkMode.proxy;
+    final mode =
+        state['networkMode'] == 'tun' ? NetworkMode.tun : NetworkMode.proxy;
     final preferences = _runtimePreferencesFromState(state);
     if (singBox) {
       await File(_singBoxConfigPath).writeAsString(
@@ -440,8 +442,8 @@ public static class WinInetProxy {
   @override
   Future<CoreType> getCoreType() async =>
       (await _readSettings())['coreType'] == 'sing-box'
-      ? CoreType.singBox
-      : CoreType.mihomo;
+          ? CoreType.singBox
+          : CoreType.mihomo;
 
   bool _profileMatchesCore(String? id, CoreType core) {
     if (id == null || id.isEmpty) return false;
@@ -456,9 +458,8 @@ public static class WinInetProxy {
   @override
   Future<void> setCoreType(CoreType core) async {
     final state = await _readSettings();
-    final currentCore = state['coreType'] == 'sing-box'
-        ? CoreType.singBox
-        : CoreType.mihomo;
+    final currentCore =
+        state['coreType'] == 'sing-box' ? CoreType.singBox : CoreType.mihomo;
     final currentActive = state['activeProfile']?.toString();
     final currentActiveKey = _activeProfileKey(currentCore);
     final targetActiveKey = _activeProfileKey(core);
@@ -469,10 +470,10 @@ public static class WinInetProxy {
     // the last profile used by the target core.
     final targetActive =
         currentCore == core && _profileMatchesCore(currentActive, core)
-        ? currentActive
-        : _profileMatchesCore(rememberedTarget, core)
-        ? rememberedTarget
-        : null;
+            ? currentActive
+            : _profileMatchesCore(rememberedTarget, core)
+                ? rememberedTarget
+                : null;
 
     final changes = <String, dynamic>{
       'coreType': core == CoreType.singBox ? 'sing-box' : 'mihomo',
@@ -493,13 +494,11 @@ public static class WinInetProxy {
     ).exists();
     final active = state['activeProfile']?.toString();
     final names = state['profileNames'];
-    final displayName = names is Map && active != null
-        ? names[active]?.toString()
-        : null;
+    final displayName =
+        names is Map && active != null ? names[active]?.toString() : null;
     return ConfigInfo(
       exists: exists,
-      fileName:
-          displayName ??
+      fileName: displayName ??
           (exists
               ? (core == CoreType.singBox ? 'sing-box.json' : 'config.yaml')
               : null),
@@ -635,8 +634,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       final extension = core == CoreType.singBox
           ? '.json'
           : lowerPath.endsWith('.yml')
-          ? '.yml'
-          : '.yaml';
+              ? '.yml'
+              : '.yaml';
       if (core == CoreType.mihomo &&
           !RegExp(
             r'\.(yaml|yml)$',
@@ -745,9 +744,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           <Object>['tun'],
           <String, dynamic>{
             'enable': enabled,
-            'route-exclude-address': bypassLanEnabled
-                ? _privateNetworkCidrs
-                : const <String>[],
+            'route-exclude-address':
+                bypassLanEnabled ? _privateNetworkCidrs : const <String>[],
             if (enabled) ...<String, dynamic>{
               'stack': 'mixed',
               'auto-route': true,
@@ -794,9 +792,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     } else {
       runtime['tun'] = <String, dynamic>{
         'enable': enabled,
-        'route-exclude-address': bypassLanEnabled
-            ? _privateNetworkCidrs
-            : const <String>[],
+        'route-exclude-address':
+            bypassLanEnabled ? _privateNetworkCidrs : const <String>[],
         if (enabled) ...<String, dynamic>{
           'stack': 'mixed',
           'auto-route': true,
@@ -871,9 +868,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           ],
           'auto_route': true,
           'strict_route': true,
-          'route_exclude_address': bypassLanEnabled
-              ? _privateNetworkCidrs
-              : const <String>[],
+          'route_exclude_address':
+              bypassLanEnabled ? _privateNetworkCidrs : const <String>[],
         });
       }
     }
@@ -1038,27 +1034,27 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<List<DebugLogFile>> getDebugLogs() async => const <DebugLogFile>[
-    DebugLogFile(
-      id: 'service.log',
-      displayName: 'Mclash.log',
-      description: '服务启动、停止和控制日志',
-    ),
-    DebugLogFile(
-      id: 'mihomo.log',
-      displayName: 'mihomo.log',
-      description: 'mihomo 内核运行日志',
-    ),
-    DebugLogFile(
-      id: 'sing-box.log',
-      displayName: 'sing-box.log',
-      description: 'sing-box 内核运行日志',
-    ),
-    DebugLogFile(
-      id: 'update.log',
-      displayName: 'update.log',
-      description: 'mihomo/sing-box 内核检测与更新日志',
-    ),
-  ];
+        DebugLogFile(
+          id: 'service.log',
+          displayName: 'Mclash.log',
+          description: '服务启动、停止和控制日志',
+        ),
+        DebugLogFile(
+          id: 'mihomo.log',
+          displayName: 'mihomo.log',
+          description: 'mihomo 内核运行日志',
+        ),
+        DebugLogFile(
+          id: 'sing-box.log',
+          displayName: 'sing-box.log',
+          description: 'sing-box 内核运行日志',
+        ),
+        DebugLogFile(
+          id: 'update.log',
+          displayName: 'update.log',
+          description: 'mihomo/sing-box 内核检测与更新日志',
+        ),
+      ];
 
   @override
   Future<String> getDebugLogContent(String id) async {
@@ -1129,8 +1125,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<void> updateCore(CoreType core) => _runService(
-    core == CoreType.mihomo ? 'update-core' : 'update-singbox',
-  ).then((_) {});
+        core == CoreType.mihomo ? 'update-core' : 'update-singbox',
+      ).then((_) {});
 
   Uri _subscriptionUri(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -1143,10 +1139,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   bool _looksLikeMihomoConfig(String content) => RegExp(
-    r'^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:',
-    caseSensitive: false,
-    multiLine: true,
-  ).hasMatch(content);
+        r'^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:',
+        caseSensitive: false,
+        multiLine: true,
+      ).hasMatch(content);
 
   Future<_SubscriptionDownload> _downloadSubscription(String url) async {
     final uri = _subscriptionUri(url);
@@ -1197,7 +1193,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           contentType: contentType,
           contentLength: bytes.length,
         );
-      })().timeout(const Duration(seconds: 45));
+      })()
+          .timeout(const Duration(seconds: 45));
     } on TimeoutException {
       throw StateError('连接订阅服务器超时。');
     } finally {

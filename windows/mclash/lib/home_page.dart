@@ -116,30 +116,26 @@ class _HomePageState extends State<HomePage> {
                       const _UsageNoticeItem(
                         icon: Icons.code_rounded,
                         title: '完全透明开源',
-                        body:
-                            '本项目完全透明开源，构建脚本和完整项目源码均随发布包提供，'
+                        body: '本项目完全透明开源，构建脚本和完整项目源码均随发布包提供，'
                             '可供审查、学习、修改和自行编译。',
                       ),
                       const _UsageNoticeItem(
                         icon: Icons.verified_user_outlined,
                         title: '仅限合法用途',
-                        body:
-                            '仅可用于学习研究、软件开发、网络调试、个人隐私保护，'
+                        body: '仅可用于学习研究、软件开发、网络调试、个人隐私保护，'
                             '以及已经获得明确授权的网络和设备。',
                       ),
                       const _UsageNoticeItem(
                         icon: Icons.block_outlined,
                         title: '禁止违法滥用',
-                        body:
-                            '禁止用于未经授权的入侵、攻击、扫描、诈骗、窃取数据、'
+                        body: '禁止用于未经授权的入侵、攻击、扫描、诈骗、窃取数据、'
                             '侵犯隐私、传播违法内容或其他违法活动。',
                         warning: true,
                       ),
                       const _UsageNoticeItem(
                         icon: Icons.info_outline,
                         title: '责任说明',
-                        body:
-                            '本项目不提供节点、订阅或内容服务。使用者应遵守法律法规，'
+                        body: '本项目不提供节点、订阅或内容服务。使用者应遵守法律法规，'
                             '并自行承担配置和使用行为产生的责任。',
                       ),
                       const SizedBox(height: 8),
@@ -216,8 +212,8 @@ class _HomePageState extends State<HomePage> {
       final config = await _service.getConfigInfo();
       final running = await _service.isRunning();
       final debugLoggingEnabled = await _service.getDebugLoggingEnabled();
-      final serviceAutoStartEnabled = await _service
-          .getServiceAutoStartEnabled();
+      final serviceAutoStartEnabled =
+          await _service.getServiceAutoStartEnabled();
       final ipv6Enabled = await _service.getIpv6Enabled();
       final bypassLanEnabled = await _service.getBypassLanEnabled();
       final networkMode = await _service.getNetworkMode();
@@ -253,9 +249,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openProxyBoard() async {
     const url = 'https://board.zash.run.place/#/proxies';
     try {
-      await Process.start('explorer.exe', const [
-        url,
-      ], mode: ProcessStartMode.detached);
+      await Process.start(
+          'explorer.exe',
+          const [
+            url,
+          ],
+          mode: ProcessStartMode.detached);
     } catch (error) {
       if (mounted) _showError('打开代理面板失败：$error');
     }
@@ -502,12 +501,14 @@ class _HomePageState extends State<HomePage> {
     final core = switch (selected) {
       _RunModeChoice.mihomoTun || _RunModeChoice.mihomoProxy => CoreType.mihomo,
       _RunModeChoice.singBoxTun ||
-      _RunModeChoice.singBoxProxy => CoreType.singBox,
+      _RunModeChoice.singBoxProxy =>
+        CoreType.singBox,
     };
     final mode = switch (selected) {
       _RunModeChoice.mihomoTun || _RunModeChoice.singBoxTun => NetworkMode.tun,
       _RunModeChoice.mihomoProxy ||
-      _RunModeChoice.singBoxProxy => NetworkMode.proxy,
+      _RunModeChoice.singBoxProxy =>
+        NetworkMode.proxy,
     };
     await _switchRunMode(core, mode);
   }
@@ -625,8 +626,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton(
-                        onPressed:
-                            busy ||
+                        onPressed: busy ||
                                 _status == ProxyStatus.starting ||
                                 _status == ProxyStatus.stopping
                             ? null
@@ -685,8 +685,8 @@ class _HomePageState extends State<HomePage> {
     final lines = updateLog.trimRight().split('\n');
     final recentLog =
         (lines.length > 80 ? lines.sublist(lines.length - 80) : lines).join(
-          '\n',
-        );
+      '\n',
+    );
     final logTitle = _debugLoggingEnabled ? '最近的 update.log' : '调试日志';
     final details = '错误：$error\n\n$logTitle：\n$recentLog';
 
@@ -759,7 +759,7 @@ class _HomePageState extends State<HomePage> {
             const Text('开源地址', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             const SelectableText(
-              'https://github.com/liuyi-htu/Mclash-for-windows',
+              'https://github.com/liuyi-htu/Mclash',
               style: TextStyle(
                 color: Colors.blue,
                 decoration: TextDecoration.underline,
@@ -912,8 +912,8 @@ class _HomePageState extends State<HomePage> {
                       log.id == 'update.log'
                           ? Icons.system_update_alt_rounded
                           : log.id == 'mihomo.log' || log.id == 'sing-box.log'
-                          ? Icons.memory_rounded
-                          : Icons.settings_applications_outlined,
+                              ? Icons.memory_rounded
+                              : Icons.settings_applications_outlined,
                     ),
                     title: Text(log.displayName),
                     subtitle: Text(log.description),
@@ -945,8 +945,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _confirmClearDebugLogs() async {
-    final confirmed =
-        await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('清除调试日志'),
@@ -1029,18 +1028,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _statusText => switch (_status) {
-    ProxyStatus.stopped => '未启动',
-    ProxyStatus.starting => '正在启动',
-    ProxyStatus.running => '运行中',
-    ProxyStatus.stopping => '正在停止',
-  };
+        ProxyStatus.stopped => '未启动',
+        ProxyStatus.starting => '正在启动',
+        ProxyStatus.running => '运行中',
+        ProxyStatus.stopping => '正在停止',
+      };
 
   String get _buttonText => switch (_status) {
-    ProxyStatus.stopped => '启动代理',
-    ProxyStatus.starting => '正在启动',
-    ProxyStatus.running => '停止代理',
-    ProxyStatus.stopping => '正在停止',
-  };
+        ProxyStatus.stopped => '启动代理',
+        ProxyStatus.starting => '正在启动',
+        ProxyStatus.running => '停止代理',
+        ProxyStatus.stopping => '正在停止',
+      };
 
   PopupMenuItem<_HomeMenuAction> _menuItem({
     required _HomeMenuAction value,
@@ -1151,11 +1150,10 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        (running
-                                ? const Color(0xFF356AE6)
-                                : const Color(0xFF202B45))
-                            .withValues(alpha: 0.20),
+                    color: (running
+                            ? const Color(0xFF356AE6)
+                            : const Color(0xFF202B45))
+                        .withValues(alpha: 0.20),
                     blurRadius: 26,
                     offset: const Offset(0, 12),
                   ),
@@ -1247,9 +1245,8 @@ class _HomePageState extends State<HomePage> {
                       onPressed: busy ? null : _toggle,
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: running
-                            ? colors.error
-                            : const Color(0xFF2859C5),
+                        foregroundColor:
+                            running ? colors.error : const Color(0xFF2859C5),
                         disabledBackgroundColor: Colors.white.withValues(
                           alpha: 0.72,
                         ),

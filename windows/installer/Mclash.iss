@@ -8,7 +8,7 @@
 AppId={{6C93D89B-75B0-4AE7-A8F3-A0F98048B215}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-DefaultDirName=D:\Program Files\Mclash
+DefaultDirName={autopf}\Mclash
 DefaultGroupName=Mclash
 OutputDir=Output
 OutputBaseFilename=Mclash-Windows-Setup-{#MyAppVersion}

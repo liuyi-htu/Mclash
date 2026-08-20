@@ -1,17 +1,22 @@
-# Mclash Root / VPN 源码说明
+# Mclash Root / Android / Windows 源码说明
 
-`source/` 同时维护 Mclash 的 Root 和 VPN 两种 Android App。两者共用 Flutter
-界面和大部分配置能力，但使用不同的代理启动方式：
+本仓库同时维护 Mclash 的 Root、Android 和 Windows 三个客户端。两个 Android
+客户端共用 Flutter 界面和大部分配置能力，但使用不同的代理启动方式：
 
 - `root/`：通过 Root 模块运行 mihomo，使用 `/data/adb/modules/mclash_root`
   模块和 `/data/adb/mclash` 数据目录，支持 Magisk、KernelSU 和 APatch。
-- `vpn/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
+- `android/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
   Root 权限。
+- `windows/`：Flutter Windows 客户端，同时支持 mihomo 和 sing-box，通过
+  独立的 Windows 系统服务管理代理内核、系统代理和更新。
+
+三个客户端均提供配置管理、代理面板和运行状态展示；Android 客户端另外提供
+应用分流和快捷设置磁贴。
 
 ## 目录结构
 
 ```text
-source/
+Mclash/
 ├── README.md
 ├── root/
 │   ├── lib/                        # Root 模式 Flutter 源码
@@ -20,15 +25,20 @@ source/
 │   ├── test/                       # Flutter 组件测试
 │   ├── build-mclash-root.sh        # Root 构建入口
 │   └── dist/                       # Root 最终产物
-└── vpn/
-    ├── lib/                        # VPN 模式 Flutter 源码
-    ├── android/                    # VPN 模式 Android/Kotlin 源码
-    ├── test/                       # Flutter 组件测试
-    ├── build-mclash-vpn.sh         # VPN 构建入口
-    └── dist/                       # VPN 最终产物
+├── android/
+│   ├── lib/                        # Android 客户端 Flutter 源码
+│   ├── android/                    # Android/Kotlin 源码
+│   ├── test/                       # Flutter 组件测试
+│   ├── build-mclash-android.sh     # Android 构建入口
+│   └── dist/                       # Android 最终产物
+└── windows/
+    ├── mclash/                     # Flutter Windows 客户端
+    ├── windows-service/            # Windows 系统服务
+    ├── installer/                  # Inno Setup 安装配置
+    └── scripts/build-windows.ps1   # Windows 构建入口
 ```
 
-每个 App 的 `lib/` 目录按职责划分：
+Android App 的 `lib/` 目录按职责划分：
 
 - `main.dart`：Flutter 应用入口和全局主题。
 - `pages/`：首页、配置、代理面板及应用选择页。
@@ -44,13 +54,19 @@ source/
 - `ConfigStore.kt`：配置文件及应用设置持久化。
 - `root-module/`：可安装的 Root 模块源码。
 
-### VPN
+### Android
 
 - `ProxyVpnService.kt`：Android VPN 生命周期和隧道管理。
 - `MihomoBridge.kt`：mihomo 内核进程、端口和资源准备。
 - `ConfigStore.kt`：配置文件及应用设置持久化。
 
-## 编译环境
+### Windows
+
+- `windows/mclash/`：桌面界面、配置管理和系统代理控制。
+- `windows/windows-service/`：负责 mihomo、sing-box 生命周期、自启动和内核更新。
+- `windows/installer/`：生成 Windows 安装程序。
+
+## Android 编译环境
 
 | 组件 | 版本或要求 |
 | --- | --- |
@@ -74,13 +90,15 @@ Android SDK 需安装 Command-line Tools 和 Platform Tools，并确保 `sdkmana
 git curl unzip gzip sha256sum file python3 java flutter dart
 ```
 
+设备绑定流量监控构建另需 `openssl`。首次编译需联网下载 Android 组件、
+Gradle、Dart 依赖和运行资源。
 
 ## 开发检查
 
 进入要检查的模式目录：
 
 ```bash
-cd source/root # 或 cd source/vpn
+cd root # 或 cd android
 flutter pub get
 flutter analyze
 flutter test
@@ -91,13 +109,13 @@ flutter test
 准备好 Release 签名配置后执行：
 
 ```bash
-cd source/root
+cd root
 ./build-mclash-root.sh
 ```
 
 脚本会下载最新 mihomo 和 geodata，执行格式化、静态分析、测试、Release
 编译、APK 完整性和签名验证。最终 APK、在线更新内核压缩包和内核更新
-manifest 写入 `source/root/dist/`。Root 模块不使用 Gradle 的上次打包结果，
+manifest 写入 `root/dist/`。Root 模块不使用 Gradle 的上次打包结果，
 每次构建都会从当前 `root-module/` 源码重新生成 ZIP 并嵌入 APK。
 独立的 Root 模块 ZIP 只是构建中间文件，不会保留在 `dist/`。
 
@@ -110,23 +128,23 @@ android/app/src/main/assets/geodata/geoip.dat
 android/app/src/main/assets/geodata/country.mmdb
 ```
 
-## VPN 构建
+## Android 构建
 
 准备好 Release 签名配置和下方运行资源后执行：
 
 ```bash
-cd source/vpn
-./build-mclash-vpn.sh
+cd android
+./build-mclash-android.sh
 ```
 
 默认构建 ARM64 Release APK，最终 APK 和 SHA-256 写入
-`source/vpn/dist/`。如需 Debug APK：
+`android/dist/`。如需 Debug APK：
 
 ```bash
-BUILD_MODE=debug ./build-mclash-vpn.sh
+BUILD_MODE=debug ./build-mclash-android.sh
 ```
 
-VPN 模式需要：
+Android 客户端需要：
 
 ```text
 android/app/src/main/jniLibs/arm64-v8a/libmihomo.so
@@ -138,6 +156,42 @@ android/app/src/main/assets/geodata/country.mmdb
 
 缺少运行资源时 APK 可能仍能完成普通 Flutter 编译，但对应的代理模式无法
 正常启动。
+
+## Windows 构建
+
+Windows 10 或更高版本需安装 Flutter（启用 Windows 桌面支持）、Go、
+Visual Studio C++ 构建工具和 Inno Setup 6。请在 PowerShell 中从仓库根目录执行：
+
+```powershell
+.\windows\scripts\build-windows.ps1
+```
+
+脚本会下载并校验 mihomo、sing-box、GeoSite、GeoIP 和 Country 数据，运行
+Dart 与 Go 检查，并将安装程序写入 `windows\installer\Output\`。Windows
+客户端支持 mihomo/Clash YAML 配置和 sing-box JSON 配置，两种内核均支持
+TUN 与系统代理模式。
+
+## GitHub 自动构建
+
+在仓库的 **Actions → Build Mclash clients → Run workflow** 中启动手动
+构建。参数如下：
+
+- `target`：构建全部客户端，或只构建 Root、Android、Windows 之一。
+- `version`：版本号，格式为 `x.y.z`。
+- `build_number`：正整数构建号。
+
+Root 和 Android 的 Release APK 使用同一套仓库 Secrets 签名：
+
+```text
+SIGNING_JKS_BASE64
+STORE_PASSWORD
+KEY_ALIAS
+KEY_PASSWORD
+```
+
+`SIGNING_JKS_BASE64` 是 JKS/keystore 文件的 Base64 内容。构建完成后，
+APK、Windows 安装程序及 SHA-256 文件会保存在对应的 Actions
+Artifacts 中。工作流只构建产物，不会自动创建 GitHub Release。
 
 ## 签名与产物
 
@@ -152,6 +206,6 @@ keystore。密钥和密码不应上传或提交到公开仓库。
 
 ## 版本信息
 
-两个 App 的版本分别在 `source/root/pubspec.yaml` 和
-`source/vpn/pubspec.yaml` 中维护。当前 Android 包名均为 `com.liuyihtu.mclash`，最低支持
-Android 7.0（API 24）。
+三个客户端的版本分别在 `root/pubspec.yaml`、`android/pubspec.yaml` 和
+`windows/mclash/pubspec.yaml` 中维护。两个 Android App 的包名均为
+`com.liuyihtu.mclash`，最低支持 Android 7.0（API 24）。

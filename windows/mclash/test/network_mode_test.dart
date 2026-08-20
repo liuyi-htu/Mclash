@@ -88,13 +88,11 @@ rules:
       await service.setNetworkMode(NetworkMode.tun);
 
       expect(await profile.readAsString(), source);
-      final runtime =
-          loadYaml(
-                await File(
-                  '${temporaryDirectory.path}\\config.yaml',
-                ).readAsString(),
-              )
-              as YamlMap;
+      final runtime = loadYaml(
+        await File(
+          '${temporaryDirectory.path}\\config.yaml',
+        ).readAsString(),
+      ) as YamlMap;
       expect(runtime['tun']['enable'], isTrue);
       expect(runtime['tun']['stack'], 'system');
       expect(runtime['tun']['strict-route'], isTrue);
