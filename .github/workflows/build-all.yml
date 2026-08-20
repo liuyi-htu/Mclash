@@ -14,45 +14,129 @@ on:
           - android
           - windows
       version:
-        description: Version in x.y.z format
-        required: true
-        default: 2.1.0
+        description: x.y.z; leave blank to reuse the latest built version
+        required: false
         type: string
       build_number:
-        description: Positive integer Android/Windows build number
-        required: true
-        default: "1"
+        description: Positive integer; leave blank to increment the latest build
+        required: false
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: build-mclash-${{ github.ref }}-${{ inputs.target }}
+  group: build-mclash-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: 3.32.8
-  APP_VERSION: ${{ inputs.version }}
-  BUILD_NUMBER: ${{ inputs.build_number }}
 
 jobs:
   validate:
-    name: Validate build parameters
+    name: Resolve build version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      build_number: ${{ steps.resolve.outputs.build_number }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
     steps:
-      - name: Validate version and build number
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version and build number
+        id: resolve
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
           set -euo pipefail
-          [[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "version must use x.y.z format" >&2
-            exit 1
-          }
-          [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
-            echo "build_number must be a positive integer" >&2
-            exit 1
-          }
+          releases_file="$RUNNER_TEMP/mclash-releases.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$releases_file"
+          RELEASES_FILE="$releases_file" python3 <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+
+          release_pattern = re.compile(r"^v(\d+\.\d+\.\d+)-b([1-9]\d*)$")
+          version_pattern = re.compile(r"^\d+\.\d+\.\d+$")
+          build_pattern = re.compile(r"^[1-9]\d*$")
+
+          pubspec = pathlib.Path("root/pubspec.yaml").read_text(encoding="utf-8")
+          source_match = re.search(
+              r"(?m)^version:\s*(\d+\.\d+\.\d+)(?:\+(\d+))?\s*$", pubspec
+          )
+          if not source_match:
+              raise SystemExit("Cannot determine a fallback version from root/pubspec.yaml")
+          source_version = source_match.group(1)
+          source_build = int(source_match.group(2) or "1")
+
+          data = json.loads(pathlib.Path(os.environ["RELEASES_FILE"]).read_text())
+          candidates = []
+          release_tags = set()
+          for release in data:
+              if release.get("draft"):
+                  continue
+              tag = release.get("tag_name", "")
+              release_tags.add(tag)
+              match = release_pattern.fullmatch(tag)
+              if match:
+                  candidates.append(
+                      (release.get("published_at") or release.get("created_at", ""),
+                       match.group(1), int(match.group(2)))
+                  )
+
+          if candidates:
+              _, previous_version, previous_build = max(candidates)
+              source = "latest Mclash Release"
+          else:
+              previous_version = source_version
+              previous_build = source_build
+              source = "root/pubspec.yaml"
+
+          requested_version = os.environ["REQUESTED_VERSION"].strip()
+          requested_build = os.environ["REQUESTED_BUILD_NUMBER"].strip()
+          version = requested_version or previous_version
+          if requested_build:
+              build_number = requested_build
+          else:
+              matching_builds = [build for _, item_version, build in candidates
+                                 if item_version == version]
+              if matching_builds:
+                  build_number = str(max(matching_builds) + 1)
+              elif version == source_version:
+                  build_number = str(source_build + 1)
+              else:
+                  build_number = "1"
+
+          if not version_pattern.fullmatch(version):
+              raise SystemExit("version must use x.y.z format")
+          if not build_pattern.fullmatch(build_number):
+              raise SystemExit("build_number must be a positive integer")
+          if int(build_number) > 65535:
+              raise SystemExit("build_number must not exceed 65535 for Windows file versions")
+          release_tag = f"v{version}-b{build_number}"
+          if release_tag in release_tags:
+              raise SystemExit(f"Release already exists: {release_tag}")
+
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as stream:
+              stream.write(f"version={version}\n")
+              stream.write(f"build_number={build_number}\n")
+              stream.write(f"release_tag={release_tag}\n")
+
+          summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          with summary.open("a", encoding="utf-8") as stream:
+              stream.write("## Resolved build version\n\n")
+              stream.write(f"- Previous: `{previous_version}+{previous_build}` ({source})\n")
+              stream.write(f"- Selected: `{version}+{build_number}`\n")
+              stream.write(f"- Release tag: `{release_tag}`\n")
+          print(f"Resolved build version: {version}+{build_number} ({release_tag})")
+          PY
 
   root:
     name: Root Android
@@ -60,6 +144,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      APP_VERSION: ${{ needs.validate.outputs.version }}
+      BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -133,10 +220,10 @@ jobs:
       - name: Upload Root artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Mclash-root-${{ inputs.version }}+${{ inputs.build_number }}
+          name: Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
           path: |
-            root/dist/Mclash-root-${{ inputs.version }}+${{ inputs.build_number }}-arm64-v8a.apk
-            root/dist/Mclash-root-${{ inputs.version }}+${{ inputs.build_number }}-arm64-v8a.apk.sha256
+            root/dist/Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk
+            root/dist/Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk.sha256
           if-no-files-found: error
 
   android:
@@ -145,6 +232,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      APP_VERSION: ${{ needs.validate.outputs.version }}
+      BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -307,10 +397,10 @@ jobs:
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Mclash-android-${{ inputs.version }}+${{ inputs.build_number }}
+          name: Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
           path: |
-            android/dist/Mclash-android-${{ inputs.version }}+${{ inputs.build_number }}-arm64-v8a.apk
-            android/dist/Mclash-android-${{ inputs.version }}+${{ inputs.build_number }}-arm64-v8a.apk.sha256
+            android/dist/Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk
+            android/dist/Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk.sha256
           if-no-files-found: error
 
   windows:
@@ -319,6 +409,9 @@ jobs:
     needs: validate
     runs-on: windows-latest
     timeout-minutes: 60
+    env:
+      APP_VERSION: ${{ needs.validate.outputs.version }}
+      BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -353,13 +446,14 @@ jobs:
       - name: Build Windows installer
         shell: powershell
         env:
-          MCLASH_VERSION: ${{ inputs.version }}
+          MCLASH_VERSION: ${{ needs.validate.outputs.version }}
+          MCLASH_BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
         run: ./windows/scripts/build-windows.ps1
 
       - name: Create Windows checksum
         shell: powershell
         run: |
-          $name = "Mclash-Windows-Setup-$env:APP_VERSION.exe"
+          $name = "Mclash-Windows-Setup-$env:APP_VERSION+$env:BUILD_NUMBER-x64.exe"
           $installer = Join-Path "windows/installer/Output" $name
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
             throw "Windows installer was not generated: $installer"
@@ -370,8 +464,71 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Mclash-windows-${{ inputs.version }}+${{ inputs.build_number }}
+          name: Mclash-windows-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
           path: |
-            windows/installer/Output/Mclash-Windows-Setup-${{ inputs.version }}.exe
-            windows/installer/Output/Mclash-Windows-Setup-${{ inputs.version }}.exe.sha256
+            windows/installer/Output/Mclash-Windows-Setup-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-x64.exe
+            windows/installer/Output/Mclash-Windows-Setup-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-x64.exe.sha256
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: >-
+      ${{ always() && inputs.target == 'all' &&
+          needs.validate.result == 'success' &&
+          needs.root.result == 'success' &&
+          needs.android.result == 'success' &&
+          needs.windows.result == 'success' }}
+    needs:
+      - validate
+      - root
+      - android
+      - windows
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      APP_VERSION: ${{ needs.validate.outputs.version }}
+      BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
+      RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Mclash-*-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=(
+            "Mclash-root-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
+            "Mclash-root-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
+            "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
+            "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
+            "Mclash-Windows-Setup-${APP_VERSION}+${BUILD_NUMBER}-x64.exe"
+            "Mclash-Windows-Setup-${APP_VERSION}+${BUILD_NUMBER}-x64.exe.sha256"
+          )
+          for name in "${expected[@]}"; do
+            [[ -s "release-assets/$name" ]] || {
+              echo "Missing or empty release asset: $name" >&2
+              exit 1
+            }
+          done
+
+      - name: Publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Mclash ${APP_VERSION} Build ${BUILD_NUMBER}" \
+            --generate-notes

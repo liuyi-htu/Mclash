@@ -17,6 +17,15 @@ $releaseVersion = if ($env:MCLASH_VERSION) {
 if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "MCLASH_VERSION must use the x.y.z format without a v prefix."
 }
+$buildNumber = if ($env:MCLASH_BUILD_NUMBER) {
+    $env:MCLASH_BUILD_NUMBER.Trim()
+} else {
+    "1"
+}
+if ($buildNumber -notmatch '^[1-9]\d*$') {
+    throw "MCLASH_BUILD_NUMBER must be a positive integer."
+}
+$packageVersion = "$releaseVersion+$buildNumber"
 
 # The package staging directory is intentionally not committed. Create it for
 # clean checkouts before downloading cores and runtime data into it.
@@ -245,7 +254,8 @@ try {
     }
     Move-Item -LiteralPath $temporaryDefaultConfig -Destination $downloadedDefaultConfig -Force
 
-    & $iscc "/DMyAppVersion=$releaseVersion" (Join-Path $root "installer\Mclash.iss")
+    & $iscc "/DMyAppVersion=$releaseVersion" "/DMyBuildNumber=$buildNumber" `
+        (Join-Path $root "installer\Mclash.iss")
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup failed with exit code $LASTEXITCODE."
     }
@@ -254,5 +264,5 @@ finally {
     Remove-Item -LiteralPath $temporaryDefaultConfig -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $downloadedDefaultConfig -Force -ErrorAction SilentlyContinue
 }
-$installer = Join-Path $root "installer\Output\Mclash-Windows-Setup-$releaseVersion.exe"
+$installer = Join-Path $root "installer\Output\Mclash-Windows-Setup-$packageVersion-x64.exe"
 Write-Host "Windows installer: $installer"

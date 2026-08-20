@@ -2,16 +2,22 @@
 #ifndef MyAppVersion
 #define MyAppVersion "1.0.2"
 #endif
+#ifndef MyBuildNumber
+#define MyBuildNumber "1"
+#endif
+#define MyPackageVersion MyAppVersion + "+" + MyBuildNumber
+#define MyFileVersion MyAppVersion + "." + MyBuildNumber
 #define MyAppExeName "Mclash.exe"
 
 [Setup]
 AppId={{6C93D89B-75B0-4AE7-A8F3-A0F98048B215}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyFileVersion}
 DefaultDirName={autopf}\Mclash
 DefaultGroupName=Mclash
 OutputDir=Output
-OutputBaseFilename=Mclash-Windows-Setup-{#MyAppVersion}
+OutputBaseFilename=Mclash-Windows-Setup-{#MyPackageVersion}-x64
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
