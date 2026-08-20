@@ -16,12 +16,12 @@ on:
       version:
         description: x.y.z; clear the field to reuse the latest built version
         required: false
-        default: 2.1.0
+        default: "2.1.0"
         type: string
       build_number:
         description: Latest build number; unchanged values advance automatically
         required: false
-        default: "23"
+        default: "25"
         type: string
 
 permissions:
