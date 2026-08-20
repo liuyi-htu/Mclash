@@ -177,7 +177,8 @@ GitHub Actions 不会因提交或修改文件自动构建。需要构建时，�
 **Actions → Build Mclash clients → Run workflow** 中手动启动。参数如下：
 
 - `target`：构建全部客户端，或只构建 Root、Android、Windows 之一。
-- `version`：版本号，格式为 `x.y.z`；留空时自动使用最近一次构建的版本号。
+- `version`：版本号，格式为 `x.y.z`；输入框预填当前发行版本 `2.1.0`，清空后
+  自动使用最近一次构建的版本号。
 - `build_number`：正整数构建号；留空时同版本自动加一，输入新版本时从 `1` 开始。
 
 工作流通过最近发布的 `v版本-b构建号` Release 标签识别上一次构建版本。仓库
