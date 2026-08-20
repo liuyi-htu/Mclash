@@ -611,26 +611,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(
                 title: const Text('运行模式'),
-                content: RadioGroup<RootProxyMode>(
-                  groupValue: selected,
-                  onChanged: (value) {
-                    if (value != null) setDialogState(() => selected = value);
-                  },
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      RadioListTile<RootProxyMode>(
-                        value: RootProxyMode.tun,
-                        title: Text('TUN'),
-                        subtitle: Text('默认，支持 IPv4、IPv6 与热点代理'),
-                      ),
-                      RadioListTile<RootProxyMode>(
-                        value: RootProxyMode.tproxy,
-                        title: Text('TProxy'),
-                        subtitle: Text('IPv4 TCP/UDP；公网 IPv6 将阻止以防泄漏'),
-                      ),
-                    ],
-                  ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<RootProxyMode>(
+                      value: RootProxyMode.tun,
+                      groupValue: selected,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => selected = value);
+                        }
+                      },
+                      title: const Text('TUN'),
+                      subtitle: const Text('默认，支持 IPv4、IPv6 与热点代理'),
+                    ),
+                    RadioListTile<RootProxyMode>(
+                      value: RootProxyMode.tproxy,
+                      groupValue: selected,
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => selected = value);
+                        }
+                      },
+                      title: const Text('TProxy'),
+                      subtitle: const Text('IPv4 TCP/UDP；公网 IPv6 将阻止以防泄漏'),
+                    ),
+                  ],
                 ),
                 actions: [
                   TextButton(
@@ -987,7 +993,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Switch(
                                   value: running,
                                   onChanged: (_) => _toggle(),
-                                  activeThumbColor: const Color(0xFF315FE8),
+                                  activeColor: const Color(0xFF315FE8),
                                   activeTrackColor: Colors.white,
                                   inactiveThumbColor: Colors.white,
                                   inactiveTrackColor: Colors.white.withValues(
