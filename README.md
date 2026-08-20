@@ -177,9 +177,9 @@ GitHub Actions 不会因提交或修改文件自动构建。需要构建时，�
 **Actions → Build Mclash clients → Run workflow** 中手动启动。参数如下：
 
 - `target`：构建全部客户端，或只构建 Root、Android、Windows 之一。
-- `version`：版本号，格式为 `x.y.z`；输入框预填当前发行版本 `2.1.0`，清空后
-  自动使用最近一次构建的版本号。
-- `build_number`：正整数构建号；留空时同版本自动加一，输入新版本时从 `1` 开始。
+- `version`：版本号，格式为 `x.y.z`；输入框预填最近成功发布的版本号。
+- `build_number`：输入框预填最近成功发布的构建号。保持两个默认值不变运行时，
+  工作流会自动使用下一个构建号；只修改为新版本时，构建号从 `1` 开始。
 
 工作流通过最近发布的 `v版本-b构建号` Release 标签识别上一次构建版本。仓库
 尚无新格式 Release 时，会以 `root/pubspec.yaml` 中的版本作为初始依据。所有
@@ -198,7 +198,9 @@ KEY_PASSWORD
 APK、Windows 安装程序及 SHA-256 文件会保存在对应的 Actions Artifacts 中。
 选择 `target=all` 且三个客户端全部构建成功时，工作流还会创建
 `v版本-b构建号` 标签和 GitHub Release，并把全部产物发布到同一个 Release；
-单独构建某个客户端时只保留 Artifact，不发布不完整的 Release。
+单独构建某个客户端时只保留 Artifact，不发布不完整的 Release。Release 发布
+成功后，工作流会用 `[skip ci]` 提交直接更新 `main` 中的版本和构建号默认值，
+不会创建额外分支，也不会触发新的构建。
 
 ## 签名与产物
 
