@@ -49,6 +49,9 @@ $releaseHeaders = @{
     "X-GitHub-Api-Version" = "2022-11-28"
     "User-Agent" = "Mclash-Windows-Build"
 }
+if ($env:GH_TOKEN) {
+    $releaseHeaders.Authorization = "Bearer $($env:GH_TOKEN)"
+}
 
 if (-not (Test-Path -LiteralPath $mihomo -PathType Leaf) -or
     (Get-Item -LiteralPath $mihomo).Length -eq 0) {
