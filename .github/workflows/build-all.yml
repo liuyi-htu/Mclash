@@ -320,7 +320,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager "ndk;27.2.12479018" >/dev/null
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          [[ -n "$android_sdk" ]] || {
+            echo "ANDROID_SDK_ROOT and ANDROID_HOME are both unset" >&2
+            exit 1
+          }
+          sdkmanager_bin="$android_sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager_bin" ]]; then
+            sdkmanager_bin=$(find "$android_sdk/cmdline-tools" -type f -name sdkmanager \
+              -perm -u+x -print -quit 2>/dev/null || true)
+          fi
+          [[ -x "$sdkmanager_bin" ]] || {
+            echo "sdkmanager was not found under $android_sdk/cmdline-tools" >&2
+            exit 1
+          }
+          "$sdkmanager_bin" "ndk;27.2.12479018" >/dev/null
           hev_tag=$(curl -fsSL \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
@@ -335,7 +349,7 @@ jobs:
           git clone --depth 1 --branch "$hev_tag" --recurse-submodules \
             https://github.com/heiher/hev-socks5-tunnel.git "$hev_source"
           ln -s . "$hev_source/jni"
-          "$ANDROID_SDK_ROOT/ndk/27.2.12479018/ndk-build" \
+          "$android_sdk/ndk/27.2.12479018/ndk-build" \
             -C "$hev_source" \
             APP_ABI=arm64-v8a \
             APP_MODULES=hev-socks5-tunnel \
