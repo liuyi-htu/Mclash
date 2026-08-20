@@ -88,13 +88,11 @@ void main() {
         await File('${directory.path}\\update.log').readAsString(),
         isEmpty,
       );
-      final state =
-          jsonDecode(
-                await File(
-                  '${temporaryDirectory.path}\\runtime-state.json',
-                ).readAsString(),
-              )
-              as Map<String, dynamic>;
+      final state = jsonDecode(
+        await File(
+          '${temporaryDirectory.path}\\runtime-state.json',
+        ).readAsString(),
+      ) as Map<String, dynamic>;
       expect(state['message'], isEmpty);
       expect(state['mihomoPid'], 123);
     },

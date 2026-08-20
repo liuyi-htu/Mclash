@@ -142,14 +142,15 @@ class _RootSettingsDialogState extends State<RootSettingsDialog> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('IPv6'),
                       subtitle: settings.proxyMode == RootProxyMode.tproxy
-                          ? const Text('TProxy 模式暂不支持 IPv6')
+                          ? const Text('TProxy 模式阻止公网 IPv6，防止流量直连泄漏')
                           : null,
                       value: settings.ipv6Enabled,
                       onChanged: settings.proxyMode == RootProxyMode.tproxy
                           ? null
                           : (value) => setState(
-                                () => _settings =
-                                    settings.copyWith(ipv6Enabled: value),
+                                () => _settings = settings.copyWith(
+                                  ipv6Enabled: value,
+                                ),
                               ),
                     ),
                     SwitchListTile(

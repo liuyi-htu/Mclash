@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-typedef RegistryProcessRunner =
-    Future<ProcessResult> Function(String executable, List<String> arguments);
+typedef RegistryProcessRunner = Future<ProcessResult> Function(
+    String executable, List<String> arguments);
 
 class WindowsSystemProxyManager {
   WindowsSystemProxyManager({
@@ -24,7 +24,8 @@ class WindowsSystemProxyManager {
   static Future<ProcessResult> _defaultProcessRunner(
     String executable,
     List<String> arguments,
-  ) => Process.run(executable, arguments, runInShell: false);
+  ) =>
+      Process.run(executable, arguments, runInShell: false);
 
   Future<void> enable({required int port, required String bypass}) async {
     final owned = <String, _RegistryValue>{
@@ -82,9 +83,7 @@ class WindowsSystemProxyManager {
       final stillOwned = existing.owned == null
           ? await _looksLikeLegacyMclashProxy()
           : await _isOwnedByMclash(existing.owned!);
-      original = stillOwned
-          ? existing.original
-          : await _readManagedValues();
+      original = stillOwned ? existing.original : await _readManagedValues();
     } else {
       original = await _readManagedValues();
     }
@@ -122,9 +121,10 @@ class WindowsSystemProxyManager {
 
   Map<String, dynamic> _valuesToJson(
     Map<String, _RegistryValue?> values,
-  ) => <String, dynamic>{
-    for (final name in managedValues) name: values[name]?.toJson(),
-  };
+  ) =>
+      <String, dynamic>{
+        for (final name in managedValues) name: values[name]?.toJson(),
+      };
 
   _ProxyBackup _decodeBackup(String content) {
     final decoded = jsonDecode(content);
@@ -266,9 +266,9 @@ class _RegistryValue {
   }
 
   Map<String, String> toJson() => <String, String>{
-    'type': type,
-    'data': data,
-  };
+        'type': type,
+        'data': data,
+      };
 }
 
 class _ProxyBackup {

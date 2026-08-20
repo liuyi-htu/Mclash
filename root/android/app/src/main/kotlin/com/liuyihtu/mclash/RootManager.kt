@@ -64,7 +64,9 @@ internal class RootManager(
         val check = shell(
             "test -x $CTL && test -x $MODULE_DIR/service.sh && " +
                 "test -x $MODULE_DIR/scripts/apply-tproxy.sh && " +
-                "test -x $MODULE_DIR/scripts/clear-tproxy.sh && echo ready",
+                "test -x $MODULE_DIR/scripts/clear-tproxy.sh && " +
+                "test -x $MODULE_DIR/scripts/apply-tun-hotspot.sh && " +
+                "test -x $MODULE_DIR/scripts/clear-tun-hotspot.sh && echo ready",
         )
         if (!check.output.contains("ready")) {
             return statusMap(RootState.BROKEN, "Root 模块文件缺失或权限错误")
@@ -461,6 +463,7 @@ internal class RootManager(
             "secret",
             "ipv6",
             "log-level",
+            "routing-mark",
         )
         val lines = source.removePrefix("\uFEFF").lines()
         val kept = mutableListOf<String>()
@@ -483,8 +486,15 @@ internal class RootManager(
             append("external-controller: 127.0.0.1:9090\n")
             append("secret: \"\"\n")
             append("log-level: ${if (preferences.rootLoggingEnabled) "debug" else "error"}\n")
+            // Mark only mihomo's outbound sockets. Root routing scripts use
+            // this mark to bypass recapture without exempting UID 0 traffic.
+            append("routing-mark: 9012\n")
             if (preferences.rootProxyMode == "tun") {
-                append("tun:\n  enable: true\n  stack: mixed\n  auto-route: true\n  auto-detect-interface: true\n")
+                append("tun:\n  enable: true\n  device: mclash0\n  stack: mixed\n")
+                append("  auto-route: true\n  auto-detect-interface: true\n")
+                // Reserve a private table/rule range for Mclash instead of the
+                // mihomo defaults, which are commonly shared by other TUN apps.
+                append("  iproute2-table-index: 2233\n  iproute2-rule-index: 23000\n")
                 val bypassCidrs = preferences.rootBypassCidrs.lineSequence()
                     .map(String::trim)
                     .filter(String::isNotEmpty)
@@ -502,11 +512,11 @@ internal class RootManager(
                         append("  include-uid:\n")
                         uids.forEach { append("    - $it\n") }
                     }
-                    append("  exclude-uid:\n    - ${context.applicationInfo.uid}\n")
                 } else {
-                    append("  exclude-uid:\n")
-                    (uids + context.applicationInfo.uid.toString()).distinct()
-                        .forEach { append("    - $it\n") }
+                    if (uids.isNotEmpty()) {
+                        append("  exclude-uid:\n")
+                        uids.forEach { append("    - $it\n") }
+                    }
                 }
             } else {
                 append("tun:\n  enable: false\n")
