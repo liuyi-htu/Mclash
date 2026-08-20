@@ -173,8 +173,8 @@ TUN 与系统代理模式。
 
 ## GitHub 自动构建
 
-在仓库的 **Actions → Build Mclash clients → Run workflow** 中启动手动
-构建。参数如下：
+GitHub Actions 不会因提交或修改文件自动构建。需要构建时，在仓库的
+**Actions → Build Mclash clients → Run workflow** 中手动启动。参数如下：
 
 - `target`：构建全部客户端，或只构建 Root、Android、Windows 之一。
 - `version`：版本号，格式为 `x.y.z`。
