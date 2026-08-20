@@ -188,13 +188,13 @@ GitHub Actions 不会因提交或修改文件自动构建。需要构建时，�
 Root 和 Android 的 Release APK 使用同一套仓库 Secrets 签名：
 
 ```text
-SIGNING_JKS_BASE64
-STORE_PASSWORD
-KEY_ALIAS
-KEY_PASSWORD
+ANDROID_KEYSTORE_BASE64
+ANDROID_KEYSTORE_PASSWORD
+ANDROID_KEY_ALIAS
+ANDROID_KEY_PASSWORD
 ```
 
-`SIGNING_JKS_BASE64` 是 JKS/keystore 文件的 Base64 内容。构建完成后，
+`ANDROID_KEYSTORE_BASE64` 是 JKS/keystore 文件的 Base64 内容。构建完成后，
 APK、Windows 安装程序及 SHA-256 文件会保存在对应的 Actions Artifacts 中。
 选择 `target=all` 且三个客户端全部构建成功时，工作流还会创建
 `v版本-b构建号` 标签和 GitHub Release，并把全部产物发布到同一个 Release；
