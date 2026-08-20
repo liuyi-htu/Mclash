@@ -17,6 +17,11 @@ $releaseVersion = if ($env:MCLASH_VERSION) {
 if ($releaseVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "MCLASH_VERSION must use the x.y.z format without a v prefix."
 }
+
+# The package staging directory is intentionally not committed. Create it for
+# clean checkouts before downloading cores and runtime data into it.
+New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+
 $isccCandidates = @(
     (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
     (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),

@@ -17,12 +17,10 @@ class AppNotice {
     entry = OverlayEntry(
       builder: (overlayContext) {
         final colors = Theme.of(overlayContext).colorScheme;
-        final background = error
-            ? colors.errorContainer
-            : colors.inverseSurface;
-        final foreground = error
-            ? colors.onErrorContainer
-            : colors.onInverseSurface;
+        final background =
+            error ? colors.errorContainer : colors.inverseSurface;
+        final foreground =
+            error ? colors.onErrorContainer : colors.onInverseSurface;
         return Positioned(
           top: 12,
           left: 20,

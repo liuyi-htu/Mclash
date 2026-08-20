@@ -590,9 +590,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _showRuntimeSettings() async {
     final restarted = await showDialog<bool>(
       context: context,
-      builder: (_) => RootSettingsDialog(
-        proxyRunning: _status == ProxyStatus.running,
-      ),
+      builder: (_) =>
+          RootSettingsDialog(proxyRunning: _status == ProxyStatus.running),
     );
     if (!mounted || restarted == null) return;
     showTopSnackBar(
@@ -623,12 +622,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       RadioListTile<RootProxyMode>(
                         value: RootProxyMode.tun,
                         title: Text('TUN'),
-                        subtitle: Text('默认，支持 IPv4 与 IPv6'),
+                        subtitle: Text('默认，支持 IPv4、IPv6 与热点代理'),
                       ),
                       RadioListTile<RootProxyMode>(
                         value: RootProxyMode.tproxy,
                         title: Text('TProxy'),
-                        subtitle: Text('TCP/UDP，暂不支持 IPv6'),
+                        subtitle: Text('IPv4 TCP/UDP；公网 IPv6 将阻止以防泄漏'),
                       ),
                     ],
                   ),
@@ -694,15 +693,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _openRootCoreUpdate() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const RootCoreUpdatePage()),
-    );
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const RootCoreUpdatePage()));
   }
 
   Future<void> _openRootLog() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const RootLogPage()),
-    );
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const RootLogPage()));
     await _refresh();
   }
 

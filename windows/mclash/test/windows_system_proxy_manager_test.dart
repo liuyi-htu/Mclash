@@ -19,7 +19,8 @@ void main() {
 
   tearDown(() => temporaryDirectory.delete(recursive: true));
 
-  ProcessResult result(int exitCode, [String stdout = '', String stderr = '']) =>
+  ProcessResult result(int exitCode,
+          [String stdout = '', String stderr = '']) =>
       ProcessResult(1, exitCode, stdout, stderr);
 
   test('backs up existing values once and restores them', () async {

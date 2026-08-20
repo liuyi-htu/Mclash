@@ -41,12 +41,14 @@ class NativeProxyService implements ProxyPlatformService {
   Future<List<ConfigProfile>> saveConfigContent({
     required String id,
     required String content,
-  }) => _delegate.saveConfigContent(id: id, content: content);
+  }) =>
+      _delegate.saveConfigContent(id: id, content: content);
   @override
   Future<List<ConfigProfile>> renameConfig({
     required String id,
     required String name,
-  }) => _delegate.renameConfig(id: id, name: name);
+  }) =>
+      _delegate.renameConfig(id: id, name: name);
   @override
   Future<List<ConfigProfile>> deleteConfig(String id) =>
       _delegate.deleteConfig(id);
@@ -63,13 +65,15 @@ class NativeProxyService implements ProxyPlatformService {
   Future<List<ConfigProfile>> addSubscription({
     required String name,
     required String url,
-  }) => _delegate.addSubscription(name: name, url: url);
+  }) =>
+      _delegate.addSubscription(name: name, url: url);
   @override
   Future<List<ConfigProfile>> updateSubscription({
     required String id,
     required String name,
     required String url,
-  }) => _delegate.updateSubscription(id: id, name: name, url: url);
+  }) =>
+      _delegate.updateSubscription(id: id, name: name, url: url);
   @override
   Future<List<ConfigProfile>> refreshSubscription(String id) =>
       _delegate.refreshSubscription(id);

@@ -1,0 +1,44 @@
+# Build outputs and tool caches
+**/build/
+**/.dart_tool/
+**/.pub/
+**/.gradle/
+**/.kotlin/
+**/.cxx/
+**/captures/
+
+# Generated Flutter compatibility files
+**/.packages
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Machine-local Android and signing configuration
+**/local.properties
+**/key.properties
+**/secure/
+*.jks
+*.keystore
+
+# Downloaded Android runtime files
+root/android/app/src/main/jniLibs/
+root/android/app/src/main/assets/geodata/
+root/android/app/src/main/assets/licenses/
+android/android/app/src/main/jniLibs/
+android/android/app/src/main/assets/geodata/
+
+# Packaged artifacts and Windows staging files
+**/dist/
+windows/installer/Output/
+windows/windows-package/
+*.apk
+*.aab
+
+# IDE, operating-system and temporary files
+**/.idea/
+*.iml
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db

@@ -1,4 +1,4 @@
-module github.com/liuyi-htu/Mclash-for-windows/windows-service
+module github.com/liuyi-htu/Mclash/windows/windows-service
 
 go 1.24
 

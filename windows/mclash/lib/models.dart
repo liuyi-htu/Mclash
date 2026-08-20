@@ -24,10 +24,10 @@ class CoreUpdateInfo {
   });
 
   factory CoreUpdateInfo.fromMap(Map<String, dynamic> map) => CoreUpdateInfo(
-    currentVersion: map['currentVersion']?.toString() ?? 'unknown',
-    latestVersion: map['latestVersion']?.toString() ?? 'unknown',
-    updateAvailable: map['updateAvailable'] == true,
-  );
+        currentVersion: map['currentVersion']?.toString() ?? 'unknown',
+        latestVersion: map['latestVersion']?.toString() ?? 'unknown',
+        updateAvailable: map['updateAvailable'] == true,
+      );
 
   final String currentVersion;
   final String latestVersion;

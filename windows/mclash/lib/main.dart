@@ -32,9 +32,8 @@ class MclashApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       fontFamily: Platform.isWindows ? 'Segoe UI' : null,
-      fontFamilyFallback: Platform.isWindows
-          ? const ['Microsoft YaHei UI']
-          : null,
+      fontFamilyFallback:
+          Platform.isWindows ? const ['Microsoft YaHei UI'] : null,
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: scaffold,
@@ -138,9 +137,8 @@ class MclashApp extends StatelessWidget {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: dark
-            ? const Color(0xFF27344B)
-            : const Color(0xFF283247),
+        backgroundColor:
+            dark ? const Color(0xFF27344B) : const Color(0xFF283247),
         contentTextStyle: const TextStyle(color: Colors.white),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
