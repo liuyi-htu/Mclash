@@ -1,7 +1,4 @@
-# Mclash Root / Android / Windows 源码说明
-
-本仓库同时维护 Mclash 的 Root、Android 和 Windows 三个客户端。两个 Android
-客户端共用 Flutter 界面和大部分配置能力，但使用不同的代理启动方式：
+# Mclash源码说明
 
 - `root/`：通过 Root 模块运行 mihomo，使用 `/data/adb/modules/mclash_root`
   模块和 `/data/adb/mclash` 数据目录，支持 Magisk、KernelSU 和 APatch。
@@ -9,9 +6,6 @@
   Root 权限。
 - `windows/`：Flutter Windows 客户端，同时支持 mihomo 和 sing-box，通过
   独立的 Windows 系统服务管理代理内核、系统代理和更新。
-
-三个客户端均提供配置管理、代理面板和运行状态展示；Android 客户端另外提供
-应用分流和快捷设置磁贴。
 
 ## 目录结构
 
