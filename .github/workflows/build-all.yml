@@ -446,7 +446,7 @@ jobs:
     name: Windows
     if: ${{ inputs.target == 'all' || inputs.target == 'windows' }}
     needs: validate
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 60
     env:
       APP_VERSION: ${{ needs.validate.outputs.version }}
