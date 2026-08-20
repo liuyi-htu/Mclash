@@ -209,3 +209,18 @@ keystore。密钥和密码不应上传或提交到公开仓库。
 三个客户端的版本分别在 `root/pubspec.yaml`、`android/pubspec.yaml` 和
 `windows/mclash/pubspec.yaml` 中维护。两个 Android App 的包名均为
 `com.liuyihtu.mclash`，最低支持 Android 7.0（API 24）。
+
+## 开源许可
+
+Mclash 自身源代码依据 [GNU General Public License v3.0](LICENSE) 开源，
+完整条款以仓库中的 `LICENSE` 文件为准。
+
+构建和运行过程中使用的 mihomo、sing-box、HevSocks5Tunnel、Flutter 及规则
+数据库等第三方项目，仍分别受其上游许可证和版权声明约束。使用或分发构建
+产物时，请同时遵守并保留相应第三方项目的许可证及声明：
+
+- [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo)
+- [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
+- [heiher/hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)
+- [Flutter](https://github.com/flutter/flutter)
+- [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat)
