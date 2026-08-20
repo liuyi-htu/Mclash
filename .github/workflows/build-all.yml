@@ -39,6 +39,8 @@ concurrency:
 
 env:
   FLUTTER_VERSION: 3.32.8
+  HEV_VERSION: 2.17.1
+  HEV_COMMIT: 9a06bc6e7989da54e3d32ff701ef7a7ce4995d3a
 
 jobs:
   validate:
@@ -296,8 +298,6 @@ jobs:
 
       - name: Build HevSocks5Tunnel JNI library
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
@@ -315,14 +315,14 @@ jobs:
             exit 1
           }
           "$sdkmanager_bin" "ndk;27.2.12479018" >/dev/null
-          hev_tag=$(gh api repos/heiher/hev-socks5-tunnel/releases/latest --jq .tag_name)
-          [[ "$hev_tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "Unexpected HevSocks5Tunnel release tag: $hev_tag" >&2
+          hev_source="$RUNNER_TEMP/hev-socks5-tunnel"
+          git clone --depth 1 --branch "$HEV_VERSION" --recurse-submodules \
+            https://github.com/heiher/hev-socks5-tunnel.git "$hev_source"
+          actual_hev_commit=$(git -C "$hev_source" rev-parse HEAD)
+          [[ "$actual_hev_commit" == "$HEV_COMMIT" ]] || {
+            echo "HevSocks5Tunnel commit mismatch: expected $HEV_COMMIT, got $actual_hev_commit" >&2
             exit 1
           }
-          hev_source="$RUNNER_TEMP/hev-socks5-tunnel"
-          git clone --depth 1 --branch "$hev_tag" --recurse-submodules \
-            https://github.com/heiher/hev-socks5-tunnel.git "$hev_source"
           ln -s . "$hev_source/jni"
           "$android_sdk/ndk/27.2.12479018/ndk-build" \
             -C "$hev_source" \
