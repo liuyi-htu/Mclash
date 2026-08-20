@@ -590,8 +590,14 @@ jobs:
 
       - name: Store latest build defaults
         shell: bash
+        env:
+          VERSION_SYNC_DEPLOY_KEY: ${{ secrets.VERSION_SYNC_DEPLOY_KEY }}
         run: |
           set -euo pipefail
+          [[ -n "$VERSION_SYNC_DEPLOY_KEY" ]] || {
+            echo "Missing repository secret: VERSION_SYNC_DEPLOY_KEY" >&2
+            exit 1
+          }
           git pull --ff-only origin main
           python3 <<'PY'
           import os
@@ -636,4 +642,36 @@ jobs:
             exit 0
           fi
           git commit -m "[skip ci] Update build defaults to ${APP_VERSION}+${BUILD_NUMBER}"
+          key_file="$RUNNER_TEMP/mclash-version-sync"
+          known_hosts="$RUNNER_TEMP/mclash-version-sync-known-hosts"
+          cleanup_version_sync() {
+            rm -f "$key_file" "$known_hosts"
+          }
+          trap cleanup_version_sync EXIT
+          printf '%s\n' "$VERSION_SYNC_DEPLOY_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          python3 <<'PY' > "$known_hosts"
+          import json
+          import os
+          import urllib.request
+
+          request = urllib.request.Request(
+              "https://api.github.com/meta",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              metadata = json.load(response)
+          for key in metadata.get("ssh_keys", []):
+              print(f"github.com {key}")
+          PY
+          [[ -s "$known_hosts" ]] || {
+            echo "Failed to obtain GitHub SSH host keys" >&2
+            exit 1
+          }
+          export GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
           git push origin HEAD:main
