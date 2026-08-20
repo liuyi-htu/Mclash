@@ -197,10 +197,25 @@ foreach ($entry in $singBoxRuleSets) {
 Push-Location $flutterProject
 try {
     flutter pub get
+    if ($LASTEXITCODE -ne 0) {
+        throw "flutter pub get failed."
+    }
     dart format --output=none --set-exit-if-changed lib test
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dart formatting check failed."
+    }
     flutter analyze
+    if ($LASTEXITCODE -ne 0) {
+        throw "Flutter analysis failed."
+    }
     flutter test
+    if ($LASTEXITCODE -ne 0) {
+        throw "Flutter tests failed."
+    }
     flutter build windows --release
+    if ($LASTEXITCODE -ne 0) {
+        throw "Flutter Windows build failed."
+    }
 }
 finally {
     Pop-Location
@@ -225,6 +240,9 @@ try {
     }
     Remove-Item -LiteralPath (Join-Path $packageDir "mihomoService.exe") -Force -ErrorAction SilentlyContinue
     go build -trimpath -ldflags="-s -w" -o "$packageDir\MclashService.exe" .
+    if ($LASTEXITCODE -ne 0) {
+        throw "Go service build failed."
+    }
 }
 finally {
     Pop-Location

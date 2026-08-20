@@ -470,30 +470,34 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('选择运行模式'),
-        content: RadioGroup<_RunModeChoice>(
-          groupValue: current,
-          onChanged: (value) => Navigator.of(dialogContext).pop(value),
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<_RunModeChoice>(
-                value: _RunModeChoice.mihomoTun,
-                title: Text('mihomo + TUN'),
-              ),
-              RadioListTile<_RunModeChoice>(
-                value: _RunModeChoice.mihomoProxy,
-                title: Text('mihomo + 系统代理'),
-              ),
-              RadioListTile<_RunModeChoice>(
-                value: _RunModeChoice.singBoxTun,
-                title: Text('sing-box + TUN'),
-              ),
-              RadioListTile<_RunModeChoice>(
-                value: _RunModeChoice.singBoxProxy,
-                title: Text('sing-box + 系统代理'),
-              ),
-            ],
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<_RunModeChoice>(
+              value: _RunModeChoice.mihomoTun,
+              groupValue: current,
+              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+              title: const Text('mihomo + TUN'),
+            ),
+            RadioListTile<_RunModeChoice>(
+              value: _RunModeChoice.mihomoProxy,
+              groupValue: current,
+              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+              title: const Text('mihomo + 系统代理'),
+            ),
+            RadioListTile<_RunModeChoice>(
+              value: _RunModeChoice.singBoxTun,
+              groupValue: current,
+              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+              title: const Text('sing-box + TUN'),
+            ),
+            RadioListTile<_RunModeChoice>(
+              value: _RunModeChoice.singBoxProxy,
+              groupValue: current,
+              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+              title: const Text('sing-box + 系统代理'),
+            ),
+          ],
         ),
       ),
     );
