@@ -23,6 +23,11 @@ on:
         required: false
         default: "25"
         type: string
+      release_notes:
+        description: Optional release notes shown below the Mihomo core version
+        required: false
+        default: ""
+        type: string
 
 permissions:
   actions: read
@@ -43,6 +48,7 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       build_number: ${{ steps.resolve.outputs.build_number }}
       release_tag: ${{ steps.resolve.outputs.release_tag }}
+      mihomo_version: ${{ steps.resolve.outputs.mihomo_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -58,6 +64,12 @@ jobs:
           set -euo pipefail
           releases_file="$RUNNER_TEMP/mclash-releases.json"
           gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$releases_file"
+          mihomo_version=$(gh api repos/MetaCubeX/mihomo/releases/latest --jq '.tag_name')
+          [[ -n "$mihomo_version" && "$mihomo_version" != *$'\n'* ]] || {
+            echo "Cannot determine the latest Mihomo core version" >&2
+            exit 1
+          }
+          echo "mihomo_version=$mihomo_version" >> "$GITHUB_OUTPUT"
           RELEASES_FILE="$releases_file" python3 <<'PY'
           import json
           import os
@@ -540,6 +552,8 @@ jobs:
       APP_VERSION: ${{ needs.validate.outputs.version }}
       BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
       RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
+      MIHOMO_VERSION: ${{ needs.validate.outputs.mihomo_version }}
+      RELEASE_NOTES: ${{ inputs.release_notes }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout main
@@ -582,11 +596,23 @@ jobs:
             echo "Release already exists: $RELEASE_TAG" >&2
             exit 1
           fi
+          python3 <<'PY'
+          import os
+          import pathlib
+
+          lines = [f"Mihomo 内核：`{os.environ['MIHOMO_VERSION']}`"]
+          custom_notes = os.environ["RELEASE_NOTES"].strip()
+          if custom_notes:
+              lines.extend(("", custom_notes))
+          pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          PY
           gh release create "$RELEASE_TAG" release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Mclash ${APP_VERSION} Build ${BUILD_NUMBER}" \
-            --generate-notes
+            --notes-file "$RUNNER_TEMP/release-notes.md"
 
       - name: Store latest build defaults
         shell: bash
