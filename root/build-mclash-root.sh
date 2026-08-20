@@ -67,7 +67,16 @@ WORK_DIR=$(mktemp -d)
 asset_url() {
   repository=$1
   pattern=$2
-  curl -fsSL "https://api.github.com/repos/$repository/releases/latest" |
+  api_headers=(
+    -H 'Accept: application/vnd.github+json'
+    -H 'X-GitHub-Api-Version: 2022-11-28'
+    -H 'User-Agent: Mclash-GitHub-Build'
+  )
+  if [ -n "${GH_TOKEN:-}" ]; then
+    api_headers+=(-H "Authorization: Bearer $GH_TOKEN")
+  fi
+  curl -fsSL --retry 3 "${api_headers[@]}" \
+    "https://api.github.com/repos/$repository/releases/latest" |
     python3 -c 'import json,re,sys
 data=json.load(sys.stdin); pattern=re.compile(sys.argv[1])
 for asset in data.get("assets", []):
