@@ -1,16 +1,6 @@
 name: Windows checks
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "windows/**"
-      - ".github/workflows/windows-check.yml"
-  pull_request:
-    paths:
-      - "windows/**"
-      - ".github/workflows/windows-check.yml"
   workflow_dispatch:
 
 permissions:
