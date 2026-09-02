@@ -252,6 +252,8 @@ class NativeProxyService {
 
   Future<void> stop() => _channel.invokeMethod<void>('stop');
 
+  Future<void> restart() => _channel.invokeMethod<void>('restart');
+
   Future<bool> isRunning() async {
     return await _channel.invokeMethod<bool>('isRunning') ?? false;
   }

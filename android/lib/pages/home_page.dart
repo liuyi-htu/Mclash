@@ -1005,7 +1005,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _showError(Object error) {
-    showTopSnackBar(context, SnackBar(content: Text(error.toString())));
+    showErrorNotice(context, error);
   }
 
   String get _statusText => switch (_status) {

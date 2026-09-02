@@ -18,6 +18,12 @@ internal class AppPreferences(context: Context) {
         get() = preferences.getString(KEY_ACTIVE_CONFIG_ID, null)
         set(value) = preferences.edit().putString(KEY_ACTIVE_CONFIG_ID, value).apply()
 
+    var bundledDefaultConfigHandled: Boolean
+        get() = preferences.getBoolean(KEY_BUNDLED_DEFAULT_CONFIG_HANDLED, false)
+        set(value) = preferences.edit()
+            .putBoolean(KEY_BUNDLED_DEFAULT_CONFIG_HANDLED, value)
+            .apply()
+
     var appProxyMode: String
         get() = preferences.getString(KEY_APP_PROXY_MODE, MODE_EXCLUDE_SELECTED)
             ?: MODE_EXCLUDE_SELECTED
@@ -100,6 +106,8 @@ internal class AppPreferences(context: Context) {
         private const val KEY_CONFIG_FILE_NAME = "config_file_name"
         private const val KEY_CONFIG_PROFILES = "config_profiles_json"
         private const val KEY_ACTIVE_CONFIG_ID = "active_config_id"
+        private const val KEY_BUNDLED_DEFAULT_CONFIG_HANDLED =
+            "bundled_default_config_handled"
         private const val KEY_APP_PROXY_MODE = "app_proxy_mode"
         private const val KEY_SELECTED_PACKAGES = "selected_packages"
         private const val KEY_DEBUG_LOGGING_ENABLED = "debug_logging_enabled"

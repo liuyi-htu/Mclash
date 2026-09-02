@@ -93,7 +93,11 @@ cd android
 ```
 
 默认构建 ARM64 Release APK，最终 APK 和 SHA-256 写入
-`android/dist/`。如需 Debug APK：
+`android/dist/`。每次构建还会从
+`https://txt.2468999.xyz/sub/mini-ali/clash/mini-ali.yaml` 下载默认配置文本，
+将 UTF-8 明文或 Base64 内容转换并校验为 Mihomo YAML 后嵌入 APK；应用仅在
+首次运行且没有现有配置时导入该配置。
+如需 Debug APK：
 
 ```bash
 BUILD_MODE=debug ./build-mclash-android.sh

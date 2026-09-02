@@ -433,7 +433,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   }
 
   void _showError(Object error) {
-    showTopSnackBar(context, SnackBar(content: Text(error.toString())));
+    showErrorNotice(context, error);
   }
 
   Future<void> _showNodes(_ProxyGroup group, Offset origin) {

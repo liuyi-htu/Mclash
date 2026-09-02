@@ -92,6 +92,7 @@ class MainActivity : FlutterActivity() {
                     ProxyVpnService.stop(this)
                     result.success(null)
                 }
+                "restart" -> restartProxy(result)
                 "isRunning" -> result.success(ProxyVpnService.running)
                 "getTrafficStats" -> result.success(
                     mapOf(
@@ -347,6 +348,26 @@ class MainActivity : FlutterActivity() {
                 result.error("start_timeout", "mihomo 启动超时", null)
             }
         }, "mclash-start-waiter").start()
+    }
+
+    private fun restartProxy(result: MethodChannel.Result) {
+        ProxyVpnService.stop(this)
+        Thread({
+            val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
+            while (
+                System.currentTimeMillis() < deadline &&
+                (ProxyVpnService.running || ProxyVpnService.starting)
+            ) {
+                Thread.sleep(100)
+            }
+            if (ProxyVpnService.running || ProxyVpnService.starting) {
+                runOnUiThread {
+                    result.error("restart_timeout", "代理停止超时，无法应用新配置", null)
+                }
+                return@Thread
+            }
+            runOnUiThread { startProxy(result) }
+        }, "mclash-restart-waiter").start()
     }
 
     private fun startupDiagnostics(): String {
@@ -638,5 +659,6 @@ class MainActivity : FlutterActivity() {
         private const val REQUEST_DEVICE_REGISTRATION_EXPORT = 7004
         private const val USAGE_NOTICE_VERSION = 1
         private const val START_TIMEOUT_MS = 60_000L
+        private const val STOP_TIMEOUT_MS = 15_000L
     }
 }

@@ -6,6 +6,8 @@ SOURCE_DIR=${1:-$SCRIPT_DIR}
 OUTPUT_DIR=${OUTPUT_DIR:-$SCRIPT_DIR/dist}
 BUILD_MODE=${BUILD_MODE:-release}
 ABI=arm64-v8a
+DEFAULT_CONFIG_URL=https://txt.2468999.xyz/sub/mini-ali/clash/mini-ali.yaml
+DEFAULT_CONFIG_ASSET="$SOURCE_DIR/android/app/src/main/assets/default-config.yaml"
 
 cleanup_build_files() {
   rm -rf \
@@ -19,7 +21,10 @@ cleanup_build_files() {
     "$SOURCE_DIR/android/app/src/main/jniLibs/$ABI/libhev-socks5-tunnel.so" \
     "$SOURCE_DIR/android/app/src/main/assets/geodata/geosite.dat" \
     "$SOURCE_DIR/android/app/src/main/assets/geodata/geoip.dat" \
-    "$SOURCE_DIR/android/app/src/main/assets/geodata/country.mmdb"
+    "$SOURCE_DIR/android/app/src/main/assets/geodata/country.mmdb" \
+    "$DEFAULT_CONFIG_ASSET" \
+    "$DEFAULT_CONFIG_ASSET.download" \
+    "$DEFAULT_CONFIG_ASSET.decoded"
   rmdir \
     "$SOURCE_DIR/android/app/src/main/jniLibs/$ABI" \
     "$SOURCE_DIR/android/app/src/main/jniLibs" \
@@ -33,7 +38,7 @@ case "$BUILD_MODE" in
   *) echo "BUILD_MODE 只能是 debug 或 release" >&2; exit 1 ;;
 esac
 
-for command_name in flutter dart unzip sha256sum; do
+for command_name in base64 curl flutter dart iconv unzip sha256sum; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "缺少必需命令：$command_name" >&2
     exit 1
@@ -58,6 +63,53 @@ for required_file in "${required_runtime_files[@]}"; do
     exit 1
   }
 done
+
+echo "正在下载默认 Mihomo 配置..."
+mkdir -p "$(dirname -- "$DEFAULT_CONFIG_ASSET")"
+curl \
+  --fail \
+  --location \
+  --silent \
+  --show-error \
+  --compressed \
+  --header "User-Agent: clash.meta" \
+  --output "$DEFAULT_CONFIG_ASSET.download" \
+  "$DEFAULT_CONFIG_URL"
+[ -s "$DEFAULT_CONFIG_ASSET.download" ] || {
+  echo "下载的默认 Mihomo 配置为空" >&2
+  exit 1
+}
+[ "$(wc -c < "$DEFAULT_CONFIG_ASSET.download")" -le 8388608 ] || {
+  echo "下载的默认 Mihomo 配置超过 8 MB" >&2
+  exit 1
+}
+
+normalize_default_config() {
+  iconv -f UTF-8 -t UTF-8 "$1" | sed '1s/^\xEF\xBB\xBF//' | tr -d '\r'
+}
+
+is_mihomo_config() {
+  grep -Eq '^[[:space:]]*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)[[:space:]]*:' "$1"
+}
+
+normalize_default_config "$DEFAULT_CONFIG_ASSET.download" > "$DEFAULT_CONFIG_ASSET"
+if ! is_mihomo_config "$DEFAULT_CONFIG_ASSET"; then
+  if ! tr -d '[:space:]' < "$DEFAULT_CONFIG_ASSET.download" \
+    | base64 --decode > "$DEFAULT_CONFIG_ASSET.decoded" 2>/dev/null; then
+    echo "下载的文本既不是 Mihomo YAML，也不是有效的 Base64 订阅" >&2
+    exit 1
+  fi
+  normalize_default_config "$DEFAULT_CONFIG_ASSET.decoded" > "$DEFAULT_CONFIG_ASSET"
+fi
+is_mihomo_config "$DEFAULT_CONFIG_ASSET" || {
+  echo "转换后的文本不是 Mihomo/Clash YAML 配置" >&2
+  exit 1
+}
+[ -s "$DEFAULT_CONFIG_ASSET" ] && [ "$(wc -c < "$DEFAULT_CONFIG_ASSET")" -le 8388608 ] || {
+  echo "转换后的默认 Mihomo 配置为空或超过 8 MB" >&2
+  exit 1
+}
+rm -f "$DEFAULT_CONFIG_ASSET.download" "$DEFAULT_CONFIG_ASSET.decoded"
 
 mkdir -p "$OUTPUT_DIR"
 cd "$SOURCE_DIR"

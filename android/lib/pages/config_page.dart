@@ -64,18 +64,24 @@ class _ConfigPageState extends State<ConfigPage> {
     return false;
   }
 
-  void _showConfigAppliedNotice(String message) {
-    showTopSnackBar(
-      context,
-      SnackBar(
+  Future<void> _confirmConfigApplied(String message) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(message),
         content: Text(
-          widget.proxyRunning
-              ? '$message。当前代理仍使用旧配置，请停止并重新启动代理以应用新配置'
-              : message,
+          widget.proxyRunning ? '确认后将重启代理并应用新配置。' : '代理当前未运行，新配置将在下次启动时应用。',
         ),
-        duration: Duration(seconds: widget.proxyRunning ? 6 : 3),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(widget.proxyRunning ? '确认并重启' : '确定'),
+          ),
+        ],
       ),
     );
+    if (widget.proxyRunning) await _service.restart();
   }
 
   Future<void> _importLocal() async {
@@ -191,7 +197,7 @@ class _ConfigPageState extends State<ConfigPage> {
             );
       if (!mounted) return;
       setState(() => _profiles = profiles);
-      _showConfigAppliedNotice(existing == null ? '订阅已添加' : '订阅已修改并更新');
+      await _confirmConfigApplied(existing == null ? '订阅已添加' : '订阅已修改并更新');
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -220,7 +226,7 @@ class _ConfigPageState extends State<ConfigPage> {
       final profiles = await _service.refreshSubscription(profile.id);
       if (!mounted) return;
       setState(() => _profiles = profiles);
-      _showConfigAppliedNotice('“${profile.name}”已更新');
+      await _confirmConfigApplied('“${profile.name}”已更新');
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -575,7 +581,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   void _showError(Object error) {
-    showTopSnackBar(context, SnackBar(content: Text(error.toString())));
+    showErrorNotice(context, error);
   }
 
   @override

@@ -52,7 +52,7 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _loading = false);
-      showTopSnackBar(context, SnackBar(content: Text('读取应用列表失败：$error')));
+      showErrorNotice(context, error);
     }
   }
 
@@ -65,7 +65,7 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopSnackBar(context, SnackBar(content: Text('保存失败：$error')));
+      showErrorNotice(context, error);
     }
   }
 
