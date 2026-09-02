@@ -23,8 +23,6 @@
 # Downloaded Android runtime files
 android/android/app/src/main/jniLibs/
 android/android/app/src/main/assets/geodata/
-android/android/app/src/main/assets/default-config.yaml
-android/android/app/src/main/assets/default-config.yaml.*
 
 # Packaged artifacts and Windows staging files
 **/dist/

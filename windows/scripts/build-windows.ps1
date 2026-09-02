@@ -6,8 +6,7 @@ $serviceProject = Join-Path $root "windows-service"
 $packageDir = Join-Path $root "windows-package"
 $mihomo = Join-Path $packageDir "mihomo.exe"
 $singBox = Join-Path $packageDir "sing-box.exe"
-$defaultConfigUrl = "https://txt.2468999.xyz/sub/mini-ali/clash/mini-ali.yaml"
-$downloadedDefaultConfig = Join-Path $packageDir "downloaded-config.yaml"
+$defaultConfig = Join-Path $root "..\assets\default-config.yaml"
 $ruleSetDir = Join-Path $packageDir "rulesets"
 $releaseVersion = if ($env:MCLASH_VERSION) {
     $env:MCLASH_VERSION.Trim()
@@ -258,32 +257,19 @@ Copy-Item -LiteralPath (Join-Path $packageDir "MclashService.exe") -Destination 
 Copy-Item -LiteralPath $mihomo -Destination $releaseDir -Force
 Copy-Item -LiteralPath $singBox -Destination $releaseDir -Force
 
-Write-Host "Downloading the default mihomo configuration..."
-$temporaryDefaultConfig = "$downloadedDefaultConfig.download"
-try {
-    Invoke-WebRequest `
-        -Headers @{ "User-Agent" = "clash.meta" } `
-        -Uri $defaultConfigUrl `
-        -OutFile $temporaryDefaultConfig
-    if (-not (Test-Path -LiteralPath $temporaryDefaultConfig -PathType Leaf) -or
-        (Get-Item -LiteralPath $temporaryDefaultConfig).Length -eq 0) {
-        throw "The downloaded default mihomo configuration is empty."
-    }
-    $defaultConfigContent = Get-Content -LiteralPath $temporaryDefaultConfig -Raw
-    if ($defaultConfigContent -notmatch '(?m)^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:') {
-        throw "The downloaded default configuration is not a mihomo/Clash YAML configuration."
-    }
-    Move-Item -LiteralPath $temporaryDefaultConfig -Destination $downloadedDefaultConfig -Force
-
-    & $iscc "/DMyAppVersion=$releaseVersion" "/DMyBuildNumber=$buildNumber" `
-        (Join-Path $root "installer\Mclash.iss")
-    if ($LASTEXITCODE -ne 0) {
-        throw "Inno Setup failed with exit code $LASTEXITCODE."
-    }
+if (-not (Test-Path -LiteralPath $defaultConfig -PathType Leaf) -or
+    (Get-Item -LiteralPath $defaultConfig).Length -eq 0) {
+    throw "The bundled default mihomo configuration is missing or empty."
 }
-finally {
-    Remove-Item -LiteralPath $temporaryDefaultConfig -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $downloadedDefaultConfig -Force -ErrorAction SilentlyContinue
+$defaultConfigContent = Get-Content -LiteralPath $defaultConfig -Raw
+if ($defaultConfigContent -notmatch '(?m)^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:') {
+    throw "The bundled default configuration is not a mihomo/Clash YAML configuration."
+}
+
+& $iscc "/DMyAppVersion=$releaseVersion" "/DMyBuildNumber=$buildNumber" `
+    (Join-Path $root "installer\Mclash.iss")
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup failed with exit code $LASTEXITCODE."
 }
 $installer = Join-Path $root "installer\Output\Mclash-Windows-Setup-$packageVersion-x64.exe"
 Write-Host "Windows installer: $installer"

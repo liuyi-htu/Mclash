@@ -1,0 +1,147 @@
+##修改配置文件里的机场订阅链接(103行附近)，把gw.alicdn.com 替换为你需要的混淆
+mixed-port: 7890
+redir-port: 7891
+tproxy-port: 1536
+ipv6: false
+mode: rule
+allow-lan: true
+bind-address: "*"
+
+disable-keep-alive: false
+keep-alive-idle: 15
+keep-alive-interval: 15
+unified-delay: true
+tcp-concurrent: true
+log-level: error
+find-process-mode: "off"
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+geodata-mode: true
+geo-auto-update: true
+geo-update-interval: 24
+geox-url:
+  geoip: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
+
+external-controller: 0.0.0.0:7788
+external-ui: WebUI/ZashBoard
+external-ui-url: "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip"
+external-controller-cors:
+  allow-origins:
+    - "*"
+  allow-private-network: true
+
+sniffer:
+  enable: true
+  force-dns-mapping: true
+  parse-pure-ip: true
+  override-destination: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+    TLS:
+      ports: [443, 5228, 8443]
+    QUIC:
+      ports: [443, 8443]
+
+tun:
+  enable: false
+  device: Meta
+  stack: mixed
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+  udp-timeout: 300
+  auto-route: true
+  strict-route: true
+  auto-redirect: false
+  auto-detect-interface: true
+
+dns:
+  enable: true
+  ipv6: false
+  prefer-h3: false
+  cache-algorithm: arc
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  use-hosts: true
+  use-system-hosts: true
+
+  fake-ip-filter:
+    - "+.lan"
+    - "+.local"
+    - "+.localdomain"
+    - "+.home.arpa"
+    - "localhost"
+    - "*.localhost"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+  # 专门解析机场节点、代理服务器的域名，避免循环依赖
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+
+  nameserver-policy:
+    "geosite:geolocation-!cn":
+      - "https://1.1.1.1/dns-query#RULES"
+      - "https://8.8.8.8/dns-query#RULES"
+
+proxy-providers:
+  机场:
+    type: http
+    url: "订阅链接"   # ← 在这里替换你的订阅链接
+    path: ./profiles/机场.yaml
+    interval: 43200
+#    override:
+#      override-expr:
+#        - '.sni = "gw.alicdn.com"'
+#        - '.servername = "gw.alicdn.com"'
+#        - '(select(.network == "ws") | .["ws-opts"].headers.Host) = "gw.alicdn.com"'
+#        - '(select(.network == "http") | .["http-opts"].headers.Host) = ["gw.alicdn.com"]'
+#        - '(select(.network == "h2") | .["h2-opts"].headers.Host) = "gw.alicdn.com"'
+#        - '(select(.network == "xhttp") | .["xhttp-opts"].headers.Host) = "gw.alicdn.com"'
+    health-check:
+      enable: true
+      interval: 3600
+      url: "https://www.gstatic.com/generate_204"
+      timeout: 3000
+
+proxy-groups:
+- name: 🚀 国内
+  type: select
+  url: http://connect.rom.miui.com/generate_204
+  proxies: [DIRECT]
+  use: [机场]
+  filter: "(?i)(中国|大陆|国内|上海|北京|广州|深圳|杭州|南京|成都|重庆|武汉|西安|天津|苏州|青岛|大连|厦门|福州|长沙|郑州|合肥|济南|宁波|无锡|东莞|佛山|珠海|中山|惠州|昆山|嘉兴|绍兴|温州|金华|台州|嘉兴|湖州|常州|南通|扬州|镇江|徐州|盐城|淮安|连云港|宿迁|芜湖|蚌埠|淮南|马鞍山|安庆|黄山|滁州|阜阳|宿州|六安|亳州|池州|宣城|南昌|九江|景德镇|萍乡|新余|鹰潭|赣州|吉安|宜春|抚州|上饶|太原|大同|阳泉|长治|晋城|朔州|晋中|运城|忻州|临汾|吕梁|石家庄|唐山|秦皇岛|邯郸|邢台|保定|张家口|承德|沧州|廊坊|衡水|呼和浩特|包头|乌海|赤峰|通辽|鄂尔多斯|呼伦贝尔|巴彦淖尔|乌兰察布|沈阳|鞍山|抚顺|本溪|丹东|锦州|营口|阜新|辽阳|盘锦|铁岭|朝阳|葫芦岛|长春|吉林|四平|辽源|通化|白山|松原|白城|哈尔滨|齐齐哈尔|鸡西|鹤岗|双鸭山|大庆|伊春|佳木斯|七台河|牡丹江|黑河|绥化|兰州|嘉峪关|金昌|白银|天水|武威|张掖|平凉|酒泉|庆阳|定西|陇南|银川|石嘴山|吴忠|固原|中卫|西宁|海东|乌鲁木齐|克拉玛依|吐鲁番|哈密|拉萨|日喀则|昌都|林芝|山南|那曲|阿里|海口|三亚|三沙|儋州|贵阳|六盘水|遵义|安顺|毕节|铜仁|昆明|曲靖|玉溪|保山|昭通|丽江|普洱|临沧|南宁|柳州|桂林|梧州|北海|防城港|钦州|贵港|玉林|百色|贺州|河池|来宾|崇左|CN|China)"
+  exclude-filter: "(?i)(剩余流量|流量剩余|套餐流量|到期时间|到期日期|有效期|过期时间|官网|客服|公告|Traffic Remaining|Expire|Expiry|香港|台湾|澳门|HK|TW|MO|Hong Kong|Taiwan|Macao)"
+- name: 🌍 国外
+  type: select
+  url: http://cloudflare.com
+  use: [机场]
+  filter: "(?i)(台湾|新加坡|日本|Hong Kong|Macao|Taiwan|Singapore|Japan|United States|Germany|United Kingdom|Canada|Australia|(^|[^A-Za-z])(HK|MO|TW|SG|JP|US|DE|UK|GB|CA|AU)([^A-Za-z]|$))"
+  exclude-filter: "(?i)(剩余流量|流量剩余|套餐流量|到期时间|到期日期|有效期|过期时间|官网|客服|公告|Traffic Remaining|Expire|Expiry)"
+
+rules:
+  - AND,((NETWORK,UDP),(DST-PORT,443)),REJECT
+  - DST-PORT,22,DIRECT
+  - GEOSITE,openai,🌍 国外
+  - GEOSITE,youtube,🌍 国外
+  - GEOSITE,telegram,🌍 国外
+  - GEOIP,telegram,🌍 国外,no-resolve
+  - GEOSITE,google,🌍 国外
+  - GEOSITE,CN,🚀 国内,DIRECT
+  - GEOIP,CN,🚀 国内,no-resolve
+  - MATCH,🌍 国外
