@@ -1,6 +1,0 @@
-id=mclash_root
-name=Mclash Root Runtime
-version=1.0.0
-versionCode=10000
-author=liuyi-htu
-description=Root TUN and TProxy runtime for Mclash

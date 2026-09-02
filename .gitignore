@@ -21,9 +21,6 @@
 *.keystore
 
 # Downloaded Android runtime files
-root/android/app/src/main/jniLibs/
-root/android/app/src/main/assets/geodata/
-root/android/app/src/main/assets/licenses/
 android/android/app/src/main/jniLibs/
 android/android/app/src/main/assets/geodata/
 

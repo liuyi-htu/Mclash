@@ -10,7 +10,6 @@ on:
         type: choice
         options:
           - all
-          - root
           - android
           - windows
       version:
@@ -78,12 +77,12 @@ jobs:
           version_pattern = re.compile(r"^\d+\.\d+\.\d+$")
           build_pattern = re.compile(r"^[1-9]\d*$")
 
-          pubspec = pathlib.Path("root/pubspec.yaml").read_text(encoding="utf-8")
+          pubspec = pathlib.Path("android/pubspec.yaml").read_text(encoding="utf-8")
           source_match = re.search(
               r"(?m)^version:\s*(\d+\.\d+\.\d+)(?:\+(\d+))?\s*$", pubspec
           )
           if not source_match:
-              raise SystemExit("Cannot determine the current version from root/pubspec.yaml")
+              raise SystemExit("Cannot determine the current version from android/pubspec.yaml")
           source_version = source_match.group(1)
           source_build = int(source_match.group(2) or "1")
 
@@ -123,107 +122,11 @@ jobs:
           summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
           with summary.open("a", encoding="utf-8") as stream:
               stream.write("## Resolved build version\n\n")
-              stream.write(f"- Source: `{source_version}+{source_build}` (root/pubspec.yaml)\n")
+              stream.write(f"- Source: `{source_version}+{source_build}` (android/pubspec.yaml)\n")
               stream.write(f"- Selected: `{version}+{build_number}`\n")
               stream.write(f"- Release tag: `{release_tag}`\n")
           print(f"Resolved build version: {version}+{build_number} ({release_tag})")
           PY
-
-  root:
-    name: Root Android
-    if: ${{ inputs.target == 'all' || inputs.target == 'root' }}
-    needs: validate
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      APP_VERSION: ${{ needs.validate.outputs.version }}
-      BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Set selected version
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import os
-          import pathlib
-          import re
-
-          path = pathlib.Path("root/pubspec.yaml")
-          text = path.read_text(encoding="utf-8")
-          version = f"{os.environ['APP_VERSION']}+{os.environ['BUILD_NUMBER']}"
-          updated, count = re.subn(r"(?m)^version:\s*.*$", f"version: {version}", text)
-          if count != 1:
-              raise SystemExit("root/pubspec.yaml must contain exactly one version field")
-          path.write_text(updated, encoding="utf-8")
-          PY
-
-      - name: Configure Android release signing
-        shell: bash
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            [[ -n "${!name}" ]] || {
-              echo "Missing repository secret: $name" >&2
-              exit 1
-            }
-          done
-          keystore_file="$RUNNER_TEMP/mclash-root-release.jks"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_file"
-          chmod 600 "$keystore_file"
-          keytool -list -keystore "$keystore_file" \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" >/dev/null
-          {
-            echo "storeFile=$keystore_file"
-            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
-            echo "keyAlias=$ANDROID_KEY_ALIAS"
-            echo "keyPassword=$ANDROID_KEY_PASSWORD"
-          } > root/android/key.properties
-          chmod 600 root/android/key.properties
-
-      - name: Build Root APK
-        shell: bash
-        working-directory: root
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ./build-mclash-root.sh
-
-      - name: Name Root artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          source_file="root/dist/Mclash-root-arm64-v8a.apk"
-          output_file="root/dist/Mclash-root-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
-          mv "$source_file" "$output_file"
-          (cd root/dist && sha256sum "$(basename "$output_file")" > "$(basename "$output_file").sha256")
-
-      - name: Upload Root artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
-          path: |
-            root/dist/Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk
-            root/dist/Mclash-root-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk.sha256
-          if-no-files-found: error
 
   android:
     name: Android
@@ -500,12 +403,10 @@ jobs:
     if: >-
       ${{ always() && inputs.target == 'all' &&
           needs.validate.result == 'success' &&
-          needs.root.result == 'success' &&
           needs.android.result == 'success' &&
           needs.windows.result == 'success' }}
     needs:
       - validate
-      - root
       - android
       - windows
     runs-on: ubuntu-latest
@@ -538,8 +439,6 @@ jobs:
         run: |
           set -euo pipefail
           expected=(
-            "Mclash-root-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
-            "Mclash-root-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
             "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
             "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
             "Mclash-Windows-Setup-${APP_VERSION}+${BUILD_NUMBER}-x64.exe"
@@ -626,7 +525,6 @@ jobs:
 
           release_version = f"{values['version']}+{values['build_number']}"
           for pubspec_path in (
-              pathlib.Path("root/pubspec.yaml"),
               pathlib.Path("android/pubspec.yaml"),
               pathlib.Path("windows/mclash/pubspec.yaml"),
           ):
@@ -643,7 +541,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- .github/workflows/build-all.yml \
-            root/pubspec.yaml \
             android/pubspec.yaml \
             windows/mclash/pubspec.yaml
           if git diff --cached --quiet; then

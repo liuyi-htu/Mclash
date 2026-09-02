@@ -1,7 +1,5 @@
 # Mclash源码说明
 
-- `root/`：通过 Root 模块运行 mihomo，使用 `/data/adb/modules/mclash_root`
-  模块和 `/data/adb/mclash` 数据目录，支持 Magisk、KernelSU 和 APatch。
 - `android/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
   Root 权限。
 - `windows/`：Flutter Windows 客户端，同时支持 mihomo 和 sing-box，通过
@@ -12,13 +10,6 @@
 ```text
 Mclash/
 ├── README.md
-├── root/
-│   ├── lib/                        # Root 模式 Flutter 源码
-│   ├── android/                    # Root 模式 Android/Kotlin 源码
-│   ├── root-module/                # Magisk/KernelSU/APatch 模块
-│   ├── test/                       # Flutter 组件测试
-│   ├── build-mclash-root.sh        # Root 构建入口
-│   └── dist/                       # Root 最终产物
 ├── android/
 │   ├── lib/                        # Android 客户端 Flutter 源码
 │   ├── android/                    # Android/Kotlin 源码
@@ -41,12 +32,6 @@ Android App 的 `lib/` 目录按职责划分：
 - `shared/`：通用 UI 组件。
 
 ## 模式特有模块
-
-### Root
-
-- `RootManager.kt`：Root 权限、模块、mihomo 内核和路由生命周期。
-- `ConfigStore.kt`：配置文件及应用设置持久化。
-- `root-module/`：可安装的 Root 模块源码。
 
 ### Android
 
@@ -89,37 +74,13 @@ Gradle、Dart 依赖和运行资源。
 
 ## 开发检查
 
-进入要检查的模式目录：
+进入 Android 客户端目录：
 
 ```bash
-cd root # 或 cd android
+cd android
 flutter pub get
 flutter analyze
 flutter test
-```
-
-## Root 构建
-
-准备好 Release 签名配置后执行：
-
-```bash
-cd root
-./build-mclash-root.sh
-```
-
-脚本会下载最新 mihomo 和 geodata，执行格式化、静态分析、测试、Release
-编译、APK 完整性和签名验证。最终 APK、在线更新内核压缩包和内核更新
-manifest 写入 `root/dist/`。Root 模块不使用 Gradle 的上次打包结果，
-每次构建都会从当前 `root-module/` 源码重新生成 ZIP 并嵌入 APK。
-独立的 Root 模块 ZIP 只是构建中间文件，不会保留在 `dist/`。
-
-Root 模式需要以下 ARM64 运行资源：
-
-```text
-android/app/src/main/jniLibs/arm64-v8a/libmihomo.so
-android/app/src/main/assets/geodata/geosite.dat
-android/app/src/main/assets/geodata/geoip.dat
-android/app/src/main/assets/geodata/country.mmdb
 ```
 
 ## Android 构建
@@ -170,16 +131,16 @@ TUN 与系统代理模式。
 GitHub Actions 不会因提交或修改文件自动构建。需要构建时，在仓库的
 **Actions → Build Mclash clients → Run workflow** 中手动启动。参数如下：
 
-- `target`：构建全部客户端，或只构建 Root、Android、Windows 之一。
+- `target`：构建全部客户端，或只构建 Android、Windows 之一。
 - `version`：版本号，格式为 `x.y.z`；输入框预填最近成功发布的版本号。
 - `build_number`：输入框预填最近成功发布的构建号。保持两个默认值不变运行时，
   工作流会自动使用下一个构建号；只修改为新版本时，构建号从 `1` 开始。
 
 工作流通过最近发布的 `v版本-b构建号` Release 标签识别上一次构建版本。仓库
-尚无新格式 Release 时，会以 `root/pubspec.yaml` 中的版本作为初始依据。所有
+尚无新格式 Release 时，会以 `android/pubspec.yaml` 中的版本作为初始依据。所有
 构建共用同一个并发队列，避免并行任务取得相同构建号。
 
-Root 和 Android 的 Release APK 使用同一套仓库 Secrets 签名：
+Android 的 Release APK 使用以下仓库 Secrets 签名：
 
 ```text
 ANDROID_KEYSTORE_BASE64
@@ -190,7 +151,7 @@ ANDROID_KEY_PASSWORD
 
 `ANDROID_KEYSTORE_BASE64` 是 JKS/keystore 文件的 Base64 内容。构建完成后，
 APK、Windows 安装程序及 SHA-256 文件会保存在对应的 Actions Artifacts 中。
-选择 `target=all` 且三个客户端全部构建成功时，工作流还会创建
+选择 `target=all` 且两个客户端全部构建成功时，工作流还会创建
 `v版本-b构建号` 标签和 GitHub Release，并把全部产物发布到同一个 Release；
 单独构建某个客户端时只保留 Artifact，不发布不完整的 Release。Release 发布
 成功后，工作流会用 `[skip ci]` 提交直接更新 `main` 中的版本和构建号默认值，
@@ -202,15 +163,14 @@ Debug APK 使用 Android 调试证书。Release APK 必须使用正式签名；
 `android/key.properties` 需配置完整，其 `storeFile` 必须指向存在的 JKS 或
 keystore。密钥和密码不应上传或提交到公开仓库。
 
-两个模式的构建脚本在成功或失败退出时，都会删除 `build/`、`.dart_tool/`、
-`.pub/`、`android/.gradle/` 和 `android/.kotlin/`，仅在各自的 `dist/` 保留
-最终产物。编译期间准备的解压后 mihomo、HevSocks5Tunnel 和 geodata 文件会在
-退出时删除；Root `dist/` 会保留用于在线更新的 mihomo `.gz` 及 manifest。
+Android 构建脚本在成功或失败退出时，都会删除 `build/`、`.dart_tool/`、
+`.pub/`、`android/.gradle/` 和 `android/.kotlin/`，仅在 `dist/` 保留最终产物。
+编译期间准备的解压后 mihomo、HevSocks5Tunnel 和 geodata 文件会在退出时删除。
 
 ## 版本信息
 
-三个客户端的版本分别在 `root/pubspec.yaml`、`android/pubspec.yaml` 和
-`windows/mclash/pubspec.yaml` 中维护。两个 Android App 的包名均为
+两个客户端的版本分别在 `android/pubspec.yaml` 和
+`windows/mclash/pubspec.yaml` 中维护。Android App 的包名为
 `com.liuyihtu.mclash`，最低支持 Android 7.0（API 24）。
 
 ## 开源许可
