@@ -20,7 +20,7 @@ on:
       build_number:
         description: Latest build number; unchanged values advance automatically
         required: false
-        default: "2"
+        default: "3"
         type: string
       release_notes:
         description: Optional release notes shown below the Mihomo core version
