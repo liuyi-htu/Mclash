@@ -2,6 +2,7 @@
 **/build/
 **/.dart_tool/
 **/.pub/
+**/ephemeral/
 **/.gradle/
 **/.kotlin/
 **/.cxx/
