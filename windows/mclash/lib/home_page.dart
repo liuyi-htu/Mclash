@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'app_notice.dart';
 import 'config_page.dart';
@@ -730,6 +732,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showAbout() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    final buildSuffix =
+        packageInfo.buildNumber.isEmpty ? '' : '+${packageInfo.buildNumber}';
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -745,6 +751,8 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
             ),
+            const SizedBox(height: 8),
+            Text('版本：${packageInfo.version}$buildSuffix'),
             const SizedBox(height: 14),
             const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -762,21 +770,23 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 16),
             const Text('开源地址', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            const SelectableText(
-              'https://github.com/liuyi-htu/Mclash',
-              style: TextStyle(
-                color: Colors.blue,
-                decoration: TextDecoration.underline,
-                height: 1.4,
+            Semantics(
+              link: true,
+              child: InkWell(
+                onTap: () => _openSourceRepository(dialogContext),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    'https://github.com/liuyi-htu/Mclash',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Telegram group',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 4),
-            const SelectableText('https://telegram.me/+QqTdo3bY8eAyZmFl'),
           ],
         ),
         actions: [
@@ -787,6 +797,16 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Future<void> _openSourceRepository(BuildContext dialogContext) async {
+    final opened = await launchUrl(
+      Uri.parse('https://github.com/liuyi-htu/Mclash'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted && dialogContext.mounted) {
+      AppNotice.show(dialogContext, '无法打开源码链接');
+    }
   }
 
   Future<void> _toggle() async {
