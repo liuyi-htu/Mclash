@@ -115,7 +115,7 @@ class VpnTunnelSettings {
       ipv4DnsServers: (map['ipv4DnsServers'] as List<Object?>?)
               ?.whereType<String>()
               .toList() ??
-          const ['1.1.1.1'],
+          const ['114.114.114.114'],
       ipv6Enabled: map['ipv6Enabled'] as bool? ?? false,
       bypassLan: map['bypassLan'] as bool? ?? true,
     );

@@ -94,7 +94,7 @@ internal class AppPreferences(context: Context) {
         const val DEFAULT_DELAY_TEST_URL = "http://connect.rom.miui.com/generate_204"
         const val DEFAULT_VPN_MTU = 1500
         const val DEFAULT_TCP_BUFFER_SIZE = 262144
-        val DEFAULT_VPN_IPV4_DNS_SERVERS = listOf("1.1.1.1")
+        val DEFAULT_VPN_IPV4_DNS_SERVERS = listOf("114.114.114.114")
         const val DEFAULT_VPN_IPV6_ENABLED = false
         const val DEFAULT_VPN_BYPASS_LAN = true
 
