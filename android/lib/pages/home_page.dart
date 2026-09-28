@@ -618,7 +618,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         controller: ipv4DnsController,
                         decoration: const InputDecoration(
                           labelText: 'IPv4 DNS',
-                          hintText: '1.1.1.1',
+                          hintText: '114.114.114.114',
                         ),
                         keyboardType: TextInputType.text,
                       ),
@@ -658,7 +658,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 actions: [
                   TextButton(
                     onPressed: () {
-                      ipv4DnsController.text = '1.1.1.1';
+                      ipv4DnsController.text = '114.114.114.114';
                       mtuController.text = '1500';
                       bufferController.text = '262144';
                       setDialogState(() {
