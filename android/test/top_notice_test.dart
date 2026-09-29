@@ -4,6 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/shared/top_notice.dart';
 
 void main() {
+  test('summary prioritizes the core error over generic startup failure', () {
+    expect(
+        errorNoticeSummary(
+            'mihomo 启动后立即退出。\n本次启动错误：\nlevel=fatal msg="yaml: line 12: invalid"'),
+        contains('yaml: line 12'));
+  });
+
   testWidgets('top notice can be dismissed in every direction', (tester) async {
     late BuildContext context;
     await tester.pumpWidget(

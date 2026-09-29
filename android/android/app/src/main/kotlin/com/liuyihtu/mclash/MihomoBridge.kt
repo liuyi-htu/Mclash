@@ -19,6 +19,9 @@ internal object MihomoProcess {
         "country.mmdb" to "Country.mmdb",
     )
 
+    private var errorReader: Thread? = null
+    private val recentErrors = java.util.ArrayDeque<String>()
+
     @Volatile
     private var process: Process? = null
 
@@ -68,11 +71,27 @@ internal object MihomoProcess {
             if (debugLoggingEnabled) {
                 ProcessBuilder.Redirect.appendTo(logFile)
             } else {
-                ProcessBuilder.Redirect.to(File("/dev/null"))
+                ProcessBuilder.Redirect.PIPE
             },
         )
 
+        errorReader?.join(1000)
+        synchronized(recentErrors) { recentErrors.clear() }
         val next = processBuilder.start()
+        if (!debugLoggingEnabled) {
+            errorReader = Thread({
+                runCatching {
+                    next.inputStream.bufferedReader().useLines { lines ->
+                        lines.forEach { line ->
+                            synchronized(recentErrors) {
+                                recentErrors.addLast(line.takeLast(2048))
+                                while (recentErrors.size > 40) recentErrors.removeFirst()
+                            }
+                        }
+                    }
+                }
+            }, "mihomo-error-reader").apply { isDaemon = true; start() }
+        }
 
         process = next
         try {
@@ -97,6 +116,29 @@ internal object MihomoProcess {
             throw error
         }
         return LOCAL_PROXY_PORT
+    }
+
+    fun validateConfig(context: Context, source: File) {
+        val home = File(context.filesDir, "mihomo").apply { mkdirs() }
+        installBundledGeodata(context, home)
+        val candidate = File.createTempFile("validate-", ".yaml", home)
+        val diagnostics = File.createTempFile("validate-", ".log", home)
+        var validator: Process? = null
+        try {
+            prepareRuntimeConfig(source, home, AppPreferences(context).vpnIpv6Enabled, false, candidate)
+            val binary = File(context.applicationInfo.nativeLibraryDir, "libmihomo.so")
+            validator = ProcessBuilder(binary.absolutePath, "-t", "-d", home.absolutePath, "-f", candidate.absolutePath)
+                .directory(home).redirectErrorStream(true).redirectOutput(diagnostics).start()
+            check(validator.waitFor(30, TimeUnit.SECONDS)) { "配置校验超时，原配置未修改" }
+            check(validator.exitValue() == 0) {
+                "运行配置校验失败（行号对应生成的运行配置，不是编辑器原文）：\n" +
+                    diagnostics.readText().takeLast(32768)
+            }
+        } finally {
+            validator?.let { if (it.isAlive) { it.destroyForcibly(); it.waitFor(2, TimeUnit.SECONDS) } }
+            candidate.delete()
+            diagnostics.delete()
+        }
     }
 
     @Synchronized
@@ -154,6 +196,7 @@ internal object MihomoProcess {
         home: File,
         ipv6Enabled: Boolean,
         debugLoggingEnabled: Boolean,
+        output: File = File(home, "runtime.yaml"),
     ): File {
         val controlledKeys = setOf(
             "mixed-port",
@@ -183,7 +226,7 @@ internal object MihomoProcess {
         val ipv6Adjusted = overrideDnsIpv6(original, ipv6Enabled)
         val filtered = removeTopLevelKeys(ipv6Adjusted, controlledKeys).trimEnd()
 
-        val runtime = File(home, "runtime.yaml")
+        val runtime = output
         runtime.writeText(
             buildString {
                 append(filtered)
@@ -331,6 +374,7 @@ internal object MihomoProcess {
 
         while (System.currentTimeMillis() < deadline) {
             if (!process.isAlive) {
+                errorReader?.join(1000)
                 error(
                     "mihomo 启动后立即退出。\n${readLogTail(logFile, debugLoggingEnabled)}",
                 )
@@ -370,14 +414,17 @@ internal object MihomoProcess {
         debugLoggingEnabled: Boolean,
     ): String {
         if (!debugLoggingEnabled) {
-            return "调试日志已关闭；启用后重新启动代理可记录 mihomo 输出"
+            return synchronized(recentErrors) {
+                "本次启动错误（行号对应运行配置 runtime.yaml）：\n" +
+                    recentErrors.joinToString("\n").ifBlank { "内核未输出具体错误" }
+            }
         }
         return runCatching {
             val lines = logFile.readLines(Charsets.UTF_8).takeLast(40)
             if (lines.isEmpty()) {
                 "mihomo.log 没有输出"
             } else {
-                "mihomo.log 最后 ${lines.size} 行：\n${lines.joinToString("\n")}"
+                "mihomo.log 最后 ${lines.size} 行（行号对应运行配置 runtime.yaml）：\n${lines.joinToString("\n")}"
             }
         }.getOrElse { error ->
             "无法读取 mihomo.log：${error.message}"
