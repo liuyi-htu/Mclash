@@ -83,7 +83,9 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     final yaml = loadYaml(saved!);
-    expect(yaml['proxy-groups'][0]['filter'], '上海|广州');
+    expect(yaml['proxy-groups'][0]['filter'], isNull);
+    expect(yaml['proxy-groups'][0]['proxies'], ['DIRECT', '上海']);
+    expect(saved, contains('上海|广州'));
     expect(yaml['rules'], loadYaml(content)['rules']);
     expect(saves, 1);
     await tester.longPress(find.text('Airport'));

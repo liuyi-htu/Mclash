@@ -29,26 +29,51 @@ internal object SubscriptionConfig {
         require(names.none { it in reserved }) { "订阅节点名称与默认策略冲突" }
         config.remove("proxy-providers")
         config["proxies"] = nodes
+        val regionNames = listOf("🚀 国内", "🌍 国外")
+        val prefixes = listOf("# Mclash 国内正则: ", "# Mclash 国外正则: ")
         val previous = previousConfig?.let { loader.load<Any>(it) } as? Map<*, *>
-        val filters = (previous?.get("proxy-groups") as? List<*>)
-            .orEmpty().filterIsInstance<Map<*, *>>()
-            .mapNotNull { group ->
-                val name = group["name"] as? String
-                val filter = group["filter"] as? String
-                if (name != null && filter != null) name to filter else null
-            }.toMap()
+        val previousGroups = (previous?.get("proxy-groups") as? List<*>).orEmpty()
+            .filterIsInstance<Map<*, *>>()
+        val filters = regionNames.mapIndexed { index, name ->
+            val comment = (previousConfig ?: template).lineSequence().firstOrNull { it.startsWith(prefixes[index]) }
+            val oldGroup = previousGroups.firstOrNull { it["name"] == name }
+            val defaultGroup = groups.filterIsInstance<Map<*, *>>().first { it["name"] == name }
+            if (comment != null) loader.load<String>(comment.removePrefix(prefixes[index]))
+            else (oldGroup?.get("filter") ?: defaultGroup["filter"] ?: if (index == 0) "上海" else "KR") as String
+        }
         config["proxy-groups"] = groups.map { item ->
             @Suppress("UNCHECKED_CAST")
             val group = (item as Map<String, Any?>).toMutableMap()
-            group.remove("use")
-            filters[group["name"]]?.let { group["filter"] = it }
-            group["include-all-proxies"] = true
-            group["empty-fallback"] = "DIRECT"
-            group["proxies"] = (group["proxies"] as? List<*>).orEmpty()
+            val region = regionNames.indexOf(group["name"])
+            if (region >= 0) {
+                val pattern = Regex(filters[region])
+                val selected = (if (region == 0) listOf("DIRECT") else emptyList()) +
+                    names.filter { pattern.containsMatchIn(it) }
+                for (key in listOf("filter", "use", "include-all-proxies", "include-all", "include-all-providers", "empty-fallback")) {
+                    group.remove(key)
+                }
+                group["proxies"] = selected.ifEmpty { listOf("DIRECT") }
+            }
             group
         }
+        val header = prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) }
         return Yaml(DumperOptions().apply {
             defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
-        }).dump(config)
+        }).dump(config).let { "$header\n$it" }
+    }
+
+    private fun quote(value: String): String = buildString {
+        append('"')
+        for (char in value) {
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> if (char.code < 32) append("\\u%04x".format(char.code)) else append(char)
+            }
+        }
+        append('"')
     }
 }

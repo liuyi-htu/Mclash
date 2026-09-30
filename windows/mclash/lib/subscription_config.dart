@@ -1,5 +1,6 @@
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
+import 'subscription_filter.dart';
 
 /// Keeps the bundled routing policy and embeds only downloaded proxy nodes.
 String buildSubscriptionConfig(String template, String subscription,
@@ -41,25 +42,12 @@ String buildSubscriptionConfig(String template, String subscription,
   final editor = YamlEditor(template);
   if (config.containsKey('proxy-providers')) editor.remove(['proxy-providers']);
   editor.update(['proxies'], nodes);
-  final previous = previousConfig == null ? null : loadYaml(previousConfig);
-  final previousGroups = previous is YamlMap ? previous['proxy-groups'] : null;
-  final filters = <String, String>{
-    if (previousGroups is YamlList)
-      for (final group in previousGroups)
-        if (group is YamlMap &&
-            group['name'] is String &&
-            group['filter'] is String)
-          group['name'] as String: group['filter'] as String,
-  };
   for (var i = 0; i < groups.length; i++) {
     final group = groups[i] as YamlMap;
     if (group.containsKey('use')) editor.remove(['proxy-groups', i, 'use']);
-    final filter = filters[group['name']] ?? group['filter'];
-    if (filter != null) editor.update(['proxy-groups', i, 'filter'], filter);
-    editor.update(['proxy-groups', i, 'include-all-proxies'], true);
-    editor.update(['proxy-groups', i, 'empty-fallback'], 'DIRECT');
-    editor.update(['proxy-groups', i, 'proxies'],
-        (group['proxies'] as YamlList?)?.toList() ?? <String>[]);
   }
-  return editor.toString();
+  return applySubscriptionFilters(editor.toString(), {
+    for (final name in defaultSubscriptionFilters.keys)
+      name: readSubscriptionFilter(previousConfig ?? template, name),
+  });
 }

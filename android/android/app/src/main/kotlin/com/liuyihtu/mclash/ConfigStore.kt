@@ -26,6 +26,8 @@ internal class ConfigStore(private val context: Context) {
     private val configsDirectory = File(mihomoDirectory, "configs")
     private val legacyConfigFile = File(mihomoDirectory, "config.yaml")
 
+    private var bundledSubscriptionAttempted = false
+
     init {
         migrateLegacyConfig()
         installBundledDefaultConfig()
@@ -602,6 +604,18 @@ internal class ConfigStore(private val context: Context) {
         legacyConfigFile.delete()
     }
 
+    @Synchronized
+    fun initializeDefaultSubscription() {
+        if (bundledSubscriptionAttempted || ProxyVpnService.running || ProxyVpnService.starting) return
+        bundledSubscriptionAttempted = true
+        val profile = readProfiles().firstOrNull {
+            it.type == TYPE_SUBSCRIPTION && it.url == DEFAULT_SUBSCRIPTION_URL &&
+                profileFile(it.id).isFile && profileFile(it.id).readText().contains("# Mclash 默认机场订阅")
+        } ?: return
+        // Keep the subscription available offline so it can be refreshed later.
+        runCatching { refreshSubscription(profile.id) }
+    }
+
     private fun installBundledDefaultConfig() {
         if (preferences.bundledDefaultConfigHandled) return
         if (readProfiles().isNotEmpty()) {
@@ -617,8 +631,8 @@ internal class ConfigStore(private val context: Context) {
         val profile = ConfigProfile(
             id = UUID.randomUUID().toString(),
             name = DEFAULT_CONFIG_NAME,
-            type = TYPE_LOCAL,
-            url = null,
+            type = TYPE_SUBSCRIPTION,
+            url = DEFAULT_SUBSCRIPTION_URL,
             updatedAt = System.currentTimeMillis(),
         )
         writeAtomically(profileFile(profile.id), bytes)
@@ -633,6 +647,7 @@ internal class ConfigStore(private val context: Context) {
         const val TYPE_SUBSCRIPTION = "subscription"
         private const val DEFAULT_CONFIG_ASSET = "default-config.yaml"
         private const val DEFAULT_CONFIG_NAME = "Cloudflare"
+        private const val DEFAULT_SUBSCRIPTION_URL = "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19"
         private const val MAX_CONFIG_BYTES = 8 * 1024 * 1024
         private val MIHOMO_KEY_REGEX = Regex(
             "(?m)^\\s*(proxies|proxy-providers|proxy-groups|rules|rule-providers|mixed-port|port|socks-port|mode|dns|tun)\\s*:",

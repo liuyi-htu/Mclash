@@ -22,19 +22,19 @@ dns: {enable: false}
     expect(config['proxies'], loadYaml(subscription)['proxies']);
     expect(config['rules'], original['rules']);
     expect(config['dns'], original['dns']);
-    expect(config['proxy-groups'][0]['proxies'], ['DIRECT']);
-    expect(config['proxy-groups'][1]['proxies'], []);
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海专线']);
+    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
     for (final group in config['proxy-groups']) {
       expect(group['use'], isNull);
-      expect(group['include-all-proxies'], isTrue);
-      expect(group['empty-fallback'], 'DIRECT');
+      expect(group['include-all-proxies'], isNull);
+      expect(group['filter'], isNull);
     }
     expect(result, isNot(contains('token=')));
   });
   test('unmatched regions retain usable DIRECT fallback', () {
     final config = loadYaml(buildSubscriptionConfig(
         template, 'proxies: [{name: 美国, type: ss, server: us.example}]'));
-    expect(config['proxy-groups'][1]['empty-fallback'], 'DIRECT');
+    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
   });
   test('refresh retains customized and blank filters from the subscription',
       () {
@@ -45,8 +45,14 @@ dns: {enable: false}
         '');
     final config = loadYaml(buildSubscriptionConfig(template, subscription,
         previousConfig: previous));
-    expect(config['proxy-groups'][0]['filter'], '广州');
-    expect(config['proxy-groups'][1]['filter'], '');
+    expect(
+        readSubscriptionFilter(
+            buildSubscriptionConfig(template, subscription,
+                previousConfig: previous),
+            domesticGroup),
+        '广州');
+    expect(config['proxy-groups'][1]['proxies'].length, 3);
+    expect(config['proxy-groups'][0]['filter'], isNull);
   });
   test('rejects empty, provider-only, malformed and conflicting nodes', () {
     for (final source in [
