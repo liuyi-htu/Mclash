@@ -7,9 +7,11 @@ import 'models.dart';
 import 'native_proxy_service.dart';
 
 class ConfigEditorPage extends StatefulWidget {
-  const ConfigEditorPage({required this.profile, super.key});
+  const ConfigEditorPage(
+      {required this.profile, this.runtimeView = false, super.key});
 
   final ConfigProfile profile;
+  final bool runtimeView;
 
   @override
   State<ConfigEditorPage> createState() => _ConfigEditorPageState();
@@ -42,7 +44,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   Future<void> _checkRunningState() async {
-    if (_loading || _saving || _checkingState) return;
+    if (widget.runtimeView || _loading || _saving || _checkingState) return;
     _checkingState = true;
     try {
       final running = await _service.isRunning();
@@ -58,13 +60,13 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     try {
       final running = await _service.isRunning();
       if (!mounted) return;
-      setState(() => _readOnly = running);
-      final content = running
+      setState(() => _readOnly = widget.runtimeView || running);
+      final content = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _controller.removeListener(_markDirty);
-      _readOnly = running;
+      _readOnly = widget.runtimeView || running;
       _dirty = false;
       _controller.text = content;
       _controller.addListener(_markDirty);

@@ -10,11 +10,13 @@ import '../shared/top_notice.dart';
 class ConfigEditorPage extends StatefulWidget {
   const ConfigEditorPage({
     required this.profile,
+    this.runtimeView = false,
     required this.proxyRunning,
     super.key,
   });
 
   final ConfigProfile profile;
+  final bool runtimeView;
   final bool proxyRunning;
 
   @override
@@ -59,7 +61,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   Future<void> _checkRunningState() async {
-    if (_loading || _saving || _checkingState) return;
+    if (widget.runtimeView || _loading || _saving || _checkingState) return;
     _checkingState = true;
     try {
       final running = await _service.isRunning();
@@ -75,14 +77,14 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     try {
       final running = await _service.isRunning();
       if (!mounted) return;
-      setState(() => _readOnly = running);
-      final content = running
+      setState(() => _readOnly = widget.runtimeView || running);
+      final content = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _lastText = content;
       _controller.removeListener(_handleTextChanged);
-      _readOnly = running;
+      _readOnly = widget.runtimeView || running;
       _dirty = false;
       _controller.text = content;
       _lineCount = _countLines(content);
