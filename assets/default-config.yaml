@@ -108,7 +108,6 @@ proxy-providers:
   机场:
     type: http
     url: "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19"
-    proxy: 🚀 国内
     path: ./profiles/机场.yaml
     interval: 43200
     health-check:
