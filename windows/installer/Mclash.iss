@@ -36,7 +36,8 @@ Name: "{app}\data\profiles"; Permissions: users-modify
 Name: "{app}\data\logs"; Permissions: users-modify
 
 [Files]
-Source: "..\mclash\build\windows\x64\runner\Release\*"; Excludes: "MclashService.exe,mihomoService.exe,mihomo.exe,sing-box.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mclash\build\windows\x64\runner\Release\Mclash.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\mclash\build\windows\x64\runner\Release\*"; Excludes: "*.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows-package\MclashService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows-package\mihomo.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\assets\default-config.yaml"; DestDir: "{app}\data"; DestName: "config.yaml"; Flags: onlyifdoesntexist

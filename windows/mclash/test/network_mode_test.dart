@@ -149,13 +149,13 @@ rules:
       '${profiles.path}\\clash.yaml',
     ).writeAsString('mixed-port: 7890\nrules:\n  - MATCH,DIRECT\n');
     await File(
-      '${profiles.path}\\sing-box.json',
+      '${profiles.path}\\unsupported.json',
     ).writeAsString('{"inbounds":[],"outbounds":[{"type":"direct"}]}');
     await File('${temporaryDirectory.path}\\state.json').writeAsString(
       jsonEncode(<String, dynamic>{
         'profileNames': <String, String>{
           'clash.yaml': 'mihomo 配置',
-          'sing-box.json': 'sing-box 配置',
+          'unsupported.json': 'JSON 配置',
         },
       }),
     );
@@ -164,8 +164,8 @@ rules:
       'clash.yaml',
     ]);
 
-    expect(await File('${profiles.path}\\sing-box.json').exists(), isTrue);
+    expect(await File('${profiles.path}\\unsupported.json').exists(), isTrue);
     await expectLater(
-        service.selectConfig('sing-box.json'), throwsArgumentError);
+        service.selectConfig('unsupported.json'), throwsArgumentError);
   });
 }
