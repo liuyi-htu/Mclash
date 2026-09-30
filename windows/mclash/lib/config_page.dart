@@ -436,11 +436,6 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
-    if (widget.proxyRunning) {
-      await _showConfigDetails(profile);
-      return;
-    }
-
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -464,46 +459,50 @@ class _ConfigPageState extends State<ConfigPage> {
               ),
             ),
             const Divider(height: 1),
-            if (!profile.active)
-              ListTile(
-                leading: const Icon(Icons.check_circle_outline),
-                title: const Text('设为当前配置'),
-                onTap: () => Navigator.of(sheetContext).pop('select'),
-              ),
-            if (profile.isSubscription)
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: const Text('修改配置名称'),
+              enabled: !widget.proxyRunning,
+              onTap: () => Navigator.of(sheetContext).pop('rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.code_outlined),
+              title: const Text('修改配置文件'),
+              enabled: !widget.proxyRunning,
+              onTap: () => Navigator.of(sheetContext).pop('editContent'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.visibility_outlined),
+              title: const Text('查看运行配置'),
+              enabled: widget.proxyRunning && profile.active,
+              onTap: () => Navigator.of(sheetContext).pop('runtime'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('删除'),
+              enabled: !widget.proxyRunning,
+              onTap: () => Navigator.of(sheetContext).pop('delete'),
+            ),
+            if (profile.isSubscription) ...[
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.link_outlined),
                 title: const Text('检测订阅链接'),
                 onTap: () => Navigator.of(sheetContext).pop('testUrl'),
               ),
-            ListTile(
-              leading: const Icon(Icons.code_outlined),
-              title: const Text('修改配置内容'),
-              onTap: () => Navigator.of(sheetContext).pop('editContent'),
-            ),
-            if (profile.isSubscription)
               ListTile(
                 leading: const Icon(Icons.refresh),
                 title: const Text('更新订阅'),
+                enabled: !widget.proxyRunning,
                 onTap: () => Navigator.of(sheetContext).pop('refresh'),
               ),
-            if (profile.isSubscription)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('修改订阅'),
+                enabled: !widget.proxyRunning,
                 onTap: () => Navigator.of(sheetContext).pop('edit'),
               ),
-            if (!profile.isSubscription)
-              ListTile(
-                leading: const Icon(Icons.drive_file_rename_outline),
-                title: const Text('修改配置名称'),
-                onTap: () => Navigator.of(sheetContext).pop('rename'),
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              onTap: () => Navigator.of(sheetContext).pop('delete'),
-            ),
+            ],
             const SizedBox(height: 8),
           ],
         ),
@@ -520,6 +519,14 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
       case 'testUrl':
         await _testSubscriptionUrl(profile);
+        return;
+      case 'runtime':
+        await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => ConfigEditorPage(
+            profile: profile,
+            runtimeView: true,
+          ),
+        ));
         return;
       case 'editContent':
         if (!_ensureStopped()) return;
@@ -803,11 +810,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 onLongPress: _working
                                     ? null
                                     : () {
-                                        if (widget.proxyRunning) {
-                                          _showConfigDetails(profile);
-                                        } else {
-                                          _showActions(profile);
-                                        }
+                                        _showActions(profile);
                                       },
                                 child: Padding(
                                   padding: const EdgeInsets.all(15),
