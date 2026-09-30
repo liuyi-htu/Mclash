@@ -107,47 +107,14 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   Future<Map<String, dynamic>> _readSettings() async {
     final current = await _readJsonMap(File(_settingsPath));
-    final settings = current ?? await _readJsonMap(File(_legacyStatePath));
-    if (settings == null) return <String, dynamic>{};
-    var changed = current == null;
-    settings.remove('mihomoPid');
-    settings.remove('message');
-    final unsupportedCore =
-        settings['coreType'] != null && settings['coreType'] != 'mihomo';
-    if (settings['coreType'] != 'mihomo') {
-      settings['coreType'] = 'mihomo';
-      changed = true;
-    }
-    final active = settings['activeProfile']?.toString();
-    if ((active != null && !_profileMatchesCore(active)) ||
-        (active == null && unsupportedCore)) {
-      final remembered = settings['activeMihomoProfile']?.toString();
-      final profile = _profileMatchesCore(remembered)
-          ? File(_profilePath(remembered!))
-          : null;
-      settings['activeProfile'] =
-          profile != null && await profile.exists() ? remembered : null;
-      if (settings['activeProfile'] != null) {
-        final preferences = _runtimePreferencesFromState(settings);
-        await File(_configPath).writeAsString(
-          _runtimeConfig(
-            await profile!.readAsString(),
-            settings['networkMode'] == 'tun'
-                ? NetworkMode.tun
-                : NetworkMode.proxy,
-            ipv6Enabled: preferences.ipv6Enabled,
-            bypassLanEnabled: preferences.bypassLanEnabled,
-          ),
-        );
-      }
-      changed = true;
-    }
-    if (settings.containsKey('activeSingBoxProfile')) {
-      settings.remove('activeSingBoxProfile');
-      changed = true;
-    }
-    if (changed) await _writeSettings(settings);
-    return settings;
+    if (current != null) return current;
+
+    final legacy = await _readJsonMap(File(_legacyStatePath));
+    if (legacy == null) return <String, dynamic>{};
+    legacy.remove('mihomoPid');
+    legacy.remove('message');
+    await _writeSettings(legacy);
+    return legacy;
   }
 
   Future<void> _updateSettings(Map<String, dynamic> changes) async {
@@ -202,7 +169,6 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   @override
   Future<void> start() async {
-    await _readSettings();
     final status = await _status();
     if (status['installed'] != true) await _runService('install');
     try {
@@ -411,10 +377,7 @@ public static class WinInetProxy {
   }
 
   @override
-  Future<CoreType> getCoreType() async {
-    await _readSettings();
-    return CoreType.mihomo;
-  }
+  Future<CoreType> getCoreType() async => CoreType.mihomo;
 
   bool _profileMatchesCore(String? id) =>
       id != null &&
@@ -743,9 +706,9 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<String> getRuntimeConfigContent() async {
-    final state = await _readSettings();
     final runtime = File(_configPath);
     if (await runtime.exists()) return runtime.readAsString();
+    final state = await _readSettings();
     final id = state['activeProfile']?.toString();
     if (id == null) throw StateError('尚未选择配置，请先选择配置。');
     final content = await File(_profilePath(id)).readAsString();

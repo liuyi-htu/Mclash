@@ -142,7 +142,7 @@ rules:
     expect(runtime['tun']['enable'], isTrue);
   });
 
-  test('lists only YAML profiles and preserves legacy JSON files', () async {
+  test('lists only YAML profiles and rejects JSON selection', () async {
     final profiles = Directory('${temporaryDirectory.path}\\profiles');
     await profiles.create(recursive: true);
     await File(
