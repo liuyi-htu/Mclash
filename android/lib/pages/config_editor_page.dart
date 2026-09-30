@@ -6,6 +6,7 @@ import 'package:yaml/yaml.dart';
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
+import '../shared/config_text_editor.dart';
 
 class ConfigEditorPage extends StatefulWidget {
   const ConfigEditorPage({
@@ -28,7 +29,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _controller = TextEditingController();
   final _jumpController = TextEditingController();
   final _editorScrollController = ScrollController();
-  final _lineNumberScrollController = ScrollController();
   bool _readOnly = false;
   Timer? _stateTimer;
   bool _checkingState = false;
@@ -44,7 +44,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   @override
   void initState() {
     super.initState();
-    _editorScrollController.addListener(_syncLineNumberScroll);
     _load();
     _stateTimer =
         Timer.periodic(const Duration(seconds: 1), (_) => _checkRunningState());
@@ -56,7 +55,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     _controller.dispose();
     _jumpController.dispose();
     _editorScrollController.dispose();
-    _lineNumberScrollController.dispose();
     super.dispose();
   }
 
@@ -150,15 +148,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   int _countLines(String text) => '\n'.allMatches(text).length + 1;
-
-  void _syncLineNumberScroll() {
-    if (!_lineNumberScrollController.hasClients) return;
-    final target = _editorScrollController.offset.clamp(
-      0.0,
-      _lineNumberScrollController.position.maxScrollExtent,
-    );
-    _lineNumberScrollController.jumpTo(target);
-  }
 
   Future<void> _save() async {
     if (_saving || _readOnly) return;
@@ -269,111 +258,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                       ],
                       if (_error != null) const SizedBox(height: 10),
                       Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Container(
-                              width: 28 +
-                                  _lineCount.toString().length *
-                                      MediaQuery.textScalerOf(context).scale(9),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                borderRadius: const BorderRadius.horizontal(
-                                  left: Radius.circular(12),
-                                ),
-                              ),
-                              child: SingleChildScrollView(
-                                controller: _lineNumberScrollController,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding:
-                                    const EdgeInsets.fromLTRB(8, 12, 8, 12),
-                                child: Text.rich(
-                                  TextSpan(
-                                      children: List.generate(
-                                          _lineCount,
-                                          (index) => TextSpan(
-                                                text:
-                                                    '${index + 1}${index + 1 == _lineCount ? '' : '\n'}',
-                                                style: TextStyle(
-                                                    backgroundColor: index +
-                                                                1 ==
-                                                            _currentLine
-                                                        ? Theme.of(context)
-                                                            .colorScheme
-                                                            .primaryContainer
-                                                        : null),
-                                              ))),
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                    fontFamily: 'monospace',
-                                    fontSize: 13,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const VerticalDivider(width: 1, thickness: 1),
-                            Expanded(
-                              child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                final editorStyle = Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge!
-                                    .copyWith(
-                                      fontFamily: 'monospace',
-                                      fontSize: 13,
-                                      height: 1.35,
-                                    );
-                                final painter = TextPainter(
-                                  text: TextSpan(
-                                      text: _controller.text,
-                                      style: editorStyle),
-                                  textDirection: TextDirection.ltr,
-                                  textScaler: MediaQuery.textScalerOf(context),
-                                )..layout();
-                                final width = (painter.width + 48).clamp(
-                                    constraints.maxWidth, double.infinity);
-                                painter.dispose();
-                                return SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: width,
-                                    height: constraints.maxHeight,
-                                    child: TextField(
-                                      textDirection: TextDirection.ltr,
-                                      controller: _controller,
-                                      readOnly: _readOnly,
-                                      scrollController: _editorScrollController,
-                                      expands: true,
-                                      minLines: null,
-                                      maxLines: null,
-                                      keyboardType: TextInputType.multiline,
-                                      textAlignVertical: TextAlignVertical.top,
-                                      autocorrect: false,
-                                      enableSuggestions: false,
-                                      smartDashesType: SmartDashesType.disabled,
-                                      smartQuotesType: SmartQuotesType.disabled,
-                                      style: editorStyle,
-                                      decoration: const InputDecoration(
-                                        hintText: 'YAML 配置内容',
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.horizontal(
-                                            right: Radius.circular(12),
-                                          ),
-                                        ),
-                                        contentPadding: EdgeInsets.all(12),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ],
+                        child: ConfigTextEditor(
+                          controller: _controller,
+                          readOnly: _readOnly,
+                          scrollController: _editorScrollController,
                         ),
                       ),
                       Text(

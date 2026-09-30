@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_notice.dart';
+import 'config_text_editor.dart';
 import 'models.dart';
 import 'native_proxy_service.dart';
 import 'proxy_platform_service.dart';
@@ -201,51 +202,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                       ],
                       const SizedBox(height: 10),
                       Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final editorStyle =
-                                Theme.of(context).textTheme.bodyLarge!.copyWith(
-                                      fontFamily: 'monospace',
-                                      fontSize: 13,
-                                      height: 1.35,
-                                    );
-                            final painter = TextPainter(
-                              text: TextSpan(
-                                  text: _controller.text, style: editorStyle),
-                              textDirection: TextDirection.ltr,
-                              textScaler: MediaQuery.textScalerOf(context),
-                            )..layout();
-                            final width = (painter.width + 48)
-                                .clamp(constraints.maxWidth, double.infinity);
-                            painter.dispose();
-                            return SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: width,
-                                height: constraints.maxHeight,
-                                child: TextField(
-                                  textDirection: TextDirection.ltr,
-                                  controller: _controller,
-                                  readOnly: _readOnly,
-                                  expands: true,
-                                  minLines: null,
-                                  maxLines: null,
-                                  keyboardType: TextInputType.multiline,
-                                  textAlignVertical: TextAlignVertical.top,
-                                  autocorrect: false,
-                                  enableSuggestions: false,
-                                  smartDashesType: SmartDashesType.disabled,
-                                  smartQuotesType: SmartQuotesType.disabled,
-                                  style: editorStyle,
-                                  decoration: const InputDecoration(
-                                    hintText: 'YAML 配置内容',
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.all(12),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                        child: ConfigTextEditor(
+                          controller: _controller,
+                          readOnly: _readOnly,
                         ),
                       ),
                     ],
