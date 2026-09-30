@@ -40,3 +40,6 @@ windows/windows-package/
 *.bak
 .DS_Store
 Thumbs.db
+
+# Windows Flutter copy of the shared default template
+windows/mclash/assets/default-config.yaml

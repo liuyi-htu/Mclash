@@ -96,6 +96,14 @@ cd android
 `android/dist/`。Android APK 和 Windows 安装包共用仓库中的
 `assets/default-config.yaml`，构建时直接内置，不再访问远程配置地址。Android
 应用仅在首次运行且没有现有配置时导入该配置。
+
+Android 和 Windows 添加、修改或更新机场订阅时，先下载 Mihomo/Clash YAML
+订阅，提取其中的 `proxies` 节点并内置到默认配置生成的订阅配置中。默认 DNS、
+规则和代理分组保持一致，分组按默认地区筛选节点；没有匹配节点时使用 `DIRECT`。
+订阅需要直接包含节点，仅包含远程 `proxy-providers` 的订阅会提示错误。
+下载或解析失败时保留原配置；已有订阅在下次更新后应用此行为。
+Windows 构建脚本会将共享模板复制到 Flutter 的 `assets/default-config.yaml`；
+单独运行 Flutter 命令前也需要先复制此文件。
 如需 Debug APK：
 
 ```bash

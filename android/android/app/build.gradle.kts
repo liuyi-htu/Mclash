@@ -102,4 +102,6 @@ flutter {
 
 dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
+    implementation("org.yaml:snakeyaml:2.7")
+    testImplementation("junit:junit:4.13.2")
 }

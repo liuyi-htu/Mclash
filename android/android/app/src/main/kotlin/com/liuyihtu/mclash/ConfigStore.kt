@@ -246,7 +246,7 @@ internal class ConfigStore(private val context: Context) {
             val raw = connection.inputStream
             val input = if (connection.contentEncoding?.contains("gzip", true) == true) GZIPInputStream(raw) else raw
             val bytes = input.use(::readStreamWithLimit)
-            val validation = runCatching { validateYaml(bytes, "订阅") }
+            val validation = runCatching { buildSubscriptionConfig(bytes) }
             return mapOf(
                 "success" to validation.isSuccess, "responseTimeMs" to elapsed,
                 "statusCode" to code, "contentLength" to bytes.size,
@@ -341,11 +341,21 @@ internal class ConfigStore(private val context: Context) {
 
             val bytes = input.use(::readStreamWithLimit)
 
-            validateYaml(bytes, "订阅")
-            return bytes
+            return buildSubscriptionConfig(bytes)
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun buildSubscriptionConfig(bytes: ByteArray): ByteArray {
+        validateYaml(bytes, "订阅")
+        val template = context.assets.open(DEFAULT_CONFIG_ASSET).use {
+            it.readBytes().toString(Charsets.UTF_8)
+        }
+        val generated = SubscriptionConfig.build(template, bytes.toString(Charsets.UTF_8))
+            .toByteArray(Charsets.UTF_8)
+        validateYaml(generated, "生成的订阅配置")
+        return generated
     }
 
     private fun validateYaml(bytes: ByteArray, source: String) {
