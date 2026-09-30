@@ -606,7 +606,7 @@ internal class ConfigStore(private val context: Context) {
         const val TYPE_LOCAL = "local"
         const val TYPE_SUBSCRIPTION = "subscription"
         private const val DEFAULT_CONFIG_ASSET = "default-config.yaml"
-        private const val DEFAULT_CONFIG_NAME = "Default"
+        private const val DEFAULT_CONFIG_NAME = "Cloudflare"
         private const val MAX_CONFIG_BYTES = 8 * 1024 * 1024
         private val MIHOMO_KEY_REGEX = Regex(
             "(?m)^\\s*(proxies|proxy-providers|proxy-groups|rules|rule-providers|mixed-port|port|socks-port|mode|dns|tun)\\s*:",
