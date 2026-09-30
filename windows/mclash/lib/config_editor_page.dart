@@ -5,11 +5,16 @@ import 'package:flutter/material.dart';
 import 'app_notice.dart';
 import 'models.dart';
 import 'native_proxy_service.dart';
+import 'proxy_platform_service.dart';
 
 class ConfigEditorPage extends StatefulWidget {
   const ConfigEditorPage(
-      {required this.profile, this.runtimeView = false, super.key});
+      {required this.profile,
+      this.runtimeView = false,
+      this.service,
+      super.key});
 
+  final ProxyPlatformService? service;
   final ConfigProfile profile;
   final bool runtimeView;
 
@@ -18,7 +23,7 @@ class ConfigEditorPage extends StatefulWidget {
 }
 
 class _ConfigEditorPageState extends State<ConfigEditorPage> {
-  final _service = NativeProxyService.instance;
+  late final _service = widget.service ?? NativeProxyService.instance;
   final _controller = TextEditingController();
   bool _readOnly = false;
   Timer? _stateTimer;
@@ -26,6 +31,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
+  String _lastText = '';
   String? _error;
 
   @override
@@ -68,6 +74,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       _controller.removeListener(_markDirty);
       _readOnly = widget.runtimeView || running;
       _dirty = false;
+      _lastText = content;
       _controller.text = content;
       _controller.addListener(_markDirty);
       setState(() => _loading = false);
@@ -81,7 +88,11 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   void _markDirty() {
-    if (!_readOnly && !_dirty && mounted) setState(() => _dirty = true);
+    if (!mounted || _controller.text == _lastText) return;
+    setState(() {
+      _lastText = _controller.text;
+      if (!_readOnly) _dirty = true;
+    });
   }
 
   Future<void> _save() async {
@@ -190,28 +201,51 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                       ],
                       const SizedBox(height: 10),
                       Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          readOnly: _readOnly,
-                          expands: true,
-                          minLines: null,
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textAlignVertical: TextAlignVertical.top,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            height: 1.35,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'YAML 配置内容',
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.all(12),
-                          ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final editorStyle =
+                                Theme.of(context).textTheme.bodyLarge!.copyWith(
+                                      fontFamily: 'monospace',
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    );
+                            final painter = TextPainter(
+                              text: TextSpan(
+                                  text: _controller.text, style: editorStyle),
+                              textDirection: TextDirection.ltr,
+                              textScaler: MediaQuery.textScalerOf(context),
+                            )..layout();
+                            final width = (painter.width + 48)
+                                .clamp(constraints.maxWidth, double.infinity);
+                            painter.dispose();
+                            return SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: width,
+                                height: constraints.maxHeight,
+                                child: TextField(
+                                  textDirection: TextDirection.ltr,
+                                  controller: _controller,
+                                  readOnly: _readOnly,
+                                  expands: true,
+                                  minLines: null,
+                                  maxLines: null,
+                                  keyboardType: TextInputType.multiline,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  autocorrect: false,
+                                  enableSuggestions: false,
+                                  smartDashesType: SmartDashesType.disabled,
+                                  smartQuotesType: SmartQuotesType.disabled,
+                                  style: editorStyle,
+                                  decoration: const InputDecoration(
+                                    hintText: 'YAML 配置内容',
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.all(12),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],
