@@ -321,13 +321,18 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                             Expanded(
                               child: LayoutBuilder(
                                   builder: (context, constraints) {
+                                final editorStyle = Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge!
+                                    .copyWith(
+                                      fontFamily: 'monospace',
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    );
                                 final painter = TextPainter(
                                   text: TextSpan(
                                       text: _controller.text,
-                                      style: const TextStyle(
-                                          fontFamily: 'monospace',
-                                          fontSize: 13,
-                                          height: 1.35)),
+                                      style: editorStyle),
                                   textDirection: TextDirection.ltr,
                                   textScaler: MediaQuery.textScalerOf(context),
                                 )..layout();
@@ -353,11 +358,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                                       enableSuggestions: false,
                                       smartDashesType: SmartDashesType.disabled,
                                       smartQuotesType: SmartQuotesType.disabled,
-                                      style: const TextStyle(
-                                        fontFamily: 'monospace',
-                                        fontSize: 13,
-                                        height: 1.35,
-                                      ),
+                                      style: editorStyle,
                                       decoration: const InputDecoration(
                                         hintText: 'YAML 配置内容',
                                         border: OutlineInputBorder(

@@ -58,6 +58,29 @@ void main() {
     await tester.pumpAndSettle();
     final field = find.byType(TextField);
     expect(tester.getSize(field).width, greaterThan(800));
+    final editable = tester
+        .state<EditableTextState>(find.byType(EditableText))
+        .renderEditable;
+    final controller = tester.widget<TextField>(field).controller!;
+    final start = controller.text.indexOf('#');
+    final end = controller.text.lastIndexOf('\n');
+    expect(
+      editable.getLocalRectForCaret(TextPosition(offset: start)).top,
+      editable.getLocalRectForCaret(TextPosition(offset: end)).top,
+      reason: 'Long lines must occupy one visual row, matching the gutter',
+    );
+    final horizontal = find.byWidgetPredicate((widget) =>
+        widget is SingleChildScrollView &&
+        widget.scrollDirection == Axis.horizontal);
+    final scrollable = tester.state<ScrollableState>(find.descendant(
+      of: horizontal,
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Scrollable && widget.axisDirection == AxisDirection.right),
+    ));
+    expect(scrollable.position.maxScrollExtent, greaterThan(300));
+    scrollable.position.jumpTo(300);
+    await tester.pump();
+    expect(tester.getTopLeft(field).dx, lessThan(0));
     expect(find.textContaining('共 3 行'), findsOneWidget);
     await tester.enterText(field, 'rules: [');
     await tester.tap(find.text('保存'));

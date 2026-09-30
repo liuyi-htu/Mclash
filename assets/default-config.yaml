@@ -22,9 +22,9 @@ geodata-mode: true
 geo-auto-update: true
 geo-update-interval: 24
 geox-url:
-  geoip: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
-  geosite: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
-  mmdb: "https://cdn.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
+  geoip: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat"
+  geosite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
+  mmdb: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb"
 
 external-controller: 0.0.0.0:9090
 external-ui: WebUI/ZashBoard
@@ -69,7 +69,6 @@ dns:
 
   cache-algorithm: arc
 
-  # 让DNS请求遵循rules出口
   respect-rules: true
 
   use-hosts: true
@@ -85,23 +84,31 @@ dns:
     - "+.msftconnecttest.com"
     - "+.msftncsi.com"
 
-  # 启动阶段bootstrap DNS（必须保留）
+  # Bootstrap DNS
   default-nameserver:
     - 223.5.5.5
+    - 119.29.29.29
 
-  # 代理节点域名解析（必须保留）
+  # 解析机场服务器域名
   proxy-server-nameserver:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
 
-  # 普通DNS走规则
+  # 国外域名 DNS → 国外代理
   nameserver:
-    - "https://1.1.1.1/dns-query#RULES"
-    - "https://8.8.8.8/dns-query#RULES"
+    - "https://1.1.1.1/dns-query#🌍 国外"
+    - "https://8.8.8.8/dns-query#🌍 国外"
+  # 国内域名 DNS → 国内代理
+  nameserver-policy:
+    "geosite:cn":
+      - "https://dns.alidns.com/dns-query#🚀 国内"
+      - "https://doh.pub/dns-query#🚀 国内"
+
 proxy-providers:
   机场:
     type: http
-    url: "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19&ClashMeta"   # ← 在这里替换你的订阅链接
+    url: "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19"
+    proxy: 🚀 国内
     path: ./profiles/机场.yaml
     interval: 43200
     health-check:
@@ -114,7 +121,8 @@ proxy-groups:
 - name: 🚀 国内
   type: select
   url: http://connect.rom.miui.com/generate_204
-  proxies: [DIRECT]
+  proxies:
+      - DIRECT
   use:
       - 机场
   filter: "(?i)上海|广州"
