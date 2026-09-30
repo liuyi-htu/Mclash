@@ -680,34 +680,13 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     return getConfigs();
   }
 
-  String _secureController(String content) {
-    var result = content.replaceAll(
-      RegExp(r'^\s*external-controller\s*:.*$', multiLine: true),
-      'external-controller: 127.0.0.1:9090',
-    );
-    if (!RegExp(
-      r'^\s*external-controller\s*:',
-      multiLine: true,
-    ).hasMatch(result)) {
-      result = '$result\nexternal-controller: 127.0.0.1:9090\n';
-    }
-    result = result.replaceAll(
-      RegExp(r'^\s*secret\s*:.*$', multiLine: true),
-      'secret: ""',
-    );
-    if (!RegExp(r'^\s*secret\s*:', multiLine: true).hasMatch(result)) {
-      result = '$result\nsecret: ""\n';
-    }
-    return result;
-  }
-
   String _runtimeConfig(
     String content,
     NetworkMode mode, {
     bool ipv6Enabled = false,
     bool bypassLanEnabled = true,
   }) {
-    final secured = _secureController(content);
+    final secured = content;
     final document = loadYaml(secured);
     if (document is! YamlMap) {
       throw const FormatException('mihomo configuration must be a YAML map.');
@@ -715,6 +694,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     try {
       final editor = YamlEditor(secured);
+      editor.update(<Object>['external-controller'], '127.0.0.1:9090');
+      editor.update(<Object>['secret'], '');
       editor.update(<Object>['ipv6'], ipv6Enabled);
       final dns = document['dns'];
       if (dns is YamlMap) {
@@ -772,6 +753,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required bool bypassLanEnabled,
   }) {
     final runtime = _plainYamlMap(document);
+    runtime['external-controller'] = '127.0.0.1:9090';
+    runtime['secret'] = '';
     runtime['ipv6'] = ipv6Enabled;
     final dns = runtime['dns'];
     if (dns is Map) dns['ipv6'] = ipv6Enabled;
@@ -966,20 +949,54 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     if (content.trim().isEmpty) {
       throw ArgumentError('Configuration cannot be empty.');
     }
-    await File(_profilePath(id)).writeAsString(content);
-    final state = await _readSettings();
-    if (state['activeProfile'] == id) {
-      if (id.toLowerCase().endsWith('.json')) {
-        await File(
-          _singBoxConfigPath,
-        ).writeAsString(await _singBoxRuntimeConfigForCurrentMode(content));
-      } else {
-        await File(
-          _configPath,
-        ).writeAsString(await _runtimeConfigForCurrentMode(content));
+    final isJson = id.toLowerCase().endsWith('.json');
+    final runtime = isJson
+        ? await _singBoxRuntimeConfigForCurrentMode(content)
+        : await _runtimeConfigForCurrentMode(content);
+    final candidate = File(
+        '$_dataDir\\validate-${DateTime.now().microsecondsSinceEpoch}.${isJson ? 'json' : 'yaml'}');
+    try {
+      await candidate.writeAsString(runtime, flush: true);
+      final executable =
+          '${File(Platform.resolvedExecutable).parent.path}\\${isJson ? 'sing-box' : 'mihomo'}.exe';
+      final arguments = isJson
+          ? <String>['check', '-c', candidate.path]
+          : <String>['-t', '-d', _dataDir, '-f', candidate.path];
+      final result =
+          await (_serviceProcessRunner?.call(executable, arguments) ??
+              Process.run(executable, arguments, workingDirectory: _dataDir));
+      if (result.exitCode != 0) {
+        throw FormatException(
+            '运行配置校验失败（行号对应生成的运行配置）：\n${result.stdout}\n${result.stderr}');
       }
+      final state = await _readSettings();
+      final profile = File(_profilePath(id));
+      final oldContent = await profile.readAsString();
+      await _replaceConfig(profile, content);
+      try {
+        if (state['activeProfile'] == id) {
+          await _replaceConfig(
+              File(isJson ? _singBoxConfigPath : _configPath), runtime);
+        }
+      } catch (_) {
+        await _replaceConfig(profile, oldContent);
+        rethrow;
+      }
+    } finally {
+      if (await candidate.exists()) await candidate.delete();
     }
     return getConfigs();
+  }
+
+  Future<void> _replaceConfig(File target, String content) async {
+    final temporary = File('${target.path}.tmp');
+    try {
+      await temporary.writeAsString(content, flush: true);
+      if (await target.exists()) await target.copy('${target.path}.bak');
+      await temporary.rename(target.path);
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
   }
 
   @override

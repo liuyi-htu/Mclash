@@ -197,7 +197,15 @@ internal class ConfigStore(private val context: Context) {
         require(index >= 0) { "找不到配置" }
         val bytes = content.removePrefix("\uFEFF").toByteArray(Charsets.UTF_8)
         validateYaml(bytes, "配置")
+        val candidate = File.createTempFile("edit-", ".yaml", configsDirectory)
+        try {
+            candidate.writeBytes(bytes)
+            MihomoProcess.validateConfig(context, candidate)
+        } finally {
+            candidate.delete()
+        }
         val target = profileFile(id)
+        if (target.isFile) target.copyTo(File(target.path + ".bak"), overwrite = true)
         val oldBytes = target.takeIf(File::isFile)?.readBytes()
         writeAtomically(target, bytes)
         val updated = profiles[index].copy(updatedAt = System.currentTimeMillis())

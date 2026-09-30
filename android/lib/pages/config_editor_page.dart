@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:yaml/yaml.dart';
 
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
@@ -21,12 +22,16 @@ class ConfigEditorPage extends StatefulWidget {
 class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _service = NativeProxyService.instance;
   final _controller = TextEditingController();
+  final _jumpController = TextEditingController();
   final _editorScrollController = ScrollController();
   final _lineNumberScrollController = ScrollController();
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
   int _lineCount = 1;
+  int _currentLine = 1;
+  int _currentColumn = 1;
+  String _lastText = '';
   String? _error;
 
   @override
@@ -39,6 +44,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   @override
   void dispose() {
     _controller.dispose();
+    _jumpController.dispose();
     _editorScrollController.dispose();
     _lineNumberScrollController.dispose();
     super.dispose();
@@ -48,6 +54,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     try {
       final content = await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
+      _lastText = content;
       _controller.text = content;
       _lineCount = _countLines(content);
       _controller.addListener(_handleTextChanged);
@@ -63,12 +70,51 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
 
   void _handleTextChanged() {
     if (!mounted) return;
-    final nextLineCount = _countLines(_controller.text);
-    if (!_dirty || nextLineCount != _lineCount) {
-      setState(() {
-        _dirty = true;
-        _lineCount = nextLineCount;
-      });
+    final text = _controller.text;
+    final offset = _controller.selection.extentOffset.clamp(0, text.length);
+    setState(() {
+      if (text != _lastText) _dirty = true;
+      _lastText = text;
+      _lineCount = _countLines(text);
+      _currentLine = _countLines(text.substring(0, offset));
+      _currentColumn = offset - text.substring(0, offset).lastIndexOf('\n');
+    });
+  }
+
+  Future<void> _jumpToLine() async {
+    final input = _jumpController..clear();
+    final line = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('跳转到行（1–$_lineCount）'),
+        content: TextField(
+            controller: input,
+            autofocus: true,
+            keyboardType: TextInputType.number),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, int.tryParse(input.text)),
+              child: const Text('跳转'))
+        ],
+      ),
+    );
+    if (line == null || !mounted) return;
+    _selectLine(line.clamp(1, _lineCount));
+  }
+
+  void _selectLine(int line) {
+    var offset = 0;
+    for (var i = 1; i < line; i++) {
+      offset = _controller.text.indexOf('\n', offset) + 1;
+    }
+    final end = _controller.text.indexOf('\n', offset);
+    _controller.selection = TextSelection(
+        baseOffset: offset,
+        extentOffset: end < 0 ? _controller.text.length : end);
+    if (_editorScrollController.hasClients) {
+      final height = MediaQuery.textScalerOf(context).scale(13) * 1.35;
+      _editorScrollController.jumpTo(((line - 1) * height)
+          .clamp(0.0, _editorScrollController.position.maxScrollExtent));
     }
   }
 
@@ -90,29 +136,56 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       _error = null;
     });
     try {
-      await _service.saveConfigContent(
+      try {
+        if (loadYaml(_controller.text) is! YamlMap) {
+          throw const FormatException('配置必须是 YAML 对象');
+        }
+      } on YamlException catch (error) {
+        final line = error.span?.start.line;
+        if (line != null) _selectLine(line + 1);
+        rethrow;
+      }
+      final profiles = await _service.saveConfigContent(
         id: widget.profile.id,
         content: _controller.text,
       );
+      final apply = profiles.any(
+              (profile) => profile.id == widget.profile.id && profile.active) &&
+          await _service.isRunning();
       if (!mounted) return;
       setState(() => _dirty = false);
-      await showDialog<void>(
+      final applyNow = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
           title: const Text('配置已保存'),
           content: Text(
-            widget.proxyRunning ? '确认后将重启代理并应用新配置。' : '代理当前未运行，新配置将在下次启动时应用。',
+            apply ? '配置已保存，可立即重启代理应用。' : '配置已保存，将在下次启用此配置时应用。',
           ),
           actions: [
+            if (apply)
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('稍后应用')),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(widget.proxyRunning ? '确认并重启' : '确定'),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(apply ? '保存并应用' : '确定'),
             ),
           ],
         ),
       );
-      if (widget.proxyRunning) await _service.restart();
+      if (apply && applyNow == true) {
+        final current = await _service.getConfigs();
+        if (current.any((profile) =>
+                profile.id == widget.profile.id && profile.active) &&
+            await _service.isRunning()) {
+          try {
+            await _service.restart();
+          } catch (error) {
+            throw StateError('配置已保存，但应用失败：${errorNoticeDetails(error)}');
+          }
+        }
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = errorNoticeSummary(errorNoticeDetails(error)));
@@ -158,6 +231,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
         appBar: AppBar(
           title: const Text('修改配置'),
           actions: [
+            IconButton(
+                onPressed: _loading ? null : _jumpToLine,
+                tooltip: '跳转到行',
+                icon: const Icon(Icons.format_list_numbered)),
             Padding(
               padding: const EdgeInsets.only(right: 10),
               child: FilledButton.icon(
@@ -195,7 +272,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Container(
-                              width: 52,
+                              width: 28 +
+                                  _lineCount.toString().length *
+                                      MediaQuery.textScalerOf(context).scale(9),
                               decoration: BoxDecoration(
                                 color: Theme.of(
                                   context,
@@ -209,11 +288,22 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                                 physics: const NeverScrollableScrollPhysics(),
                                 padding:
                                     const EdgeInsets.fromLTRB(8, 12, 8, 12),
-                                child: Text(
-                                  List.generate(
-                                    _lineCount,
-                                    (index) => '${index + 1}',
-                                  ).join('\n'),
+                                child: Text.rich(
+                                  TextSpan(
+                                      children: List.generate(
+                                          _lineCount,
+                                          (index) => TextSpan(
+                                                text:
+                                                    '${index + 1}${index + 1 == _lineCount ? '' : '\n'}',
+                                                style: TextStyle(
+                                                    backgroundColor: index +
+                                                                1 ==
+                                                            _currentLine
+                                                        ? Theme.of(context)
+                                                            .colorScheme
+                                                            .primaryContainer
+                                                        : null),
+                                              ))),
                                   textAlign: TextAlign.right,
                                   style: TextStyle(
                                     color: Theme.of(
@@ -228,37 +318,63 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                             ),
                             const VerticalDivider(width: 1, thickness: 1),
                             Expanded(
-                              child: TextField(
-                                controller: _controller,
-                                scrollController: _editorScrollController,
-                                expands: true,
-                                minLines: null,
-                                maxLines: null,
-                                keyboardType: TextInputType.multiline,
-                                textAlignVertical: TextAlignVertical.top,
-                                autocorrect: false,
-                                enableSuggestions: false,
-                                smartDashesType: SmartDashesType.disabled,
-                                smartQuotesType: SmartQuotesType.disabled,
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 13,
-                                  height: 1.35,
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: 'YAML 配置内容',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.horizontal(
-                                      right: Radius.circular(12),
+                              child: LayoutBuilder(
+                                  builder: (context, constraints) {
+                                final painter = TextPainter(
+                                  text: TextSpan(
+                                      text: _controller.text,
+                                      style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 13,
+                                          height: 1.35)),
+                                  textDirection: TextDirection.ltr,
+                                  textScaler: MediaQuery.textScalerOf(context),
+                                )..layout();
+                                final width = (painter.width + 48).clamp(
+                                    constraints.maxWidth, double.infinity);
+                                painter.dispose();
+                                return SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: width,
+                                    height: constraints.maxHeight,
+                                    child: TextField(
+                                      textDirection: TextDirection.ltr,
+                                      controller: _controller,
+                                      scrollController: _editorScrollController,
+                                      expands: true,
+                                      minLines: null,
+                                      maxLines: null,
+                                      keyboardType: TextInputType.multiline,
+                                      textAlignVertical: TextAlignVertical.top,
+                                      autocorrect: false,
+                                      enableSuggestions: false,
+                                      smartDashesType: SmartDashesType.disabled,
+                                      smartQuotesType: SmartQuotesType.disabled,
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 13,
+                                        height: 1.35,
+                                      ),
+                                      decoration: const InputDecoration(
+                                        hintText: 'YAML 配置内容',
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.horizontal(
+                                            right: Radius.circular(12),
+                                          ),
+                                        ),
+                                        contentPadding: EdgeInsets.all(12),
+                                      ),
                                     ),
                                   ),
-                                  contentPadding: EdgeInsets.all(12),
-                                ),
-                              ),
+                                );
+                              }),
                             ),
                           ],
                         ),
                       ),
+                      Text(
+                          '第 $_currentLine 行，第 $_currentColumn 列 · 共 $_lineCount 行'),
                     ],
                   ),
                 ),

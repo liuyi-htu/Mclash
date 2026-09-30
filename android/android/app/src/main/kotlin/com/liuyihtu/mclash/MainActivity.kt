@@ -658,7 +658,7 @@ class MainActivity : FlutterActivity() {
         private const val REQUEST_VPN_TILE = 7003
         private const val REQUEST_DEVICE_REGISTRATION_EXPORT = 7004
         private const val USAGE_NOTICE_VERSION = 1
-        private const val START_TIMEOUT_MS = 60_000L
+        private const val START_TIMEOUT_MS = 200_000L
         private const val STOP_TIMEOUT_MS = 15_000L
     }
 }

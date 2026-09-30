@@ -99,6 +99,10 @@ void showErrorNotice(BuildContext context, Object error) {
               content: SingleChildScrollView(child: SelectableText(details)),
               actions: [
                 TextButton(
+                    onPressed: () =>
+                        Clipboard.setData(ClipboardData(text: details)),
+                    child: const Text('复制')),
+                TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
                   child: const Text('确定'),
                 ),
@@ -125,7 +129,13 @@ String errorNoticeSummary(String details) {
   final normalized = details.trim();
   if (normalized.isEmpty) return '未知错误';
 
-  var summary = normalized
+  final errorLine = normalized.split(RegExp(r'[\r\n]+')).where(
+        (line) => RegExp(
+                r'level=(fatal|error)|yaml:|decode config|parse config|unmarshal',
+                caseSensitive: false)
+            .hasMatch(line),
+      );
+  var summary = (errorLine.isNotEmpty ? errorLine.first : normalized)
       .split(RegExp(r'[\r\n]+'))
       .firstWhere((line) => line.trim().isNotEmpty)
       .trim();
