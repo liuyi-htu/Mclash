@@ -14,6 +14,7 @@ abstract interface class ProxyPlatformService {
   Future<List<ConfigProfile>> getConfigs();
   Future<List<ConfigProfile>> importConfigs();
   Future<ConfigInfo> selectConfig(String id);
+  Future<String> getRuntimeConfigContent();
   Future<String> getConfigContent(String id);
   Future<List<ConfigProfile>> saveConfigContent({
     required String id,

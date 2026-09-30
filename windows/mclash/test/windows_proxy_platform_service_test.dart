@@ -14,7 +14,10 @@ void main() {
     await Directory(
       '${dataDir.path}${Platform.pathSeparator}profiles',
     ).create(recursive: true);
-    service = WindowsProxyPlatformService(dataDir: dataDir.path);
+    service = WindowsProxyPlatformService(
+        dataDir: dataDir.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
   });
 
   tearDown(() async {

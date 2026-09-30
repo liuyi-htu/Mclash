@@ -891,6 +891,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   Future<String> _runtimeConfigForCurrentMode(String content) async {
+    await _requireConfigStopped();
     final state = await _readSettings();
     final preferences = _runtimePreferencesFromState(state);
     return _runtimeConfig(
@@ -937,6 +938,20 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     return getConfigInfo();
   }
 
+  Future<void> _requireConfigStopped() async {
+    final state = (await _status())['state'];
+    if (state != 'stopped' && state != 'not_installed') {
+      throw StateError('请先停止代理再修改配置');
+    }
+  }
+
+  @override
+  Future<String> getRuntimeConfigContent() async => File(
+        await getCoreType() == CoreType.singBox
+            ? _singBoxConfigPath
+            : _configPath,
+      ).readAsString();
+
   @override
   Future<String> getConfigContent(String id) =>
       File(_profilePath(id)).readAsString();
@@ -946,6 +961,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String id,
     required String content,
   }) async {
+    await _requireConfigStopped();
     if (content.trim().isEmpty) {
       throw ArgumentError('Configuration cannot be empty.');
     }
@@ -972,6 +988,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       final state = await _readSettings();
       final profile = File(_profilePath(id));
       final oldContent = await profile.readAsString();
+      await _requireConfigStopped();
       await _replaceConfig(profile, content);
       try {
         if (state['activeProfile'] == id) {
@@ -1004,6 +1021,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String id,
     required String name,
   }) async {
+    await _requireConfigStopped();
     if (name.trim().isEmpty) {
       throw ArgumentError('Profile name cannot be empty.');
     }
@@ -1018,6 +1036,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<List<ConfigProfile>> deleteConfig(String id) async {
+    await _requireConfigStopped();
     final state = await _readSettings();
     final deletingDefault = id.toLowerCase() == _defaultProfileId;
     final deletingActive = state['activeProfile'] == id;
@@ -1236,11 +1255,13 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String name,
     required String url,
   }) async {
+    await _requireConfigStopped();
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
     final cleanUrl = _subscriptionUri(url).toString();
     final download = await _downloadSubscription(cleanUrl);
     final id = _newSubscriptionId();
+    await _requireConfigStopped();
     await _writeSubscription(id, download.content);
     final state = await _readSettings();
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
@@ -1260,6 +1281,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String name,
     required String url,
   }) async {
+    await _requireConfigStopped();
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
     final state = await _readSettings();
@@ -1268,6 +1290,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     final cleanUrl = _subscriptionUri(url).toString();
     final download = await _downloadSubscription(cleanUrl);
+    await _requireConfigStopped();
     await _writeSubscription(id, download.content);
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
@@ -1286,6 +1309,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<List<ConfigProfile>> refreshSubscription(String id) async {
+    await _requireConfigStopped();
     final state = await _readSettings();
     if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
       throw StateError('所选配置不是机场订阅。');
@@ -1293,6 +1317,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final url = _stateMap(state, 'profileUrls')[id]?.toString();
     if (url == null || url.isEmpty) throw StateError('订阅链接不存在。');
     final download = await _downloadSubscription(url);
+    await _requireConfigStopped();
     await _writeSubscription(id, download.content);
     if (state['activeProfile'] == id) {
       await File(_configPath).writeAsString(

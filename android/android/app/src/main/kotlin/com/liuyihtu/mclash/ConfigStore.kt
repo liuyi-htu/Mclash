@@ -161,6 +161,7 @@ internal class ConfigStore(private val context: Context) {
             url = rawUrl,
             updatedAt = System.currentTimeMillis(),
         )
+        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
         writeAtomically(profileFile(id), bytes)
         profiles[index] = updated
         writeProfiles(profiles)
@@ -207,6 +208,7 @@ internal class ConfigStore(private val context: Context) {
         val target = profileFile(id)
         if (target.isFile) target.copyTo(File(target.path + ".bak"), overwrite = true)
         val oldBytes = target.takeIf(File::isFile)?.readBytes()
+        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
         writeAtomically(target, bytes)
         val updated = profiles[index].copy(updatedAt = System.currentTimeMillis())
         profiles[index] = updated

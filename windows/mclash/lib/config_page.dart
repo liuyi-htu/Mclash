@@ -266,6 +266,12 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showConfigDetails(ConfigProfile profile) async {
+    if (widget.proxyRunning) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => ConfigEditorPage(profile: profile)));
+      return;
+    }
+
     final colors = Theme.of(context).colorScheme;
     await showModalBottomSheet<void>(
       context: context,
@@ -430,6 +436,11 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
+    if (widget.proxyRunning) {
+      await _showConfigDetails(profile);
+      return;
+    }
+
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,

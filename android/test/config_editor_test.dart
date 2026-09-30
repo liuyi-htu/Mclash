@@ -13,6 +13,35 @@ void main() {
       active: true,
       exists: true,
       updatedAt: 0);
+  testWidgets('running editor shows runtime read-only and unlocks when stopped',
+      (tester) async {
+    var running = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'isRunning') return running;
+      if (call.method == 'getRuntimeConfigContent') return 'mixed-port: 7890\n';
+      if (call.method == 'getConfigContent') return 'rules: []\n';
+      throw StateError('Unexpected mutation: ${call.method}');
+    });
+    await tester.pumpWidget(const MaterialApp(
+        home: ConfigEditorPage(profile: profile, proxyRunning: true)));
+    await tester.pumpAndSettle();
+    var field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.readOnly, isTrue);
+    expect(field.controller!.text, 'mixed-port: 7890\n');
+    expect(find.text('运行配置（只读）'), findsOneWidget);
+    expect(find.text('保存'), findsNothing);
+    running = false;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.readOnly, isFalse);
+    expect(field.controller!.text, 'rules: []\n');
+    expect(find.text('保存'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
   testWidgets('long lines scroll horizontally and invalid YAML is not saved',
       (tester) async {
     var saves = 0;
