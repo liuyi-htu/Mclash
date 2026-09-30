@@ -533,7 +533,7 @@ public static class WinInetProxy {
         !await defaultProfile.exists()) {
       await File(_configPath).copy(defaultProfile.path);
       final names = _stateMap(state, 'profileNames')
-        ..[_defaultProfileId] = 'Default';
+        ..[_defaultProfileId] = 'Cloudflare';
       await _updateSettings(<String, dynamic>{
         'activeProfile': _defaultProfileId,
         'activeMihomoProfile': _defaultProfileId,

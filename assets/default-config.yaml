@@ -101,7 +101,7 @@ dns:
 proxy-providers:
   机场:
     type: http
-    url: "订阅链接"   # ← 在这里替换你的订阅链接
+    url: "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19&ClashMeta"   # ← 在这里替换你的订阅链接
     path: ./profiles/机场.yaml
     interval: 43200
     health-check:
