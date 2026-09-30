@@ -74,6 +74,11 @@ class MainActivity : FlutterActivity() {
                 "addSubscription" -> addSubscription(call, result)
                 "updateSubscription" -> updateSubscription(call, result)
                 "refreshSubscription" -> refreshSubscription(call, result)
+                "getRuntimeConfigContent" -> runAsync(result, "mclash-runtime-config") {
+                    val runtime = File(filesDir, "mihomo/runtime.yaml")
+                    require(runtime.isFile) { "运行配置尚未生成" }
+                    runtime.readText(Charsets.UTF_8)
+                }
                 "getConfigContent" -> getConfigContent(call, result)
                 "saveConfigContent" -> saveConfigContent(call, result)
                 "testSubscriptionUrl" -> testSubscriptionUrl(call, result)
@@ -185,7 +190,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun updateSubscription(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyNotStarting()
+        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
@@ -196,7 +201,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun refreshSubscription(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyNotStarting()
+        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         runAsync(result, "mclash-refresh-subscription") {
             configStore.refreshSubscription(id)
@@ -210,10 +215,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun saveConfigContent(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyNotStarting()
+        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         val content = call.argument<String>("content") ?: error("配置内容不能为空")
         runAsync(result, "mclash-save-config-content") {
+            requireProxyStopped()
             configStore.saveContent(id, content)
             configStore.listMaps()
         }
@@ -286,12 +292,6 @@ class MainActivity : FlutterActivity() {
     private fun requireProxyStopped() {
         require(!ProxyVpnService.running && !ProxyVpnService.starting) {
             "请先停止代理再修改配置"
-        }
-    }
-
-    private fun requireProxyNotStarting() {
-        require(!ProxyVpnService.starting) {
-            "代理正在启动，请稍后再修改配置"
         }
     }
 

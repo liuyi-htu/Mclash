@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:yaml/yaml.dart';
 
@@ -25,6 +27,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _jumpController = TextEditingController();
   final _editorScrollController = ScrollController();
   final _lineNumberScrollController = ScrollController();
+  bool _readOnly = false;
+  Timer? _stateTimer;
+  bool _checkingState = false;
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
@@ -39,10 +44,13 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     super.initState();
     _editorScrollController.addListener(_syncLineNumberScroll);
     _load();
+    _stateTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _checkRunningState());
   }
 
   @override
   void dispose() {
+    _stateTimer?.cancel();
     _controller.dispose();
     _jumpController.dispose();
     _editorScrollController.dispose();
@@ -50,11 +58,32 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     super.dispose();
   }
 
+  Future<void> _checkRunningState() async {
+    if (_loading || _saving || _checkingState) return;
+    _checkingState = true;
+    try {
+      final running = await _service.isRunning();
+      if (mounted && running != _readOnly) await _load();
+    } catch (_) {
+      // Keep the current view; native save guards still reject unsafe writes.
+    } finally {
+      _checkingState = false;
+    }
+  }
+
   Future<void> _load() async {
     try {
-      final content = await _service.getConfigContent(widget.profile.id);
+      final running = await _service.isRunning();
+      if (!mounted) return;
+      setState(() => _readOnly = running);
+      final content = running
+          ? await _service.getRuntimeConfigContent()
+          : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _lastText = content;
+      _controller.removeListener(_handleTextChanged);
+      _readOnly = running;
+      _dirty = false;
       _controller.text = content;
       _lineCount = _countLines(content);
       _controller.addListener(_handleTextChanged);
@@ -130,12 +159,17 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _readOnly) return;
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
+      if (await _service.isRunning()) {
+        await _load();
+        return;
+      }
+
       try {
         if (loadYaml(_controller.text) is! YamlMap) {
           throw const FormatException('配置必须是 YAML 对象');
@@ -145,47 +179,11 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
         if (line != null) _selectLine(line + 1);
         rethrow;
       }
-      final profiles = await _service.saveConfigContent(
-        id: widget.profile.id,
-        content: _controller.text,
-      );
-      final apply = profiles.any(
-              (profile) => profile.id == widget.profile.id && profile.active) &&
-          await _service.isRunning();
+      await _service.saveConfigContent(
+          id: widget.profile.id, content: _controller.text);
       if (!mounted) return;
       setState(() => _dirty = false);
-      final applyNow = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('配置已保存'),
-          content: Text(
-            apply ? '配置已保存，可立即重启代理应用。' : '配置已保存，将在下次启用此配置时应用。',
-          ),
-          actions: [
-            if (apply)
-              TextButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                  child: const Text('稍后应用')),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(apply ? '保存并应用' : '确定'),
-            ),
-          ],
-        ),
-      );
-      if (apply && applyNow == true) {
-        final current = await _service.getConfigs();
-        if (current.any((profile) =>
-                profile.id == widget.profile.id && profile.active) &&
-            await _service.isRunning()) {
-          try {
-            await _service.restart();
-          } catch (error) {
-            throw StateError('配置已保存，但应用失败：${errorNoticeDetails(error)}');
-          }
-        }
-      }
+      showTopSnackBar(context, const SnackBar(content: Text('配置已保存，下次启动时应用')));
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = errorNoticeSummary(errorNoticeDetails(error)));
@@ -229,25 +227,26 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: const Text('修改配置'),
+          title: Text(_readOnly ? '运行配置（只读）' : '修改配置'),
           actions: [
             IconButton(
                 onPressed: _loading ? null : _jumpToLine,
                 tooltip: '跳转到行',
                 icon: const Icon(Icons.format_list_numbered)),
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: FilledButton.icon(
-                onPressed: _loading || _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
-                label: const Text('保存'),
+            if (!_readOnly)
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: FilledButton.icon(
+                  onPressed: _loading || _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: const Text('保存'),
+                ),
               ),
-            ),
           ],
         ),
         body: _loading
@@ -341,6 +340,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                                     child: TextField(
                                       textDirection: TextDirection.ltr,
                                       controller: _controller,
+                                      readOnly: _readOnly,
                                       scrollController: _editorScrollController,
                                       expands: true,
                                       minLines: null,

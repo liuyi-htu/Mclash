@@ -71,17 +71,16 @@ class _ConfigPageState extends State<ConfigPage> {
       builder: (dialogContext) => AlertDialog(
         title: Text(message),
         content: Text(
-          widget.proxyRunning ? '确认后将重启代理并应用新配置。' : '代理当前未运行，新配置将在下次启动时应用。',
+          '配置已保存，新配置将在下次启动时应用。',
         ),
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text(widget.proxyRunning ? '确认并重启' : '确定'),
+            child: const Text('确定'),
           ),
         ],
       ),
     );
-    if (widget.proxyRunning) await _service.restart();
   }
 
   Future<void> _importLocal() async {
@@ -101,7 +100,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showSubscriptionEditor({ConfigProfile? existing}) async {
-    if (existing == null && !_ensureStopped()) return;
+    if (!_ensureStopped()) return;
 
     final nameController = TextEditingController(text: existing?.name ?? '');
     final urlController = TextEditingController(text: existing?.url ?? '');
@@ -221,6 +220,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _refreshSubscription(ConfigProfile profile) async {
+    if (!_ensureStopped()) return;
     try {
       setState(() => _working = true);
       final profiles = await _service.refreshSubscription(profile.id);
@@ -271,6 +271,13 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showConfigDetails(ConfigProfile profile) async {
+    if (widget.proxyRunning) {
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) =>
+              ConfigEditorPage(profile: profile, proxyRunning: true)));
+      return;
+    }
+
     final colors = Theme.of(context).colorScheme;
     await showModalBottomSheet<void>(
       context: context,
@@ -358,7 +365,7 @@ class _ConfigPageState extends State<ConfigPage> {
               const SizedBox(height: 18),
               Text(
                 widget.proxyRunning
-                    ? '代理运行中：长按可修改配置或更新订阅；停止代理后可切换、删除或导入。'
+                    ? '代理运行中：点击查看运行配置；停止代理后才能修改配置。'
                     : '点击非当前配置可切换，长按可管理。',
                 style: TextStyle(color: colors.onSurfaceVariant, height: 1.4),
               ),
@@ -435,6 +442,11 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
+    if (widget.proxyRunning) {
+      await _showConfigDetails(profile);
+      return;
+    }
+
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -617,7 +629,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    '代理运行期间可以修改配置和更新订阅；完成后需重新启动代理才能应用。',
+                                    '代理运行期间仅可查看运行配置，不允许修改配置或更新订阅。',
                                     style: TextStyle(
                                       color: colors.onPrimaryContainer,
                                     ),

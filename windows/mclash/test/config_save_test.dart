@@ -22,7 +22,10 @@ void main() {
     await dir.delete(recursive: true);
   });
   test('invalid YAML never overwrites an inactive profile', () async {
-    final service = WindowsProxyPlatformService(dataDir: dir.path);
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
     final before = await profile.readAsString();
     await expectLater(
         service.saveConfigContent(id: 'test.yaml', content: 'rules: ['),
@@ -32,8 +35,9 @@ void main() {
   test('core rejection leaves original file intact', () async {
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
-        serviceProcessRunner: (_, args) async =>
-            ProcessResult(1, 1, '', 'invalid rule'));
+        serviceProcessRunner: (_, args) async => args.first == 'status-json'
+            ? ProcessResult(1, 0, '{"state":"stopped"}', '')
+            : ProcessResult(1, 1, '', 'invalid rule'));
     final before = await profile.readAsString();
     await expectLater(
         service.saveConfigContent(id: 'test.yaml', content: 'rules: [bad]\n'),
@@ -44,6 +48,9 @@ void main() {
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
         serviceProcessRunner: (_, args) async {
+          if (args.first == 'status-json') {
+            return ProcessResult(1, 0, '{"state":"stopped"}', '');
+          }
           expect(args.first, '-t');
           expect(await File(args.last).exists(), isTrue);
           return ProcessResult(1, 0, 'configuration test successful', '');
@@ -53,12 +60,29 @@ void main() {
     expect(await profile.readAsString(), 'rules: []\n');
     expect(await File('${profile.path}.bak').readAsString(), before);
   });
+  test('running service rejects edits and exposes actual runtime content',
+      () async {
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"running"}', ''));
+    final before = await profile.readAsString();
+    await File('${dir.path}\\config.yaml').writeAsString('mixed-port: 7890\n');
+    expect(await service.getRuntimeConfigContent(), 'mixed-port: 7890\n');
+    await expectLater(
+        service.saveConfigContent(id: 'test.yaml', content: 'rules: []'),
+        throwsStateError);
+    expect(await profile.readAsString(), before);
+  });
   test('controller override preserves nested secret and YAML comments',
       () async {
     final config = File('${dir.path}\\config.yaml');
     await config
         .writeAsString('# Keep me\ncustom:\n  secret: nested\nsecret: old\n');
-    final service = WindowsProxyPlatformService(dataDir: dir.path);
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
     await service.setNetworkMode(NetworkMode.proxy);
     final content = await config.readAsString();
     final yaml = loadYaml(content);

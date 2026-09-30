@@ -115,6 +115,9 @@ class NativeProxyService {
         .toList(growable: false);
   }
 
+  Future<String> getRuntimeConfigContent() async =>
+      await _channel.invokeMethod<String>('getRuntimeConfigContent') ?? '';
+
   Future<String> getConfigContent(String id) async {
     return await _channel.invokeMethod<String>(
           'getConfigContent',

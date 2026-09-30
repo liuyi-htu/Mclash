@@ -36,6 +36,9 @@ class NativeProxyService implements ProxyPlatformService {
   @override
   Future<ConfigInfo> selectConfig(String id) => _delegate.selectConfig(id);
   @override
+  Future<String> getRuntimeConfigContent() =>
+      _delegate.getRuntimeConfigContent();
+  @override
   Future<String> getConfigContent(String id) => _delegate.getConfigContent(id);
   @override
   Future<List<ConfigProfile>> saveConfigContent({

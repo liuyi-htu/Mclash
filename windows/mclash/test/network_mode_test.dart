@@ -14,7 +14,10 @@ void main() {
     temporaryDirectory = await Directory.systemTemp.createTemp(
       'mclash-network-mode-',
     );
-    service = WindowsProxyPlatformService(dataDir: temporaryDirectory.path);
+    service = WindowsProxyPlatformService(
+        dataDir: temporaryDirectory.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
   });
 
   tearDown(() => temporaryDirectory.delete(recursive: true));

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_notice.dart';
@@ -16,6 +18,9 @@ class ConfigEditorPage extends StatefulWidget {
 class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _service = NativeProxyService.instance;
   final _controller = TextEditingController();
+  bool _readOnly = false;
+  Timer? _stateTimer;
+  bool _checkingState = false;
   bool _loading = true;
   bool _saving = false;
   bool _dirty = false;
@@ -25,18 +30,42 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   void initState() {
     super.initState();
     _load();
+    _stateTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _checkRunningState());
   }
 
   @override
   void dispose() {
+    _stateTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
+  Future<void> _checkRunningState() async {
+    if (_loading || _saving || _checkingState) return;
+    _checkingState = true;
+    try {
+      final running = await _service.isRunning();
+      if (mounted && running != _readOnly) await _load();
+    } catch (_) {
+      // Keep the current view; native save guards still reject unsafe writes.
+    } finally {
+      _checkingState = false;
+    }
+  }
+
   Future<void> _load() async {
     try {
-      final content = await _service.getConfigContent(widget.profile.id);
+      final running = await _service.isRunning();
       if (!mounted) return;
+      setState(() => _readOnly = running);
+      final content = running
+          ? await _service.getRuntimeConfigContent()
+          : await _service.getConfigContent(widget.profile.id);
+      if (!mounted) return;
+      _controller.removeListener(_markDirty);
+      _readOnly = running;
+      _dirty = false;
       _controller.text = content;
       _controller.addListener(_markDirty);
       setState(() => _loading = false);
@@ -50,16 +79,21 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   void _markDirty() {
-    if (!_dirty && mounted) setState(() => _dirty = true);
+    if (!_readOnly && !_dirty && mounted) setState(() => _dirty = true);
   }
 
   Future<void> _save() async {
-    if (_saving) return;
+    if (_saving || _readOnly) return;
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
+      if (await _service.isRunning()) {
+        await _load();
+        return;
+      }
+
       await _service.saveConfigContent(
         id: widget.profile.id,
         content: _controller.text,
@@ -109,21 +143,22 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: const Text('修改配置'),
+          title: Text(_readOnly ? '运行配置（只读）' : '修改配置'),
           actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: FilledButton.icon(
-                onPressed: _loading || _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
-                label: const Text('保存'),
+            if (!_readOnly)
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: FilledButton.icon(
+                  onPressed: _loading || _saving ? null : _save,
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: const Text('保存'),
+                ),
               ),
-            ),
           ],
         ),
         body: _loading
@@ -135,10 +170,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        widget.profile.name,
+                        _readOnly ? '当前内核实际运行配置' : widget.profile.name,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      if (widget.profile.isSubscription) ...[
+                      if (!_readOnly && widget.profile.isSubscription) ...[
                         const SizedBox(height: 6),
                         const Text('这是订阅配置，后续更新订阅时会覆盖手工修改的内容。'),
                       ],
@@ -155,6 +190,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                       Expanded(
                         child: TextField(
                           controller: _controller,
+                          readOnly: _readOnly,
                           expands: true,
                           minLines: null,
                           maxLines: null,
