@@ -118,6 +118,18 @@ internal object MihomoProcess {
         return LOCAL_PROXY_PORT
     }
 
+    fun previewConfig(context: Context, source: File): String {
+        val home = File(context.filesDir, "mihomo").apply { mkdirs() }
+        val candidate = File.createTempFile("preview-", ".yaml", home)
+        val preferences = AppPreferences(context)
+        return try {
+            prepareRuntimeConfig(source, home, preferences.vpnIpv6Enabled,
+                preferences.debugLoggingEnabled, candidate).readText(Charsets.UTF_8)
+        } finally {
+            candidate.delete()
+        }
+    }
+
     fun validateConfig(context: Context, source: File) {
         val home = File(context.filesDir, "mihomo").apply { mkdirs() }
         installBundledGeodata(context, home)

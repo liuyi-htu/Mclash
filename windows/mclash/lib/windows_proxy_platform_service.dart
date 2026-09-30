@@ -946,11 +946,19 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   @override
-  Future<String> getRuntimeConfigContent() async => File(
-        await getCoreType() == CoreType.singBox
-            ? _singBoxConfigPath
-            : _configPath,
-      ).readAsString();
+  Future<String> getRuntimeConfigContent() async {
+    final core = await getCoreType();
+    final runtime =
+        File(core == CoreType.singBox ? _singBoxConfigPath : _configPath);
+    if (await runtime.exists()) return runtime.readAsString();
+    final state = await _readSettings();
+    final id = state['activeProfile']?.toString();
+    if (id == null) throw StateError('尚未选择配置，请先选择配置。');
+    final content = await File(_profilePath(id)).readAsString();
+    return core == CoreType.singBox
+        ? _singBoxRuntimeConfigForCurrentMode(content)
+        : '# 运行配置预览（尚未启动）\n${await _runtimeConfigForCurrentMode(content)}';
+  }
 
   @override
   Future<String> getConfigContent(String id) =>
