@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart';
+import 'subscription_config.dart';
 
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
@@ -974,7 +976,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           throw StateError('订阅内容不是 mihomo/Clash YAML 配置，请检查订阅链接类型。');
         }
         return _SubscriptionDownload(
-          content: content,
+          content: buildSubscriptionConfig(
+            await rootBundle.loadString('assets/default-config.yaml'),
+            content,
+          ),
           responseTimeMs: stopwatch.elapsedMilliseconds,
           statusCode: response.statusCode,
           contentType: contentType,
@@ -991,11 +996,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   Future<void> _writeSubscription(String id, String content) async {
     await _ensureDirectories();
-    final target = File(_profilePath(id));
-    final temporary = File('${target.path}.download');
-    await temporary.writeAsString(content, flush: true);
-    if (await target.exists()) await target.delete();
-    await temporary.rename(target.path);
+    await _replaceConfig(File(_profilePath(id)), content);
   }
 
   String _newSubscriptionId() =>
@@ -1092,7 +1093,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         statusCode: result.statusCode,
         contentLength: result.contentLength,
         contentType: result.contentType,
-        message: '订阅链接有效，内容为 mihomo/Clash YAML 配置。',
+        message: '订阅链接有效，节点可内置到默认配置。',
       );
     } catch (error) {
       return SubscriptionUrlTestResult(

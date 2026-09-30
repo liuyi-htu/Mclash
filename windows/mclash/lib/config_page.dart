@@ -123,7 +123,7 @@ class _ConfigPageState extends State<ConfigPage> {
                       decoration: const InputDecoration(
                         labelText: '订阅链接',
                         hintText: 'https://...',
-                        helperText: '使用 Mclash/mihomo 订阅链接',
+                        helperText: '下载 Mihomo 节点并套用默认配置',
                       ),
                       keyboardType: TextInputType.url,
                       autocorrect: false,

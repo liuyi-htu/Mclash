@@ -137,6 +137,11 @@ foreach ($entry in $geodataFiles) {
     Write-Host "Geodata ready: $($entry.Installed)"
 }
 
+# Bundle the shared template under a project-local Flutter asset path.
+$flutterAssets = Join-Path $flutterProject "assets"
+New-Item -ItemType Directory -Path $flutterAssets -Force | Out-Null
+Copy-Item -LiteralPath $defaultConfig -Destination (Join-Path $flutterAssets "default-config.yaml") -Force
+
 Push-Location $flutterProject
 try {
     flutter pub get
