@@ -5,9 +5,7 @@ $flutterProject = Join-Path $root "mclash"
 $serviceProject = Join-Path $root "windows-service"
 $packageDir = Join-Path $root "windows-package"
 $mihomo = Join-Path $packageDir "mihomo.exe"
-$singBox = Join-Path $packageDir "sing-box.exe"
 $defaultConfig = Join-Path $root "..\assets\default-config.yaml"
-$ruleSetDir = Join-Path $packageDir "rulesets"
 $releaseVersion = if ($env:MCLASH_VERSION) {
     $env:MCLASH_VERSION.Trim()
 } else {
@@ -92,27 +90,6 @@ if (-not (Test-Path -LiteralPath $mihomo -PathType Leaf) -or
     }
 }
 
-if (-not (Test-Path -LiteralPath $singBox -PathType Leaf) -or
-    (Get-Item -LiteralPath $singBox).Length -eq 0) {
-    Write-Host "Downloading the latest official sing-box Windows amd64 core..."
-    $release = Invoke-RestMethod -Headers $releaseHeaders -Uri "https://api.github.com/repos/SagerNet/sing-box/releases/latest"
-    $asset = $release.assets | Where-Object { $_.name -match '^sing-box-[0-9.]+-windows-amd64\.zip$' } | Select-Object -First 1
-    if (-not $asset -or -not $asset.digest -or -not $asset.digest.StartsWith("sha256:")) { throw "No verifiable sing-box Windows amd64 archive was found." }
-    $archive = Join-Path $env:TEMP $asset.name
-    $extractDir = Join-Path $env:TEMP "mclash-singbox-$([guid]::NewGuid())"
-    try {
-        Invoke-WebRequest -Headers @{ "User-Agent" = "Mclash-Windows-Build" } -Uri $asset.browser_download_url -OutFile $archive
-        if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $asset.digest.Substring(7).ToUpperInvariant()) { throw "sing-box SHA-256 mismatch." }
-        Expand-Archive $archive $extractDir -Force
-        $exe = Get-ChildItem $extractDir -Filter "sing-box.exe" -Recurse | Select-Object -First 1
-        if (-not $exe) { throw "sing-box archive contains no executable." }
-        Copy-Item $exe.FullName $singBox -Force
-    } finally {
-        Remove-Item $archive -Force -ErrorAction SilentlyContinue
-        Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-
 Write-Host "Resolving the latest MetaCubeX geodata release..."
 $geodataRelease = Invoke-RestMethod `
     -Headers $releaseHeaders `
@@ -158,42 +135,6 @@ foreach ($entry in $geodataFiles) {
         }
     }
     Write-Host "Geodata ready: $($entry.Installed)"
-}
-
-Write-Host "Resolving official sing-box rule sets..."
-New-Item -ItemType Directory -Path $ruleSetDir -Force | Out-Null
-$singBoxRuleSets = @(
-    @{ Repo = "SagerNet/sing-geoip"; File = "geoip-cn.srs" },
-    @{ Repo = "SagerNet/sing-geosite"; File = "geosite-cn.srs" },
-    @{ Repo = "SagerNet/sing-geosite"; File = "geosite-private.srs" },
-    @{ Repo = "SagerNet/sing-geosite"; File = "geosite-category-ads-all.srs" },
-    @{ Repo = "SagerNet/sing-geosite"; File = "geosite-geolocation-!cn.srs" }
-)
-
-foreach ($entry in $singBoxRuleSets) {
-    $metadata = Invoke-RestMethod `
-        -Headers $releaseHeaders `
-        -Uri "https://api.github.com/repos/$($entry.Repo)/contents/$($entry.File)?ref=rule-set"
-    if (-not $metadata.content -or -not $metadata.sha) {
-        throw "The official sing-box rule set $($entry.File) has no content or Git hash."
-    }
-    $bytes = [Convert]::FromBase64String(($metadata.content -replace '\s', ''))
-    $header = [Text.Encoding]::UTF8.GetBytes("blob $($bytes.Length)`0")
-    $blob = New-Object byte[] ($header.Length + $bytes.Length)
-    [Buffer]::BlockCopy($header, 0, $blob, 0, $header.Length)
-    [Buffer]::BlockCopy($bytes, 0, $blob, $header.Length, $bytes.Length)
-    $sha1 = [Security.Cryptography.SHA1]::Create()
-    try {
-        $actualGitHash = [BitConverter]::ToString($sha1.ComputeHash($blob)).Replace("-", "").ToLowerInvariant()
-    }
-    finally {
-        $sha1.Dispose()
-    }
-    if ($actualGitHash -ne $metadata.sha.ToLowerInvariant()) {
-        throw "$($entry.File) Git blob hash mismatch: expected=$($metadata.sha) actual=$actualGitHash"
-    }
-    [IO.File]::WriteAllBytes((Join-Path $ruleSetDir $entry.File), $bytes)
-    Write-Host "sing-box rule set ready: $($entry.File)"
 }
 
 Push-Location $flutterProject
@@ -255,7 +196,6 @@ Remove-Item -LiteralPath (Join-Path $releaseDir "MclashService.exe") -Force -Err
 Remove-Item -LiteralPath (Join-Path $releaseDir "mihomoService.exe") -Force -ErrorAction SilentlyContinue
 Copy-Item -LiteralPath (Join-Path $packageDir "MclashService.exe") -Destination $releaseDir -Force
 Copy-Item -LiteralPath $mihomo -Destination $releaseDir -Force
-Copy-Item -LiteralPath $singBox -Destination $releaseDir -Force
 
 if (-not (Test-Path -LiteralPath $defaultConfig -PathType Leaf) -or
     (Get-Item -LiteralPath $defaultConfig).Length -eq 0) {

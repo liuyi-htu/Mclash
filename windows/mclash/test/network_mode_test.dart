@@ -142,59 +142,7 @@ rules:
     expect(runtime['tun']['enable'], isTrue);
   });
 
-  test('creates and removes a managed sing-box TUN inbound', () async {
-    final config = File('${temporaryDirectory.path}\\sing-box.json');
-    await config.writeAsString('''
-{"inbounds":[{"type":"mixed","listen_port":7890}],"outbounds":[{"type":"direct"}]}
-''');
-    await service.setIpv6Enabled(true);
-    await service.setBypassLanEnabled(false);
-    await service.setCoreType(CoreType.singBox);
-    await service.setNetworkMode(NetworkMode.tun);
-    var decoded =
-        jsonDecode(await config.readAsString()) as Map<String, dynamic>;
-    expect(
-      (decoded['inbounds'] as List).any(
-        (entry) => entry is Map && entry['tag'] == 'mclash-tun',
-      ),
-      isTrue,
-    );
-    final managedTun = (decoded['inbounds'] as List)
-        .whereType<Map>()
-        .firstWhere((entry) => entry['tag'] == 'mclash-tun');
-    expect(managedTun['address'], contains('fdfe:dcba:9876::1/126'));
-    expect(managedTun['route_exclude_address'], isEmpty);
-    final ruleSets = (decoded['route'] as Map)['rule_set'] as List;
-    expect(
-      ruleSets.map((entry) => (entry as Map)['tag']),
-      containsAll(<String>[
-        'geoip-cn',
-        'geosite-cn',
-        'geosite-private',
-        'geosite-category-ads-all',
-        'geosite-geolocation-!cn',
-      ]),
-    );
-    expect(
-      ruleSets.every(
-        (entry) =>
-            entry is Map &&
-            entry['type'] == 'local' &&
-            entry['path'].toString().startsWith('rulesets/'),
-      ),
-      isTrue,
-    );
-    await service.setNetworkMode(NetworkMode.proxy);
-    decoded = jsonDecode(await config.readAsString()) as Map<String, dynamic>;
-    expect(
-      (decoded['inbounds'] as List).any(
-        (entry) => entry is Map && entry['tag'] == 'mclash-tun',
-      ),
-      isFalse,
-    );
-  });
-
-  test('lists only profiles supported by the selected core', () async {
+  test('lists only YAML profiles and preserves legacy JSON files', () async {
     final profiles = Directory('${temporaryDirectory.path}\\profiles');
     await profiles.create(recursive: true);
     await File(
@@ -216,9 +164,8 @@ rules:
       'clash.yaml',
     ]);
 
-    await service.setCoreType(CoreType.singBox);
-    expect((await service.getConfigs()).map((item) => item.id), <String>[
-      'sing-box.json',
-    ]);
+    expect(await File('${profiles.path}\\sing-box.json').exists(), isTrue);
+    await expectLater(
+        service.selectConfig('sing-box.json'), throwsArgumentError);
   });
 }

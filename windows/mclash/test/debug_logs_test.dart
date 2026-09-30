@@ -37,7 +37,6 @@ void main() {
     expect(logs.map((log) => log.id), <String>[
       'service.log',
       'mihomo.log',
-      'sing-box.log',
       'update.log',
     ]);
     expect(logs.first.displayName, 'Mclash.log');

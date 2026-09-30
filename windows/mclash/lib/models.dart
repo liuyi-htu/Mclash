@@ -2,7 +2,7 @@ enum ProxyStatus { stopped, starting, running, stopping }
 
 enum NetworkMode { proxy, tun }
 
-enum CoreType { mihomo, singBox }
+enum CoreType { mihomo }
 
 class DebugLogFile {
   const DebugLogFile({

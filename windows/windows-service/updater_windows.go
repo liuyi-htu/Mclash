@@ -22,7 +22,6 @@ import (
 )
 
 const mihomoReleaseAPI = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
-const singBoxReleaseAPI = "https://api.github.com/repos/SagerNet/sing-box/releases/latest"
 
 type coreUpdateInfo struct {
 	CurrentVersion  string `json:"currentVersion"`
@@ -153,86 +152,6 @@ func updateCore(paths appPaths) error {
 	}
 	defer os.Remove(temporary)
 	return activateCoreUpdate(paths, "mihomo", paths.MihomoExe, temporary, info.LatestVersion, readMihomoVersion)
-}
-
-func checkSingBoxUpdate(paths appPaths) (coreUpdateInfo, githubRelease, error) {
-	current, err := readCoreVersion(paths.SingBoxExe, "version")
-	if err != nil {
-		return coreUpdateInfo{}, githubRelease{}, err
-	}
-	release, err := fetchGitHubRelease(singBoxReleaseAPI, "sing-box")
-	if err != nil {
-		return coreUpdateInfo{}, githubRelease{}, err
-	}
-	latest, err := normalizeVersion(release.TagName)
-	if err != nil {
-		return coreUpdateInfo{}, githubRelease{}, err
-	}
-	comparison, err := compareVersions(current, latest)
-	if err != nil {
-		return coreUpdateInfo{}, githubRelease{}, err
-	}
-	return coreUpdateInfo{CurrentVersion: current, LatestVersion: latest, UpdateAvailable: comparison < 0}, release, nil
-}
-
-func updateSingBox(paths appPaths) error {
-	info, release, err := checkSingBoxUpdate(paths)
-	if err != nil {
-		return err
-	}
-	if !info.UpdateAvailable {
-		appendUpdateLog(
-			paths,
-			"[sing-box] 当前内核已是官方最新版，无需更新：当前=%s，官方=%s",
-			info.CurrentVersion,
-			info.LatestVersion,
-		)
-		return nil
-	}
-	wantedName := "sing-box-" + info.LatestVersion + "-windows-amd64.zip"
-	var downloadURL, digest string
-	for _, asset := range release.Assets {
-		if strings.EqualFold(asset.Name, wantedName) {
-			downloadURL, digest = asset.BrowserDownloadURL, asset.Digest
-			break
-		}
-	}
-	if downloadURL == "" {
-		return fmt.Errorf("official release does not contain %s", wantedName)
-	}
-	archive, err := downloadCoreArchive(downloadURL)
-	if err != nil {
-		return err
-	}
-	if !strings.HasPrefix(strings.ToLower(digest), "sha256:") {
-		return fmt.Errorf("official release asset has no SHA-256 digest")
-	}
-	expected, err := hex.DecodeString(strings.TrimPrefix(strings.ToLower(digest), "sha256:"))
-	if err != nil {
-		return err
-	}
-	actual := sha256.Sum256(archive)
-	if !bytes.Equal(actual[:], expected) {
-		return fmt.Errorf("downloaded sing-box SHA-256 mismatch")
-	}
-	binary, err := extractMihomoExecutable(archive)
-	if err != nil {
-		return err
-	}
-	temporary := paths.SingBoxExe + ".update"
-	_ = os.Remove(temporary)
-	if err := os.WriteFile(temporary, binary, 0o755); err != nil {
-		return err
-	}
-	defer os.Remove(temporary)
-	return activateCoreUpdate(
-		paths,
-		"sing-box",
-		paths.SingBoxExe,
-		temporary,
-		info.LatestVersion,
-		func(path string) (string, error) { return readCoreVersion(path, "version") },
-	)
 }
 
 var (
