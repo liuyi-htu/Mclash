@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/subscription_config.dart';
+import 'package:mclash/subscription_filter.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -22,9 +23,10 @@ dns: {enable: false}
     expect(config['rules'], original['rules']);
     expect(config['dns'], original['dns']);
     expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海专线']);
-    expect(config['proxy-groups'][1]['proxies'], ['hk Premium']);
+    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
     for (final group in config['proxy-groups']) {
       expect(group['use'], isNull);
+      expect(group['include-all-proxies'], isNull);
       expect(group['filter'], isNull);
     }
     expect(result, isNot(contains('token=')));
@@ -33,6 +35,24 @@ dns: {enable: false}
     final config = loadYaml(buildSubscriptionConfig(
         template, 'proxies: [{name: 美国, type: ss, server: us.example}]'));
     expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
+  });
+  test('refresh retains customized and blank filters from the subscription',
+      () {
+    final previous = editSubscriptionFilter(
+        editSubscriptionFilter(buildSubscriptionConfig(template, subscription),
+            domesticGroup, '广州'),
+        foreignGroup,
+        '');
+    final config = loadYaml(buildSubscriptionConfig(template, subscription,
+        previousConfig: previous));
+    expect(
+        readSubscriptionFilter(
+            buildSubscriptionConfig(template, subscription,
+                previousConfig: previous),
+            domesticGroup),
+        '广州');
+    expect(config['proxy-groups'][1]['proxies'].length, 3);
+    expect(config['proxy-groups'][0]['filter'], isNull);
   });
   test('rejects empty, provider-only, malformed and conflicting nodes', () {
     for (final source in [

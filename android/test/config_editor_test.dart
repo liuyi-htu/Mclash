@@ -29,7 +29,7 @@ void main() {
     var field = tester.widget<TextField>(find.byType(TextField));
     expect(field.readOnly, isTrue);
     expect(field.controller!.text, 'mixed-port: 7890\n');
-    expect(find.text('运行配置（只读）'), findsOneWidget);
+    expect(find.text('当前运行配置（只读）'), findsOneWidget);
     expect(find.text('保存'), findsNothing);
     running = false;
     await tester.pump(const Duration(seconds: 1));

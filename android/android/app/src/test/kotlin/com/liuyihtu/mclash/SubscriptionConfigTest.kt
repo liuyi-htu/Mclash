@@ -25,7 +25,21 @@ class SubscriptionConfigTest {
         assertEquals(original["rules"], result["rules"])
         val groups = result["proxy-groups"] as List<*>
         assertEquals(listOf("DIRECT", "上海专线"), (groups[0] as Map<*, *>)["proxies"])
-        assertEquals(listOf("hk Premium"), (groups[1] as Map<*, *>)["proxies"])
+        assertEquals(listOf("DIRECT"), (groups[1] as Map<*, *>)["proxies"])
+    }
+
+    @Test fun preservesFiltersWhenRefreshingNodes() {
+        val source = "proxies: [{name: KR, type: ss}, {name: 广州, type: ss}]"
+        val previous = SubscriptionConfig.build(template, source)
+            .replace("# Mclash 国内正则: \"上海\"", "# Mclash 国内正则: \"广州\"")
+            .replace("# Mclash 国外正则: \"KR\"", "# Mclash 国外正则: \"\"")
+        val text = SubscriptionConfig.build(template, source, previous)
+        val result = Yaml().load<Map<String, Any>>(text)
+        val groups = result["proxy-groups"] as List<*>
+        assertEquals(listOf("DIRECT", "广州"), (groups[0] as Map<*, *>)["proxies"])
+        assertEquals(listOf("KR", "广州"), (groups[1] as Map<*, *>)["proxies"])
+        assertFalse((groups[1] as Map<*, *>).containsKey("filter"))
+        assertTrue(text.contains("# Mclash 国内正则: \"广州\""))
     }
 
     @Test fun rejectsInvalidNodesAndFallsBackForMissingRegions() {

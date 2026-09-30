@@ -218,7 +218,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(_readOnly ? '运行配置（只读）' : '修改配置'),
+          title: Text(_readOnly ? '当前运行配置（只读）' : '修改配置'),
           actions: [
             IconButton(
                 onPressed: _loading ? null : _jumpToLine,

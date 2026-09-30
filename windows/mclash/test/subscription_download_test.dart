@@ -2,11 +2,58 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
+import 'package:mclash/subscription_filter.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
+  test(
+      'first launch creates Cloudflare subscription and embeds downloaded nodes',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('default-subscription-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    server.listen((request) async {
+      requests++;
+      request.response.write(
+          'proxies: [{name: KR default, type: ss, server: example.org}]');
+      await request.response.close();
+    });
+    final url = 'http://127.0.0.1:${server.port}/subscription';
+    final service = WindowsProxyPlatformService(
+      dataDir: dir.path,
+      defaultSubscriptionUrl: url,
+      serviceProcessRunner: (_, __) async =>
+          ProcessResult(1, 0, '{"state":"stopped"}', ''),
+    );
+    try {
+      await File('${dir.path}\\config.yaml').writeAsString(
+          File('../../assets/default-config.yaml').readAsStringSync());
+      await service.getConfigInfo();
+      final state =
+          jsonDecode(await File('${dir.path}\\settings.json').readAsString());
+      expect(state['profileNames']['default.yaml'], 'Cloudflare');
+      expect(state['profileTypes']['default.yaml'], 'subscription');
+      expect(state['profileUrls']['default.yaml'], url);
+      final runtime =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      expect(runtime['proxies'][0]['name'], 'KR default');
+      expect(runtime['proxy-providers'], isNull);
+      expect(runtime['proxy-groups'][1]['filter'], isNull);
+      expect(runtime['proxy-groups'][1]['proxies'], ['KR default']);
+      await service.getConfigs();
+      expect(requests, 1);
+    } finally {
+      await server.close(force: true);
+      for (final entry in dir.parent.listSync()) {
+        if (entry.path.startsWith('${dir.path}\\')) {
+          await entry.delete(recursive: true);
+        }
+      }
+      await dir.delete(recursive: true);
+    }
+  });
   test(
       'download, refresh and edit embed nodes; failed refresh keeps saved config',
       () async {
@@ -33,11 +80,25 @@ void main() {
       expect(config['proxy-providers'], isNull);
       expect(config['proxies'][0]['name'], 'HK first');
       expect(config['rules'].last, 'MATCH,🌍 国外');
+      // Save through the same route as the menu; the active runtime must follow.
+      settings['activeProfile'] = id;
+      await File('${dir.path}\\settings.json')
+          .writeAsString(jsonEncode(settings));
+      await service.saveConfigContent(
+          id: id,
+          content: editSubscriptionFilter(
+              await file.readAsString(), domesticGroup, '广州'));
+      final runtime =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      expect(runtime['proxy-groups'][0]['filter'], isNull);
+      expect(readSubscriptionFilter(await file.readAsString(), domesticGroup),
+          '广州');
       response =
           'proxies: [{name: 广州 refreshed, type: ss, server: example.org}]';
       await service.refreshSubscription(id);
       config = loadYaml(await file.readAsString());
       expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '广州 refreshed']);
+      expect(config['proxy-groups'][0]['filter'], isNull);
       response = 'proxies: [{name: 韩国 edited, type: ss, server: example.org}]';
       await service.updateSubscription(id: id, name: 'edited', url: url);
       expect(loadYaml(await file.readAsString())['proxies'][0]['name'],
