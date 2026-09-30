@@ -76,8 +76,14 @@ class MainActivity : FlutterActivity() {
                 "refreshSubscription" -> refreshSubscription(call, result)
                 "getRuntimeConfigContent" -> runAsync(result, "mclash-runtime-config") {
                     val runtime = File(filesDir, "mihomo/runtime.yaml")
-                    if (runtime.isFile) runtime.readText(Charsets.UTF_8)
-                    else "# 运行配置预览（尚未启动）\n" + MihomoProcess.previewConfig(this, configStore.configFile)
+                    if (ProxyVpnService.running || ProxyVpnService.starting) {
+                        check(runtime.isFile) { "运行配置尚未生成" }
+                        runtime.readText(Charsets.UTF_8)
+                    } else {
+                        val name = configStore.activeProfile()?.name ?: "未选择配置"
+                        "# 运行配置预览（当前启用：$name）\n" +
+                            MihomoProcess.previewConfig(this, configStore.configFile)
+                    }
                 }
                 "getConfigContent" -> getConfigContent(call, result)
                 "saveConfigContent" -> saveConfigContent(call, result)

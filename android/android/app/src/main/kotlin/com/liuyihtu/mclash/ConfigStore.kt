@@ -155,16 +155,14 @@ internal class ConfigStore(private val context: Context) {
         require(index >= 0) { "找不到订阅配置" }
         require(profiles[index].type == TYPE_SUBSCRIPTION) { "本地配置不能修改为订阅" }
 
-        val bytes = downloadSubscription(rawUrl)
+        val bytes = downloadSubscription(rawUrl, profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8))
         val updated = profiles[index].copy(
             name = name,
             url = rawUrl,
             updatedAt = System.currentTimeMillis(),
         )
-        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
-        writeAtomically(profileFile(id), bytes)
         profiles[index] = updated
-        writeProfiles(profiles)
+        writeConfigAndProfiles(id, bytes, profiles)
 
         if (preferences.activeConfigId == id) {
             preferences.configFileName = updated.name
@@ -207,17 +205,9 @@ internal class ConfigStore(private val context: Context) {
         }
         val target = profileFile(id)
         if (target.isFile) target.copyTo(File(target.path + ".bak"), overwrite = true)
-        val oldBytes = target.takeIf(File::isFile)?.readBytes()
-        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
-        writeAtomically(target, bytes)
         val updated = profiles[index].copy(updatedAt = System.currentTimeMillis())
         profiles[index] = updated
-        try {
-            writeProfiles(profiles)
-        } catch (error: Throwable) {
-            if (oldBytes == null) target.delete() else writeAtomically(target, oldBytes)
-            throw error
-        }
+        writeConfigAndProfiles(id, bytes, profiles)
         return updated
     }
 
@@ -281,6 +271,9 @@ internal class ConfigStore(private val context: Context) {
         val profile = readProfiles().firstOrNull { it.id == id }
             ?: error("找不到配置")
         require(profileFile(profile.id).isFile) { "配置文件不存在，请重新导入或更新订阅" }
+        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
+        writeAtomically(File(mihomoDirectory, "runtime.yaml"),
+            MihomoProcess.previewConfig(context, profileFile(id)).toByteArray(Charsets.UTF_8))
         preferences.activeConfigId = profile.id
         preferences.configFileName = profile.name
         QuickSettingsTileUpdater.request(context)
@@ -303,7 +296,7 @@ internal class ConfigStore(private val context: Context) {
         QuickSettingsTileUpdater.request(context)
     }
 
-    private fun downloadSubscription(rawUrl: String): ByteArray {
+    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null): ByteArray {
         val parsed = URL(rawUrl)
         require(parsed.protocol == "http" || parsed.protocol == "https") {
             "订阅链接只支持 http:// 或 https://"
@@ -341,18 +334,41 @@ internal class ConfigStore(private val context: Context) {
 
             val bytes = input.use(::readStreamWithLimit)
 
-            return buildSubscriptionConfig(bytes)
+            return buildSubscriptionConfig(bytes, previousConfig)
         } finally {
             connection.disconnect()
         }
     }
 
-    private fun buildSubscriptionConfig(bytes: ByteArray): ByteArray {
+    private fun writeConfigAndProfiles(id: String, bytes: ByteArray, profiles: List<ConfigProfile>) {
+        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
+        val target = profileFile(id)
+        val oldBytes = target.takeIf(File::isFile)?.readBytes()
+        val runtime = File(mihomoDirectory, "runtime.yaml")
+        val syncRuntime = preferences.activeConfigId == id
+        val oldRuntime = if (syncRuntime) runtime.takeIf(File::isFile)?.readBytes() else null
+        writeAtomically(target, bytes)
+        try {
+            if (syncRuntime) {
+                val generated = MihomoProcess.previewConfig(context, target).toByteArray(Charsets.UTF_8)
+                writeAtomically(runtime, generated)
+            }
+            writeProfiles(profiles)
+        } catch (error: Throwable) {
+            if (oldBytes == null) target.delete() else writeAtomically(target, oldBytes)
+            if (syncRuntime) {
+                if (oldRuntime == null) runtime.delete() else writeAtomically(runtime, oldRuntime)
+            }
+            throw error
+        }
+    }
+
+    private fun buildSubscriptionConfig(bytes: ByteArray, previousConfig: String? = null): ByteArray {
         validateYaml(bytes, "订阅")
         val template = context.assets.open(DEFAULT_CONFIG_ASSET).use {
             it.readBytes().toString(Charsets.UTF_8)
         }
-        val generated = SubscriptionConfig.build(template, bytes.toString(Charsets.UTF_8))
+        val generated = SubscriptionConfig.build(template, bytes.toString(Charsets.UTF_8), previousConfig)
             .toByteArray(Charsets.UTF_8)
         validateYaml(generated, "生成的订阅配置")
         return generated

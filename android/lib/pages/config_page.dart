@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../shared/subscription_filter.dart';
+import '../shared/subscription_filter_dialog.dart';
 
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
@@ -441,81 +443,137 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  Future<void> _editSubscriptionFilter(
+      ConfigProfile profile, String groupName) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      final filter = readSubscriptionFilter(content, groupName);
+      if (!mounted) return;
+      setState(() => _working = false);
+      final saved = await showSubscriptionFilterDialog(
+        context: context,
+        groupName: groupName,
+        initialFilter: filter,
+        onSave: (value) async {
+          final latest = await _service.getConfigContent(profile.id);
+          await _service.saveConfigContent(
+            id: profile.id,
+            content: editSubscriptionFilter(latest, groupName, value),
+          );
+        },
+      );
+      if (saved && mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _showActions(ConfigProfile profile) async {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(
-                profile.isSubscription
-                    ? Icons.cloud_outlined
-                    : Icons.description_outlined,
-              ),
-              title: Text(profile.name),
-              subtitle: Text(
-                profile.isSubscription
-                    ? (profile.url ?? '订阅链接不可用')
-                    : '本地 YAML 配置',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    profile.isSubscription
+                        ? Icons.cloud_outlined
+                        : Icons.description_outlined,
+                  ),
+                  title: Text(profile.name),
+                  subtitle: Text(
+                    profile.isSubscription
+                        ? (profile.url ?? '订阅链接不可用')
+                        : '本地 YAML 配置',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.drive_file_rename_outline),
+                  title: const Text('修改配置名称'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('rename'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.code_outlined),
+                  title: const Text('修改配置文件'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('editContent'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.visibility_outlined),
+                  title: const Text('查看当前运行配置'),
+                  onTap: () => Navigator.of(sheetContext).pop('runtime'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('删除'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('delete'),
+                ),
+                if (profile.isSubscription) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.filter_alt_outlined),
+                    title: const Text('国内正则表达式'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () =>
+                        Navigator.of(sheetContext).pop('domesticFilter'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.filter_alt_outlined),
+                    title: const Text('国外正则表达式'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () =>
+                        Navigator.of(sheetContext).pop('foreignFilter'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.link_outlined),
+                    title: const Text('检测订阅链接'),
+                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: const Text('更新订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('修改订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('edit'),
+                  ),
+                ],
+                const SizedBox(height: 8),
+              ],
             ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('修改配置名称'),
-              enabled: !widget.proxyRunning,
-              onTap: () => Navigator.of(sheetContext).pop('rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.code_outlined),
-              title: const Text('修改配置文件'),
-              enabled: !widget.proxyRunning,
-              onTap: () => Navigator.of(sheetContext).pop('editContent'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.visibility_outlined),
-              title: const Text('查看运行配置'),
-              onTap: () => Navigator.of(sheetContext).pop('runtime'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              enabled: !widget.proxyRunning,
-              onTap: () => Navigator.of(sheetContext).pop('delete'),
-            ),
-            if (profile.isSubscription) ...[
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.link_outlined),
-                title: const Text('检测订阅链接'),
-                onTap: () => Navigator.of(sheetContext).pop('testUrl'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.refresh),
-                title: const Text('更新订阅'),
-                enabled: !widget.proxyRunning,
-                onTap: () => Navigator.of(sheetContext).pop('refresh'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('修改订阅'),
-                enabled: !widget.proxyRunning,
-                onTap: () => Navigator.of(sheetContext).pop('edit'),
-              ),
-            ],
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
 
     if (!mounted) return;
     switch (action) {
+      case 'domesticFilter':
+        await _editSubscriptionFilter(profile, domesticGroup);
+        return;
+      case 'foreignFilter':
+        await _editSubscriptionFilter(profile, foreignGroup);
+        return;
       case 'select':
         await _select(profile);
         return;

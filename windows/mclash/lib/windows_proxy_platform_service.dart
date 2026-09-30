@@ -709,12 +709,20 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   @override
   Future<String> getRuntimeConfigContent() async {
     final runtime = File(_configPath);
-    if (await runtime.exists()) return runtime.readAsString();
+    final status = (await _status())['state'];
+    if (status != 'stopped' && status != 'not_installed') {
+      if (!await runtime.exists()) throw StateError('运行配置尚未生成。');
+      return runtime.readAsString();
+    }
     final state = await _readSettings();
     final id = state['activeProfile']?.toString();
-    if (id == null) throw StateError('尚未选择配置，请先选择配置。');
+    if (id == null) {
+      if (await runtime.exists()) return runtime.readAsString();
+      throw StateError('尚未选择配置，请先选择配置。');
+    }
     final content = await File(_profilePath(id)).readAsString();
-    return '# 运行配置预览（尚未启动）\n${await _runtimeConfigForCurrentMode(content)}';
+    final name = _stateMap(state, 'profileNames')[id]?.toString() ?? id;
+    return '# 运行配置预览（当前启用：$name）\n${await _runtimeConfigForCurrentMode(content)}';
   }
 
   @override
@@ -933,7 +941,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         multiLine: true,
       ).hasMatch(content);
 
-  Future<_SubscriptionDownload> _downloadSubscription(String url) async {
+  Future<_SubscriptionDownload> _downloadSubscription(String url,
+      {String? previousConfig}) async {
     final uri = _subscriptionUri(url);
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
@@ -979,6 +988,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           content: buildSubscriptionConfig(
             await rootBundle.loadString('assets/default-config.yaml'),
             content,
+            previousConfig: previousConfig,
           ),
           responseTimeMs: stopwatch.elapsedMilliseconds,
           statusCode: response.statusCode,
@@ -992,6 +1002,11 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<String?> _subscriptionContent(String id) async {
+    final file = File(_profilePath(id));
+    return await file.exists() ? file.readAsString() : null;
   }
 
   Future<void> _writeSubscription(String id, String content) async {
@@ -1041,7 +1056,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       throw StateError('所选配置不是机场订阅。');
     }
     final cleanUrl = _subscriptionUri(url).toString();
-    final download = await _downloadSubscription(cleanUrl);
+    final download = await _downloadSubscription(cleanUrl,
+        previousConfig: await _subscriptionContent(id));
     await _requireConfigStopped();
     await _writeSubscription(id, download.content);
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
@@ -1068,7 +1084,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     final url = _stateMap(state, 'profileUrls')[id]?.toString();
     if (url == null || url.isEmpty) throw StateError('订阅链接不存在。');
-    final download = await _downloadSubscription(url);
+    final download = await _downloadSubscription(url,
+        previousConfig: await _subscriptionContent(id));
     await _requireConfigStopped();
     await _writeSubscription(id, download.content);
     if (state['activeProfile'] == id) {

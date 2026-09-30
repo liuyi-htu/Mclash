@@ -124,13 +124,13 @@ proxy-groups:
       - DIRECT
   use:
       - 机场
-  filter: "(?i)上海|广州"
+  filter: "上海"
 - name: 🌍 国外
   type: select
   url: http://www.gstatic.com/generate_204
   use:
       - 机场
-  filter: "(?i)韩国|香港|HK|Hong Kong|HongKong|KR"
+  filter: "KR"
 
 rules:
 #  - DST-PORT,22,DIRECT

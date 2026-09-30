@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/subscription_config.dart';
+import 'package:mclash/subscription_filter.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -21,18 +22,31 @@ dns: {enable: false}
     expect(config['proxies'], loadYaml(subscription)['proxies']);
     expect(config['rules'], original['rules']);
     expect(config['dns'], original['dns']);
-    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海专线']);
-    expect(config['proxy-groups'][1]['proxies'], ['hk Premium']);
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT']);
+    expect(config['proxy-groups'][1]['proxies'], []);
     for (final group in config['proxy-groups']) {
       expect(group['use'], isNull);
-      expect(group['filter'], isNull);
+      expect(group['include-all-proxies'], isTrue);
+      expect(group['empty-fallback'], 'DIRECT');
     }
     expect(result, isNot(contains('token=')));
   });
   test('unmatched regions retain usable DIRECT fallback', () {
     final config = loadYaml(buildSubscriptionConfig(
         template, 'proxies: [{name: 美国, type: ss, server: us.example}]'));
-    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
+    expect(config['proxy-groups'][1]['empty-fallback'], 'DIRECT');
+  });
+  test('refresh retains customized and blank filters from the subscription',
+      () {
+    final previous = editSubscriptionFilter(
+        editSubscriptionFilter(buildSubscriptionConfig(template, subscription),
+            domesticGroup, '广州'),
+        foreignGroup,
+        '');
+    final config = loadYaml(buildSubscriptionConfig(template, subscription,
+        previousConfig: previous));
+    expect(config['proxy-groups'][0]['filter'], '广州');
+    expect(config['proxy-groups'][1]['filter'], '');
   });
   test('rejects empty, provider-only, malformed and conflicting nodes', () {
     for (final source in [

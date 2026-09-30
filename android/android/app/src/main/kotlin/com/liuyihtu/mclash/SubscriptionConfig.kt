@@ -6,7 +6,7 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
 
 internal object SubscriptionConfig {
-    fun build(template: String, subscription: String): String {
+    fun build(template: String, subscription: String, previousConfig: String? = null): String {
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {
             codePointLimit = 8 * 1024 * 1024
             isAllowDuplicateKeys = false
@@ -29,14 +29,22 @@ internal object SubscriptionConfig {
         require(names.none { it in reserved }) { "订阅节点名称与默认策略冲突" }
         config.remove("proxy-providers")
         config["proxies"] = nodes
+        val previous = previousConfig?.let { loader.load<Any>(it) } as? Map<*, *>
+        val filters = (previous?.get("proxy-groups") as? List<*>)
+            .orEmpty().filterIsInstance<Map<*, *>>()
+            .mapNotNull { group ->
+                val name = group["name"] as? String
+                val filter = group["filter"] as? String
+                if (name != null && filter != null) name to filter else null
+            }.toMap()
         config["proxy-groups"] = groups.map { item ->
             @Suppress("UNCHECKED_CAST")
             val group = (item as Map<String, Any?>).toMutableMap()
-            val pattern = (group.remove("filter") as? String)?.let(::Regex)
             group.remove("use")
-            val existing = (group["proxies"] as? List<*>)?.filterIsInstance<String>().orEmpty()
-            val selected = (existing + names.filter { pattern == null || pattern.containsMatchIn(it) }).distinct()
-            group["proxies"] = selected.ifEmpty { listOf("DIRECT") }
+            filters[group["name"]]?.let { group["filter"] = it }
+            group["include-all-proxies"] = true
+            group["empty-fallback"] = "DIRECT"
+            group["proxies"] = (group["proxies"] as? List<*>).orEmpty()
             group
         }
         return Yaml(DumperOptions().apply {

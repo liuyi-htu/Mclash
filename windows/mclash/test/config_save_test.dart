@@ -75,6 +75,24 @@ void main() {
         throwsStateError);
     expect(await profile.readAsString(), before);
   });
+  test(
+      'stopped runtime view previews the active profile instead of a stale file',
+      () async {
+    await profile.writeAsString('mixed-port: 1234\nrules: []\n');
+    await File('${dir.path}\\settings.json').writeAsString(
+        '{"activeProfile":"test.yaml","profileNames":{"test.yaml":"Airport"}}');
+    await File('${dir.path}\\config.yaml')
+        .writeAsString('mixed-port: 5678\nrules: []\n');
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, args) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
+    final content = await service.getRuntimeConfigContent();
+    expect(content, contains('当前启用：Airport'));
+    expect(loadYaml(content)['mixed-port'], 1234);
+    expect(await File('${dir.path}\\config.yaml').readAsString(),
+        contains('5678'));
+  });
   test('controller override preserves nested secret and YAML comments',
       () async {
     final config = File('${dir.path}\\config.yaml');

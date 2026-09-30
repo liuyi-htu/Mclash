@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
+import 'package:mclash/subscription_filter.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -33,11 +34,23 @@ void main() {
       expect(config['proxy-providers'], isNull);
       expect(config['proxies'][0]['name'], 'HK first');
       expect(config['rules'].last, 'MATCH,🌍 国外');
+      // Save through the same route as the menu; the active runtime must follow.
+      settings['activeProfile'] = id;
+      await File('${dir.path}\\settings.json')
+          .writeAsString(jsonEncode(settings));
+      await service.saveConfigContent(
+          id: id,
+          content: editSubscriptionFilter(
+              await file.readAsString(), domesticGroup, '广州'));
+      final runtime =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      expect(runtime['proxy-groups'][0]['filter'], '广州');
       response =
           'proxies: [{name: 广州 refreshed, type: ss, server: example.org}]';
       await service.refreshSubscription(id);
       config = loadYaml(await file.readAsString());
-      expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '广州 refreshed']);
+      expect(config['proxy-groups'][0]['proxies'], ['DIRECT']);
+      expect(config['proxy-groups'][0]['filter'], '广州');
       response = 'proxies: [{name: 韩国 edited, type: ss, server: example.org}]';
       await service.updateSubscription(id: id, name: 'edited', url: url);
       expect(loadYaml(await file.readAsString())['proxies'][0]['name'],

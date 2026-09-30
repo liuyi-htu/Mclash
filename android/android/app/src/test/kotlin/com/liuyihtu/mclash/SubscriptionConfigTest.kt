@@ -24,8 +24,20 @@ class SubscriptionConfigTest {
         assertEquals(original["dns"], result["dns"])
         assertEquals(original["rules"], result["rules"])
         val groups = result["proxy-groups"] as List<*>
-        assertEquals(listOf("DIRECT", "上海专线"), (groups[0] as Map<*, *>)["proxies"])
-        assertEquals(listOf("hk Premium"), (groups[1] as Map<*, *>)["proxies"])
+        assertEquals(listOf("DIRECT"), (groups[0] as Map<*, *>)["proxies"])
+        assertEquals(emptyList<String>(), (groups[1] as Map<*, *>)["proxies"])
+    }
+
+    @Test fun preservesFiltersWhenRefreshingNodes() {
+        val source = "proxies: [{name: KR, type: ss}]"
+        val previous = SubscriptionConfig.build(template, source)
+            .replace("filter: 上海", "filter: 广州")
+            .replace("filter: KR", "filter: ''")
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template, source, previous))
+        val groups = result["proxy-groups"] as List<*>
+        assertEquals("广州", (groups[0] as Map<*, *>)["filter"])
+        assertEquals("", (groups[1] as Map<*, *>)["filter"])
+        assertEquals(true, (groups[1] as Map<*, *>)["include-all-proxies"])
     }
 
     @Test fun rejectsInvalidNodesAndFallsBackForMissingRegions() {
@@ -37,6 +49,6 @@ class SubscriptionConfigTest {
         val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template,
             "proxies: [{name: 美国, type: ss}]"))
         val groups = result["proxy-groups"] as List<*>
-        assertEquals(listOf("DIRECT"), (groups[1] as Map<*, *>)["proxies"])
+        assertEquals("DIRECT", (groups[1] as Map<*, *>)["empty-fallback"])
     }
 }
