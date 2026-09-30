@@ -10,6 +10,7 @@ void main() {
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('config-save-');
     profile = File('${dir.path}\\profiles\\test.yaml');
+    await profile.parent.create(recursive: true);
     await profile.writeAsString('rules: [MATCH,DIRECT]\n');
   });
   tearDown(() async {

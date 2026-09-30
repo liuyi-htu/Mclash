@@ -480,7 +480,6 @@ class _ConfigPageState extends State<ConfigPage> {
             ListTile(
               leading: const Icon(Icons.visibility_outlined),
               title: const Text('查看运行配置'),
-              enabled: widget.proxyRunning && profile.active,
               onTap: () => Navigator.of(sheetContext).pop('runtime'),
             ),
             ListTile(
