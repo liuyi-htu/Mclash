@@ -15,7 +15,7 @@ func TestSettingsAndRuntimeStateAreSeparated(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		paths.Settings,
-		[]byte(`{"coreType":"sing-box","debugLoggingEnabled":true}`),
+		[]byte(`{"coreType":"mihomo","debugLoggingEnabled":true}`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
@@ -25,7 +25,7 @@ func TestSettingsAndRuntimeStateAreSeparated(t *testing.T) {
 	}
 
 	settings := readSettings(paths)
-	if settings["coreType"] != "sing-box" || settings["debugLoggingEnabled"] != true {
+	if settings["coreType"] != "mihomo" || settings["debugLoggingEnabled"] != true {
 		t.Fatalf("settings = %#v", settings)
 	}
 	runtime := readRuntimeState(paths)
@@ -55,14 +55,14 @@ func TestLegacyStateRemainsReadableDuringMigration(t *testing.T) {
 	}
 	if err := os.WriteFile(
 		paths.LegacyState,
-		[]byte(`{"coreType":"sing-box","debugLoggingEnabled":true,"mihomoPid":42,"message":"legacy"}`),
+		[]byte(`{"coreType":"mihomo","debugLoggingEnabled":true,"mihomoPid":42,"message":"legacy"}`),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 
 	settings := readSettings(paths)
-	if settings["coreType"] != "sing-box" {
+	if settings["coreType"] != "mihomo" {
 		t.Fatalf("legacy settings = %#v", settings)
 	}
 	if _, exists := settings["message"]; exists {

@@ -31,56 +31,12 @@ void main() {
     );
   }
 
-  test('remembers the active profile for each core', () async {
-    final separator = Platform.pathSeparator;
-    await File(
-      '${dataDir.path}${separator}profiles${separator}home.yaml',
-    ).writeAsString('mixed-port: 7890\nproxies: []\n');
-    await File(
-      '${dataDir.path}${separator}profiles${separator}box.json',
-    ).writeAsString('{"inbounds": []}\n');
-    await File('${dataDir.path}${separator}state.json').writeAsString(
-      jsonEncode(<String, dynamic>{
-        'coreType': 'mihomo',
-        'activeProfile': 'home.yaml',
-        'mihomoPid': 42,
-        'message': 'legacy runtime message',
-        'profileNames': <String, dynamic>{
-          'home.yaml': 'Home',
-          'box.json': 'Box',
-        },
-      }),
-    );
-
-    await service.setCoreType(CoreType.singBox);
-    var state = await readState();
-    expect(
-      await File(
-        '${dataDir.path}${separator}settings.json',
-      ).exists(),
-      isTrue,
-    );
-    expect(state.containsKey('mihomoPid'), isFalse);
-    expect(state.containsKey('message'), isFalse);
-    expect(state['activeMihomoProfile'], 'home.yaml');
-    expect(state['activeProfile'], isNull);
-
-    await service.selectConfig('box.json');
-    await service.setCoreType(CoreType.mihomo);
-    state = await readState();
-    expect(state['activeProfile'], 'home.yaml');
-
-    await service.setCoreType(CoreType.singBox);
-    state = await readState();
-    expect(state['activeProfile'], 'box.json');
-  });
-
   test('changing only network mode keeps the current profile', () async {
     final separator = Platform.pathSeparator;
     await File(
       '${dataDir.path}${separator}profiles${separator}selected.yaml',
     ).writeAsString('mixed-port: 7890\nproxies: []\n');
-    await File('${dataDir.path}${separator}state.json').writeAsString(
+    await File('${dataDir.path}${separator}settings.json').writeAsString(
       jsonEncode(<String, dynamic>{
         'coreType': 'mihomo',
         'activeProfile': 'selected.yaml',
@@ -120,7 +76,6 @@ void main() {
     // the deleted generated profile.
     await runtime.writeAsString('mixed-port: 7890\nproxies: []\n');
     await service.setNetworkMode(NetworkMode.tun);
-    await service.setCoreType(CoreType.singBox);
     await service.setCoreType(CoreType.mihomo);
     profiles = await service.getConfigs();
 

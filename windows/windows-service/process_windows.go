@@ -9,41 +9,8 @@ import (
 	"time"
 )
 
-func selectedCore(paths appPaths) string {
-	if readSettings(paths)["coreType"] == "sing-box" {
-		return "sing-box"
-	}
-	return "mihomo"
-}
-
 func debugLoggingEnabled(paths appPaths) bool {
 	return readSettings(paths)["debugLoggingEnabled"] == true
-}
-
-func validateSelectedConfig(paths appPaths) error {
-	if selectedCore(paths) == "sing-box" {
-		if err := validateRegularNonEmpty(paths.SingBoxExe, ".exe"); err != nil {
-			return err
-		}
-		if err := validateRegularNonEmpty(paths.SingBoxConfig, ".json"); err != nil {
-			return err
-		}
-		cmd := exec.Command(paths.SingBoxExe, "check", "-c", paths.SingBoxConfig)
-		cmd.Dir = paths.DataDir
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("sing-box configuration check failed: %w: %s", err, string(output))
-		}
-		return nil
-	}
-	return validateMihomoConfig(paths)
-}
-
-func startSelectedCore(paths appPaths) (*mihomoProcess, error) {
-	if selectedCore(paths) == "sing-box" {
-		return startCoreProcess(paths, paths.SingBoxExe, paths.SingBoxLog, paths.DataDir, []string{"run", "-c", paths.SingBoxConfig})
-	}
-	return startMihomo(paths)
 }
 
 func startCoreProcess(paths appPaths, executable, logPath, workingDir string, args []string) (*mihomoProcess, error) {

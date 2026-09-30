@@ -142,72 +142,20 @@ rules:
     expect(runtime['tun']['enable'], isTrue);
   });
 
-  test('creates and removes a managed sing-box TUN inbound', () async {
-    final config = File('${temporaryDirectory.path}\\sing-box.json');
-    await config.writeAsString('''
-{"inbounds":[{"type":"mixed","listen_port":7890}],"outbounds":[{"type":"direct"}]}
-''');
-    await service.setIpv6Enabled(true);
-    await service.setBypassLanEnabled(false);
-    await service.setCoreType(CoreType.singBox);
-    await service.setNetworkMode(NetworkMode.tun);
-    var decoded =
-        jsonDecode(await config.readAsString()) as Map<String, dynamic>;
-    expect(
-      (decoded['inbounds'] as List).any(
-        (entry) => entry is Map && entry['tag'] == 'mclash-tun',
-      ),
-      isTrue,
-    );
-    final managedTun = (decoded['inbounds'] as List)
-        .whereType<Map>()
-        .firstWhere((entry) => entry['tag'] == 'mclash-tun');
-    expect(managedTun['address'], contains('fdfe:dcba:9876::1/126'));
-    expect(managedTun['route_exclude_address'], isEmpty);
-    final ruleSets = (decoded['route'] as Map)['rule_set'] as List;
-    expect(
-      ruleSets.map((entry) => (entry as Map)['tag']),
-      containsAll(<String>[
-        'geoip-cn',
-        'geosite-cn',
-        'geosite-private',
-        'geosite-category-ads-all',
-        'geosite-geolocation-!cn',
-      ]),
-    );
-    expect(
-      ruleSets.every(
-        (entry) =>
-            entry is Map &&
-            entry['type'] == 'local' &&
-            entry['path'].toString().startsWith('rulesets/'),
-      ),
-      isTrue,
-    );
-    await service.setNetworkMode(NetworkMode.proxy);
-    decoded = jsonDecode(await config.readAsString()) as Map<String, dynamic>;
-    expect(
-      (decoded['inbounds'] as List).any(
-        (entry) => entry is Map && entry['tag'] == 'mclash-tun',
-      ),
-      isFalse,
-    );
-  });
-
-  test('lists only profiles supported by the selected core', () async {
+  test('lists only YAML profiles and rejects JSON selection', () async {
     final profiles = Directory('${temporaryDirectory.path}\\profiles');
     await profiles.create(recursive: true);
     await File(
       '${profiles.path}\\clash.yaml',
     ).writeAsString('mixed-port: 7890\nrules:\n  - MATCH,DIRECT\n');
     await File(
-      '${profiles.path}\\sing-box.json',
+      '${profiles.path}\\unsupported.json',
     ).writeAsString('{"inbounds":[],"outbounds":[{"type":"direct"}]}');
     await File('${temporaryDirectory.path}\\state.json').writeAsString(
       jsonEncode(<String, dynamic>{
         'profileNames': <String, String>{
           'clash.yaml': 'mihomo 配置',
-          'sing-box.json': 'sing-box 配置',
+          'unsupported.json': 'JSON 配置',
         },
       }),
     );
@@ -216,9 +164,8 @@ rules:
       'clash.yaml',
     ]);
 
-    await service.setCoreType(CoreType.singBox);
-    expect((await service.getConfigs()).map((item) => item.id), <String>[
-      'sing-box.json',
-    ]);
+    expect(await File('${profiles.path}\\unsupported.json').exists(), isTrue);
+    await expectLater(
+        service.selectConfig('unsupported.json'), throwsArgumentError);
   });
 }

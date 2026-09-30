@@ -22,13 +22,13 @@ func (h *serviceHandler) Execute(_ []string, requests <-chan svc.ChangeRequest, 
 		h.logf("startup failed: %v", err)
 		return false, 1
 	}
-	if err := validateSelectedConfig(h.paths); err != nil {
+	if err := validateMihomoConfig(h.paths); err != nil {
 		h.logf("startup failed: %v", err)
 		h.writeState(0, err.Error())
 		return false, 2
 	}
 
-	process, err := startSelectedCore(h.paths)
+	process, err := startMihomo(h.paths)
 	if err != nil {
 		h.logf("startup failed: %v", err)
 		h.writeState(0, err.Error())
@@ -80,12 +80,12 @@ func (h *serviceHandler) Execute(_ []string, requests <-chan svc.ChangeRequest, 
 				}
 			case <-timer.C:
 			}
-			if err := validateSelectedConfig(h.paths); err != nil {
+			if err := validateMihomoConfig(h.paths); err != nil {
 				h.logf("restart cancelled: %v", err)
 				h.writeState(0, err.Error())
 				return false, 4
 			}
-			process, err = startSelectedCore(h.paths)
+			process, err = startMihomo(h.paths)
 			if err != nil {
 				h.logf("restart failed: %v", err)
 				h.writeState(0, err.Error())

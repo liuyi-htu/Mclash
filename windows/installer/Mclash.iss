@@ -34,18 +34,16 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Name: "{app}\data"; Permissions: users-modify
 Name: "{app}\data\profiles"; Permissions: users-modify
 Name: "{app}\data\logs"; Permissions: users-modify
-Name: "{app}\data\rulesets"; Permissions: users-modify
 
 [Files]
-Source: "..\mclash\build\windows\x64\runner\Release\*"; Excludes: "MclashService.exe,mihomoService.exe,mihomo.exe,sing-box.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\mclash\build\windows\x64\runner\Release\Mclash.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\mclash\build\windows\x64\runner\Release\*"; Excludes: "*.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows-package\MclashService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows-package\mihomo.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\windows-package\sing-box.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\assets\default-config.yaml"; DestDir: "{app}\data"; DestName: "config.yaml"; Flags: onlyifdoesntexist
 Source: "..\windows-package\geosite.dat"; DestDir: "{app}\data"; DestName: "GeoSite.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\geoip.dat"; DestDir: "{app}\data"; DestName: "GeoIP.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\country.mmdb"; DestDir: "{app}\data"; DestName: "Country.mmdb"; Flags: onlyifdoesntexist
-Source: "..\windows-package\rulesets\*.srs"; DestDir: "{app}\data\rulesets"; Flags: ignoreversion
 Source: "..\mclash\windows\runner\resources\app_icon.ico"; DestDir: "{app}"; DestName: "Mclash.ico"; Flags: ignoreversion
 
 [Icons]

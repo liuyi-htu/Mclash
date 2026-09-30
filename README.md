@@ -2,7 +2,7 @@
 
 - `android/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
   Root 权限。
-- `windows/`：Flutter Windows 客户端，同时支持 mihomo 和 sing-box，通过
+- `windows/`：Flutter Windows 客户端，使用 mihomo，通过
   独立的 Windows 系统服务管理代理内核、系统代理和更新。
 
 ## 目录结构
@@ -42,7 +42,7 @@ Android App 的 `lib/` 目录按职责划分：
 ### Windows
 
 - `windows/mclash/`：桌面界面、配置管理和系统代理控制。
-- `windows/windows-service/`：负责 mihomo、sing-box 生命周期、自启动和内核更新。
+- `windows/windows-service/`：负责 mihomo 生命周期、自启动和内核更新。
 - `windows/installer/`：生成 Windows 安装程序。
 
 ## Android 编译环境
@@ -124,9 +124,9 @@ Visual Studio C++ 构建工具和 Inno Setup 6。请在 PowerShell 中从仓库�
 .\windows\scripts\build-windows.ps1
 ```
 
-脚本会下载并校验 mihomo、sing-box、GeoSite、GeoIP 和 Country 数据，运行
+脚本会下载并校验 mihomo、GeoSite、GeoIP 和 Country 数据，运行
 Dart 与 Go 检查，并将安装程序写入 `windows\installer\Output\`。Windows
-客户端支持 mihomo/Clash YAML 配置和 sing-box JSON 配置，两种内核均支持
+客户端支持 mihomo/Clash YAML 配置，支持
 TUN 与系统代理模式。
 
 ## GitHub 自动构建
@@ -181,12 +181,11 @@ Android 构建脚本在成功或失败退出时，都会删除 `build/`、`.dart
 Mclash 自身源代码依据 [GNU General Public License v3.0](LICENSE) 开源，
 完整条款以仓库中的 `LICENSE` 文件为准。
 
-构建和运行过程中使用的 mihomo、sing-box、HevSocks5Tunnel、Flutter 及规则
+构建和运行过程中使用的 mihomo、HevSocks5Tunnel、Flutter 及规则
 数据库等第三方项目，仍分别受其上游许可证和版权声明约束。使用或分发构建
 产物时，请同时遵守并保留相应第三方项目的许可证及声明：
 
 - [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo)
-- [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
 - [heiher/hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)
 - [Flutter](https://github.com/flutter/flutter)
 - [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat)

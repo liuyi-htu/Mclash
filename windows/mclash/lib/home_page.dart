@@ -13,7 +13,7 @@ import 'native_proxy_service.dart';
 
 enum _HomeMenuAction { config, generalSettings }
 
-enum _RunModeChoice { mihomoTun, mihomoProxy, singBoxTun, singBoxProxy }
+enum _RunModeChoice { mihomoTun, mihomoProxy }
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -301,7 +301,7 @@ class _HomePageState extends State<HomePage> {
       });
       AppNotice.show(
         context,
-        '已切换到 ${core == CoreType.mihomo ? 'mihomo' : 'sing-box'} + '
+        '已切换到 mihomo + '
         '${target == NetworkMode.tun ? 'TUN' : '系统代理'}',
       );
     } catch (error) {
@@ -429,8 +429,7 @@ class _HomePageState extends State<HomePage> {
                 context: sheetContext,
                 icon: Icons.swap_horiz_rounded,
                 title: '运行模式',
-                subtitle:
-                    '${_coreType == CoreType.mihomo ? 'mihomo' : 'sing-box'} + '
+                subtitle: 'mihomo + '
                     '${_networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'}',
                 onTap: _showRunModeDialog,
               ),
@@ -465,8 +464,6 @@ class _HomePageState extends State<HomePage> {
     final current = switch ((_coreType, _networkMode)) {
       (CoreType.mihomo, NetworkMode.tun) => _RunModeChoice.mihomoTun,
       (CoreType.mihomo, NetworkMode.proxy) => _RunModeChoice.mihomoProxy,
-      (CoreType.singBox, NetworkMode.tun) => _RunModeChoice.singBoxTun,
-      (CoreType.singBox, NetworkMode.proxy) => _RunModeChoice.singBoxProxy,
     };
     final selected = await showDialog<_RunModeChoice>(
       context: context,
@@ -475,47 +472,31 @@ class _HomePageState extends State<HomePage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RadioListTile<_RunModeChoice>(
-              value: _RunModeChoice.mihomoTun,
-              groupValue: current,
-              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+            ListTile(
+              leading: Icon(current == _RunModeChoice.mihomoTun
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              onTap: () =>
+                  Navigator.of(dialogContext).pop(_RunModeChoice.mihomoTun),
               title: const Text('mihomo + TUN'),
             ),
-            RadioListTile<_RunModeChoice>(
-              value: _RunModeChoice.mihomoProxy,
-              groupValue: current,
-              onChanged: (value) => Navigator.of(dialogContext).pop(value),
+            ListTile(
+              leading: Icon(current == _RunModeChoice.mihomoProxy
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              onTap: () =>
+                  Navigator.of(dialogContext).pop(_RunModeChoice.mihomoProxy),
               title: const Text('mihomo + 系统代理'),
-            ),
-            RadioListTile<_RunModeChoice>(
-              value: _RunModeChoice.singBoxTun,
-              groupValue: current,
-              onChanged: (value) => Navigator.of(dialogContext).pop(value),
-              title: const Text('sing-box + TUN'),
-            ),
-            RadioListTile<_RunModeChoice>(
-              value: _RunModeChoice.singBoxProxy,
-              groupValue: current,
-              onChanged: (value) => Navigator.of(dialogContext).pop(value),
-              title: const Text('sing-box + 系统代理'),
             ),
           ],
         ),
       ),
     );
     if (selected == null || !mounted) return;
-    final core = switch (selected) {
-      _RunModeChoice.mihomoTun || _RunModeChoice.mihomoProxy => CoreType.mihomo,
-      _RunModeChoice.singBoxTun ||
-      _RunModeChoice.singBoxProxy =>
-        CoreType.singBox,
-    };
-    final mode = switch (selected) {
-      _RunModeChoice.mihomoTun || _RunModeChoice.singBoxTun => NetworkMode.tun,
-      _RunModeChoice.mihomoProxy ||
-      _RunModeChoice.singBoxProxy =>
-        NetworkMode.proxy,
-    };
+    const core = CoreType.mihomo;
+    final mode = selected == _RunModeChoice.mihomoTun
+        ? NetworkMode.tun
+        : NetworkMode.proxy;
     await _switchRunMode(core, mode);
   }
 
@@ -566,8 +547,6 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 18),
               _coreUpdateCard(sheetContext, CoreType.mihomo, 'mihomo'),
-              const SizedBox(height: 12),
-              _coreUpdateCard(sheetContext, CoreType.singBox, 'sing-box'),
               const SizedBox(height: 14),
               const Center(child: Text('更新会先完成下载，再自动停止代理、替换内核并恢复运行。')),
             ],
@@ -935,7 +914,7 @@ class _HomePageState extends State<HomePage> {
                     leading: Icon(
                       log.id == 'update.log'
                           ? Icons.system_update_alt_rounded
-                          : log.id == 'mihomo.log' || log.id == 'sing-box.log'
+                          : log.id == 'mihomo.log'
                               ? Icons.memory_rounded
                               : Icons.settings_applications_outlined,
                     ),
@@ -974,7 +953,7 @@ class _HomePageState extends State<HomePage> {
           builder: (dialogContext) => AlertDialog(
             title: const Text('清除调试日志'),
             content: const Text(
-              '将清空服务日志、mihomo 日志、sing-box 日志和内核更新日志。'
+              '将清空服务日志、mihomo 日志和内核更新日志。'
               '此操作不会删除配置文件。',
             ),
             actions: [
@@ -1092,10 +1071,7 @@ class _HomePageState extends State<HomePage> {
               child: Icon(icon, size: 21, color: colors.onPrimaryContainer),
             ),
             const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
           ],
         ),
       ),

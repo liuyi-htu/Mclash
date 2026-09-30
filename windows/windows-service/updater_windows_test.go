@@ -88,10 +88,10 @@ func TestActivateCoreUpdateRollsBackAndRestartsOnVerificationFailure(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(paths.SingBoxExe, []byte("old"), 0o755); err != nil {
+	if err := os.WriteFile(paths.MihomoExe, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	temporary := paths.SingBoxExe + ".update"
+	temporary := paths.MihomoExe + ".update"
 	if err := os.WriteFile(temporary, []byte("bad"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -103,13 +103,13 @@ func TestActivateCoreUpdateRollsBackAndRestartsOnVerificationFailure(t *testing.
 		func(appPaths) error { starts++; return nil },
 	)
 
-	err = activateCoreUpdate(paths, "sing-box", paths.SingBoxExe, temporary, "2.0.0", func(string) (string, error) {
+	err = activateCoreUpdate(paths, "mihomo", paths.MihomoExe, temporary, "2.0.0", func(string) (string, error) {
 		return "1.0.0", nil
 	})
 	if err == nil {
 		t.Fatal("expected version verification failure")
 	}
-	data, readErr := os.ReadFile(paths.SingBoxExe)
+	data, readErr := os.ReadFile(paths.MihomoExe)
 	if readErr != nil {
 		t.Fatal(readErr)
 	}

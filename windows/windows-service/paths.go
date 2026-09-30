@@ -15,25 +15,22 @@ const (
 )
 
 type appPaths struct {
-	BaseDir       string
-	DataDir       string
-	ServiceExe    string
-	MihomoExe     string
-	SingBoxExe    string
-	Config        string
-	SingBoxConfig string
-	Profiles      string
-	Logs          string
-	ServiceLog    string
-	MihomoLog     string
-	SingBoxLog    string
-	Settings      string
-	RuntimeState  string
-	LegacyState   string
-	ProxyBackup   string
-	GeoSite       string
-	GeoIP         string
-	CountryDB     string
+	BaseDir      string
+	DataDir      string
+	ServiceExe   string
+	MihomoExe    string
+	Config       string
+	Profiles     string
+	Logs         string
+	ServiceLog   string
+	MihomoLog    string
+	Settings     string
+	RuntimeState string
+	LegacyState  string
+	ProxyBackup  string
+	GeoSite      string
+	GeoIP        string
+	CountryDB    string
 }
 
 func resolvePaths(baseDir, dataDir string) (appPaths, error) {
@@ -56,24 +53,21 @@ func resolvePaths(baseDir, dataDir string) (appPaths, error) {
 		return appPaths{}, fmt.Errorf("resolve data directory: %w", err)
 	}
 	return appPaths{
-		BaseDir:       baseDir,
-		DataDir:       dataDir,
-		ServiceExe:    filepath.Join(baseDir, "MclashService.exe"),
-		MihomoExe:     filepath.Join(baseDir, "mihomo.exe"),
-		SingBoxExe:    filepath.Join(baseDir, "sing-box.exe"),
-		Config:        filepath.Join(dataDir, "config.yaml"),
-		SingBoxConfig: filepath.Join(dataDir, "sing-box.json"),
-		Profiles:      filepath.Join(dataDir, "profiles"),
-		Logs:          filepath.Join(dataDir, "logs"),
-		ServiceLog:    filepath.Join(dataDir, "logs", "service.log"),
-		MihomoLog:     filepath.Join(dataDir, "logs", "mihomo.log"),
-		SingBoxLog:    filepath.Join(dataDir, "logs", "sing-box.log"),
-		Settings:      filepath.Join(dataDir, "settings.json"),
-		RuntimeState:  filepath.Join(dataDir, "runtime-state.json"),
-		LegacyState:   filepath.Join(dataDir, "state.json"),
-		GeoSite:       filepath.Join(dataDir, "GeoSite.dat"),
-		GeoIP:         filepath.Join(dataDir, "GeoIP.dat"),
-		CountryDB:     filepath.Join(dataDir, "Country.mmdb"),
+		BaseDir:      baseDir,
+		DataDir:      dataDir,
+		ServiceExe:   filepath.Join(baseDir, "MclashService.exe"),
+		MihomoExe:    filepath.Join(baseDir, "mihomo.exe"),
+		Config:       filepath.Join(dataDir, "config.yaml"),
+		Profiles:     filepath.Join(dataDir, "profiles"),
+		Logs:         filepath.Join(dataDir, "logs"),
+		ServiceLog:   filepath.Join(dataDir, "logs", "service.log"),
+		MihomoLog:    filepath.Join(dataDir, "logs", "mihomo.log"),
+		Settings:     filepath.Join(dataDir, "settings.json"),
+		RuntimeState: filepath.Join(dataDir, "runtime-state.json"),
+		LegacyState:  filepath.Join(dataDir, "state.json"),
+		GeoSite:      filepath.Join(dataDir, "GeoSite.dat"),
+		GeoIP:        filepath.Join(dataDir, "GeoIP.dat"),
+		CountryDB:    filepath.Join(dataDir, "Country.mmdb"),
 	}, nil
 }
 

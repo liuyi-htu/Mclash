@@ -23,7 +23,6 @@ class _ConfigPageState extends State<ConfigPage> {
   bool _loading = true;
   bool _working = false;
   bool _testingSubscriptionUrl = false;
-  CoreType _coreType = CoreType.mihomo;
 
   @override
   void initState() {
@@ -33,11 +32,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _load() async {
     try {
-      final coreType = await _service.getCoreType();
       final profiles = await _service.getConfigs();
       if (!mounted) return;
       setState(() {
-        _coreType = coreType;
         _profiles = profiles;
         _loading = false;
       });
@@ -267,8 +264,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _showConfigDetails(ConfigProfile profile) async {
     if (widget.proxyRunning) {
-      await Navigator.of(context).push<void>(MaterialPageRoute(
-          builder: (_) => ConfigEditorPage(profile: profile)));
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(builder: (_) => ConfigEditorPage(profile: profile)),
+      );
       return;
     }
 
@@ -520,12 +518,12 @@ class _ConfigPageState extends State<ConfigPage> {
         await _testSubscriptionUrl(profile);
         return;
       case 'runtime':
-        await Navigator.of(context).push<void>(MaterialPageRoute(
-          builder: (_) => ConfigEditorPage(
-            profile: profile,
-            runtimeView: true,
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) =>
+                ConfigEditorPage(profile: profile, runtimeView: true),
           ),
-        ));
+        );
         return;
       case 'editContent':
         if (!_ensureStopped()) return;
@@ -628,28 +626,23 @@ class _ConfigPageState extends State<ConfigPage> {
                     children: [
                       const Icon(Icons.file_open_outlined),
                       const SizedBox(width: 12),
-                      Text(
-                        _coreType == CoreType.mihomo
-                            ? '导入 mihomo YAML'
-                            : '导入 sing-box JSON',
-                      ),
+                      Text('导入 mihomo YAML'),
                     ],
                   ),
                 ),
-                if (_coreType == CoreType.mihomo)
-                  const PopupMenuItem(
-                    value: _AddConfigAction.subscription,
-                    height: 48,
-                    padding: EdgeInsets.symmetric(horizontal: 14),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.cloud_download_outlined),
-                        SizedBox(width: 12),
-                        Text('添加机场订阅'),
-                      ],
-                    ),
+                const PopupMenuItem(
+                  value: _AddConfigAction.subscription,
+                  height: 48,
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.cloud_download_outlined),
+                      SizedBox(width: 12),
+                      Text('添加机场订阅'),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -778,9 +771,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                   ),
                                   const SizedBox(height: 7),
                                   Text(
-                                    _coreType == CoreType.mihomo
-                                        ? '点击右上角“＋”导入 mihomo YAML\n或添加机场订阅'
-                                        : '点击右上角“＋”导入 sing-box JSON',
+                                    '点击右上角“＋”导入 mihomo YAML\n或添加机场订阅',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: colors.onSurfaceVariant,
