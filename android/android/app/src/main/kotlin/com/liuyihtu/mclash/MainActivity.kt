@@ -68,11 +68,9 @@ class MainActivity : FlutterActivity() {
                 }
                 "exportDeviceRegistration" -> exportDeviceRegistration(result)
                 "getConfigInfo" -> runAsync(result, "mclash-config-info") {
-                    configStore.initializeDefaultSubscription()
                     configInfo()
                 }
-                "getConfigs" -> runAsync(result, "mclash-default-subscription") {
-                    configStore.initializeDefaultSubscription()
+                "getConfigs" -> runAsync(result, "mclash-config-list") {
                     configStore.listMaps()
                 }
                 "getProxyGroupOrder" -> result.success(configStore.proxyGroupOrder())

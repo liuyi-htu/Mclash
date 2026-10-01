@@ -30,7 +30,6 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   final String? _dataDirOverride;
   final String _defaultSubscriptionUrl;
-  bool _defaultDownloadAttempted = false;
   static const _bundledSubscriptionUrl =
       "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19";
   final String? _systemProxyBackupPathOverride;
@@ -407,8 +406,7 @@ public static class WinInetProxy {
 
   @override
   Future<ConfigInfo> getConfigInfo() async {
-    if (!_defaultDownloadAttempted &&
-        await File(_configPath).exists() &&
+    if (await File(_configPath).exists() &&
         (await File(_configPath).readAsString()).contains('# Mclash 默认机场订阅')) {
       await getConfigs();
     }
@@ -466,25 +464,6 @@ public static class WinInetProxy {
       });
       state = await _readSettings();
       active = _defaultProfileId;
-    }
-    if (!_defaultDownloadAttempted &&
-        _stateMap(state, 'profileTypes')[_defaultProfileId] == 'subscription' &&
-        await defaultProfile.exists() &&
-        (await defaultProfile.readAsString()).contains('# Mclash 默认机场订阅')) {
-      _defaultDownloadAttempted = true;
-      try {
-        await _requireConfigStopped();
-        final download = await _downloadSubscription(
-            _stateMap(state, 'profileUrls')[_defaultProfileId].toString());
-        await _requireConfigStopped();
-        await _writeSubscription(_defaultProfileId, download.content);
-        if (active == _defaultProfileId) {
-          await _replaceConfig(File(_configPath),
-              await _runtimeConfigForCurrentMode(download.content));
-        }
-      } catch (_) {
-        // Offline first launch keeps the subscription for a later manual refresh.
-      }
     }
     final rawNames = state['profileNames'];
     final names = rawNames is Map ? rawNames : const <String, dynamic>{};

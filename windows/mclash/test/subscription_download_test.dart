@@ -8,8 +8,7 @@ import 'package:yaml/yaml.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
-  test(
-      'first launch creates Cloudflare subscription and embeds downloaded nodes',
+  test('first launch lists Cloudflare without downloading until manual refresh',
       () async {
     final dir = await Directory.systemTemp.createTemp('default-subscription-');
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -36,6 +35,16 @@ void main() {
       expect(state['profileNames']['default.yaml'], 'Cloudflare');
       expect(state['profileTypes']['default.yaml'], 'subscription');
       expect(state['profileUrls']['default.yaml'], url);
+      await service.getConfigs();
+      await service.getConfigInfo();
+      await service.getConfigs();
+      expect(requests, 0);
+      final initial =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      expect(initial['proxies'], isEmpty);
+      expect(
+          await File('${dir.path}\\profiles\\default.yaml').exists(), isTrue);
+      await service.refreshSubscription('default.yaml');
       final runtime =
           loadYaml(await File('${dir.path}\\config.yaml').readAsString());
       expect(runtime['proxies'][0]['name'], 'KR default');
