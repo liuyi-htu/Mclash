@@ -85,4 +85,22 @@ class SubscriptionConfigTest {
         val groups = result["proxy-groups"] as List<*>
         assertEquals(listOf("DIRECT"), (groups[1] as Map<*, *>)["proxies"])
     }
+    @Test fun refreshPreservesManualNodesAndTheirHost() {
+        val source = "proxies: [{name: KR, type: ss}]"
+        val previous = """
+            # Mclash 手动节点: ["上海手动"]
+            proxies: [{name: 上海手动, type: vmess, network: ws, ws-opts: {headers: {Host: preset.example}}}]
+        """.trimIndent()
+        val text = SubscriptionConfig.build(template, source, previous)
+        val nodes = Yaml().load<Map<String, Any>>(text)["proxies"] as List<*>
+        assertEquals(2, nodes.size)
+        assertEquals("上海手动", (nodes[1] as Map<*, *>)["name"])
+        assertEquals("preset.example", ((((nodes[1] as Map<*, *>)["ws-opts"] as Map<*, *>)["headers"] as Map<*, *>)["Host"]))
+        assertTrue(text.contains("# Mclash 手动节点: [\"上海手动\"]"))
+        val repeated = SubscriptionConfig.build(template, "proxies: [{name: 上海手动, type: ss}]", text)
+        val refreshedNodes = Yaml().load<Map<String, Any>>(repeated)["proxies"] as List<*>
+        assertEquals(1, refreshedNodes.size)
+        assertEquals("vmess", (refreshedNodes[0] as Map<*, *>)["type"])
+    }
+
 }

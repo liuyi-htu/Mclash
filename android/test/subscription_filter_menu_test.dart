@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,7 +40,7 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    for (final name in ['国内正则表达式', '国外正则表达式', '修改 Host']) {
+    for (final name in ['国内正则表达式', '国外正则表达式', '修改 Host', '添加节点']) {
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
       expect(tile.enabled, isFalse);
@@ -153,6 +154,52 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'add node uses configured Host without a Host input or subscription request',
+      (tester) async {
+    String? saved;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') {
+        return '# Mclash HTTP/WS Host: "preset.example"\n$content';
+      }
+      if (call.method == 'saveConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        saved = call.arguments['content'] as String;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加节点'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'vmess://bad');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(saved, isNull);
+    final link = 'vmess://${base64Encode(utf8.encode(jsonEncode({
+          'ps': '上海手动',
+          'add': 'example.org',
+          'port': '443',
+          'id': '00000000-0000-4000-8000-000000000001',
+          'net': 'ws',
+          'host': 'link.example'
+        })))}';
+    await tester.enterText(find.byType(TextField), link);
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    final config = loadYaml(saved!);
+    expect(
+        config['proxies'][2]['ws-opts']['headers']['Host'], 'preset.example');
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海', '上海手动']);
     expect(tester.takeException(), isNull);
   });
 }
