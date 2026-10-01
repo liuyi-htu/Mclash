@@ -14,6 +14,25 @@ rules: [MATCH,DIRECT]
 ''';
 
 void main() {
+  test('global front proxies follow saved order serially across refresh', () {
+    final chained = setGlobalProxyChain(source, ['wap', 'KR'], prepend: true);
+    final yaml = loadYaml(chained);
+    expect(yaml['proxies'][0]['dialer-proxy'], 'KR');
+    expect(yaml['proxies'][1]['dialer-proxy'], 'wap');
+    expect(yaml['proxies'][2]['dialer-proxy'], isNull);
+    expect(readProxyChainGroups(chained), isEmpty);
+    final refreshed = loadYaml(applySavedProxyChains(source, chained));
+    expect(refreshed['proxies'][0]['dialer-proxy'], 'KR');
+    expect(refreshed['proxies'][1]['dialer-proxy'], 'wap');
+    final reordered =
+        setGlobalProxyChain(chained, ['KR', 'wap'], prepend: true);
+    final changed = loadYaml(reordered);
+    expect(changed['proxies'][0]['dialer-proxy'], 'wap');
+    expect(changed['proxies'][2]['dialer-proxy'], 'KR');
+    expect(changed['proxies'][1]['dialer-proxy'], isNull);
+    expect(readGlobalProxyChains(reordered)['front'], ['KR', 'wap']);
+  });
+
   test(
       'global front and back cover all normal nodes, including refreshed nodes',
       () {

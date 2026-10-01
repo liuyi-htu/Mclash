@@ -23,6 +23,18 @@ class SubscriptionConfigTest {
         assertEquals("updated.example", nodes.first { it["name"] == "KR" }["server"])
     }
 
+    @Test fun globalFrontNodesConnectSeriallyInSavedOrder() {
+        val subscription = "proxies: [{name: 上海, type: http}, {name: KR, type: http}, {name: wap, type: http}]"
+        for (front in listOf(listOf("wap", "KR"), listOf("KR", "wap"))) {
+            val previous = "# Mclash 全局链路: {\"front\":[${front.joinToString(",") { "\"$it\"" }}]}\nproxies: []"
+            val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template, subscription, previous))
+            val nodes = (result["proxies"] as List<*>).filterIsInstance<Map<*, *>>().associateBy { it["name"] }
+            assertEquals(front.last(), nodes["上海"]!!["dialer-proxy"])
+            assertEquals(front.first(), nodes[front.last()]!!["dialer-proxy"])
+            assertNull(nodes[front.first()]!!["dialer-proxy"])
+        }
+    }
+
     @Test fun globalChainsCoverNewNodesAndAvoidFrontBackCycles() {
         val previous = "# Mclash 全局链路: {\"front\":[\"wap\"],\"back\":[\"exit\"]}\nproxies: []"
         val subscription = "proxies: [{name: 上海, type: http}, {name: KR, type: http}, {name: wap, type: http}, {name: exit, type: http}]"

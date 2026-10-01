@@ -115,77 +115,79 @@ class _ConfigPageState extends State<ConfigPage> {
     final urlController = TextEditingController(text: existing?.url ?? '');
     String? validationMessage;
 
-    final save = await showDialog<bool>(
-          context: context,
-          barrierDismissible: !_working,
-          builder: (dialogContext) => StatefulBuilder(
-            builder: (dialogContext, setDialogState) => AlertDialog(
-              title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: '名称',
-                        hintText: '例如：我的机场',
+    final route = DialogRoute<bool>(
+      context: context,
+      barrierDismissible: !_working,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '名称',
+                    hintText: '例如：我的机场',
+                  ),
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: urlController,
+                  decoration: const InputDecoration(
+                    labelText: '订阅链接',
+                    hintText: 'https://...',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
+                ),
+                if (validationMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      validationMessage!,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
                       ),
-                      textInputAction: TextInputAction.next,
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: urlController,
-                      decoration: const InputDecoration(
-                        labelText: '订阅链接',
-                        hintText: 'https://...',
-                      ),
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                    ),
-                    if (validationMessage != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          validationMessage!,
-                          style: TextStyle(
-                            color: Theme.of(dialogContext).colorScheme.error,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    if (nameController.text.isEmpty) {
-                      setDialogState(() => validationMessage = '请输入名称');
-                      return;
-                    }
-                    if (urlController.text.isEmpty) {
-                      setDialogState(() => validationMessage = '请输入订阅链接');
-                      return;
-                    }
-                    Navigator.of(dialogContext).pop(true);
-                  },
-                  child: Text(existing == null ? '添加并下载' : '保存并更新'),
-                ),
+                  ),
+                ],
               ],
             ),
           ),
-        ) ??
-        false;
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (nameController.text.isEmpty) {
+                  setDialogState(() => validationMessage = '请输入名称');
+                  return;
+                }
+                if (urlController.text.isEmpty) {
+                  setDialogState(() => validationMessage = '请输入订阅链接');
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: Text(existing == null ? '添加并下载' : '保存并更新'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final save =
+        await Navigator.of(context, rootNavigator: true).push(route) ?? false;
+    await route.completed;
 
     final name = nameController.text;
     final url = urlController.text;
@@ -390,47 +392,49 @@ class _ConfigPageState extends State<ConfigPage> {
     final controller = TextEditingController(text: profile.name);
     String? validationMessage;
 
-    final shouldSave = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => StatefulBuilder(
-            builder: (dialogContext, setDialogState) => AlertDialog(
-              title: const Text('配置名称'),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: '名称',
-                  errorText: validationMessage,
-                ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) {
-                  if (controller.text.trim().isEmpty) {
-                    setDialogState(() => validationMessage = '请输入配置名称');
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(true);
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    if (controller.text.trim().isEmpty) {
-                      setDialogState(() => validationMessage = '请输入配置名称');
-                      return;
-                    }
-                    Navigator.of(dialogContext).pop(true);
-                  },
-                  child: const Text('保存'),
-                ),
-              ],
+    final route = DialogRoute<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('配置名称'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: '名称',
+              errorText: validationMessage,
             ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) {
+              if (controller.text.trim().isEmpty) {
+                setDialogState(() => validationMessage = '请输入配置名称');
+                return;
+              }
+              Navigator.of(dialogContext).pop(true);
+            },
           ),
-        ) ??
-        false;
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (controller.text.trim().isEmpty) {
+                  setDialogState(() => validationMessage = '请输入配置名称');
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final shouldSave =
+        await Navigator.of(context, rootNavigator: true).push(route) ?? false;
+    await route.completed;
 
     final name = controller.text.trim();
     controller.dispose();
@@ -549,6 +553,9 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         nodes: nodes,
         prepend: prepend,
+        initialNodes:
+            readGlobalProxyChains(content)[prepend ? 'front' : 'back'] ??
+                const [],
         onSave: (current, other) async {
           final latest = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
@@ -562,6 +569,16 @@ class _ConfigPageState extends State<ConfigPage> {
       if (mounted) _showError(error);
     } finally {
       if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _returnToActions(ConfigProfile profile) async {
+    if (!mounted) return;
+    for (final current in _profiles) {
+      if (current.id == profile.id) {
+        await _showActions(current);
+        return;
+      }
     }
   }
 
@@ -693,30 +710,38 @@ class _ConfigPageState extends State<ConfigPage> {
     switch (action) {
       case 'prependProxy':
         await _editProxyChain(profile, true);
+        await _returnToActions(profile);
         return;
       case 'appendProxy':
         await _editProxyChain(profile, false);
+        await _returnToActions(profile);
         return;
       case 'addNode':
         await _addNode(profile);
+        await _returnToActions(profile);
         return;
       case 'host':
         await _editSubscriptionHost(profile);
+        await _returnToActions(profile);
         return;
       case 'domesticFilter':
         await _editSubscriptionFilter(profile, domesticGroup);
+        await _returnToActions(profile);
         return;
       case 'foreignFilter':
         await _editSubscriptionFilter(profile, foreignGroup);
+        await _returnToActions(profile);
         return;
       case 'select':
         await _select(profile);
         return;
       case 'refresh':
         await _refreshSubscription(profile);
+        await _returnToActions(profile);
         return;
       case 'testUrl':
         await _testSubscriptionUrl(profile);
+        await _returnToActions(profile);
         return;
       case 'runtime':
         await Navigator.of(context).push<void>(MaterialPageRoute(
@@ -726,6 +751,7 @@ class _ConfigPageState extends State<ConfigPage> {
             proxyRunning: widget.proxyRunning,
           ),
         ));
+        await _returnToActions(profile);
         return;
       case 'editContent':
         if (profile.isSubscription) return;
@@ -739,15 +765,19 @@ class _ConfigPageState extends State<ConfigPage> {
           ),
         );
         await _load();
+        await _returnToActions(profile);
         return;
       case 'edit':
         await _showSubscriptionEditor(existing: profile);
+        await _returnToActions(profile);
         return;
       case 'rename':
         await _renameLocalProfile(profile);
+        await _returnToActions(profile);
         return;
       case 'delete':
         await _delete(profile);
+        await _returnToActions(profile);
         return;
     }
   }
