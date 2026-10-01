@@ -24,6 +24,28 @@ void main() {
       exists: true,
       updatedAt: 0);
 
+  testWidgets('subscription editor stays read-only with the proxy stopped',
+      (tester) async {
+    const subscription = ConfigProfile(
+        id: 'airport',
+        name: 'Airport',
+        type: 'subscription',
+        active: true,
+        exists: true,
+        updatedAt: 0);
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigEditorPage(
+            profile: subscription, service: _EditorService())));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    expect(find.byTooltip('保存'), findsNothing);
+    expect(find.text('订阅配置（只读）'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final scale in [1.0, 2.0]) {
     testWidgets('long lines stay on one row at text scale $scale',
         (tester) async {

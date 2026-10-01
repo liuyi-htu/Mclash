@@ -30,6 +30,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _jumpController = TextEditingController();
   final _editorScrollController = ScrollController();
   bool _readOnly = false;
+  bool _runtimeContent = false;
   Timer? _stateTimer;
   bool _checkingState = false;
   bool _loading = true;
@@ -63,7 +64,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     _checkingState = true;
     try {
       final running = await _service.isRunning();
-      if (mounted && running != _readOnly) await _load();
+      if (mounted && running != _runtimeContent) await _load();
     } catch (_) {
       // Keep the current view; native save guards still reject unsafe writes.
     } finally {
@@ -75,14 +76,17 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     try {
       final running = await _service.isRunning();
       if (!mounted) return;
-      setState(() => _readOnly = widget.runtimeView || running);
+      setState(() {
+        _runtimeContent = widget.runtimeView || running;
+        _readOnly = _runtimeContent || widget.profile.isSubscription;
+      });
       final content = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _lastText = content;
       _controller.removeListener(_handleTextChanged);
-      _readOnly = widget.runtimeView || running;
+      _readOnly = _runtimeContent || widget.profile.isSubscription;
       _dirty = false;
       _controller.text = content;
       _lineCount = _countLines(content);
@@ -218,7 +222,11 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(_readOnly ? '当前运行配置（只读）' : '修改配置'),
+          title: Text(_runtimeContent
+              ? '当前运行配置（只读）'
+              : _readOnly
+                  ? '订阅配置（只读）'
+                  : '修改配置'),
           actions: [
             IconButton(
                 onPressed: _loading ? null : _jumpToLine,

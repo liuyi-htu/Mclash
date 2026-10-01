@@ -17,7 +17,7 @@ typedef ServiceProcessRunner = Future<ProcessResult> Function(
 class WindowsProxyPlatformService implements ProxyPlatformService {
   WindowsProxyPlatformService({
     String? dataDir,
-    this.subscriptionDownloadTimeout = const Duration(seconds: 25),
+    this.subscriptionIdleTimeout = const Duration(seconds: 30),
     String? systemProxyBackupPath,
     RegistryProcessRunner? registryProcessRunner,
     ServiceProcessRunner? serviceProcessRunner,
@@ -26,7 +26,7 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
         _registryProcessRunner = registryProcessRunner,
         _serviceProcessRunner = serviceProcessRunner;
 
-  final Duration subscriptionDownloadTimeout;
+  final Duration subscriptionIdleTimeout;
   final String? _dataDirOverride;
   final String? _systemProxyBackupPathOverride;
   final RegistryProcessRunner? _registryProcessRunner;
@@ -947,7 +947,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       {String? previousConfig}) async {
     final uri = _subscriptionUri(url);
     final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 10)
+      ..connectionTimeout = const Duration(seconds: 15)
       ..userAgent = 'clash.meta';
     try {
       return await (() async {
@@ -960,9 +960,9 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         );
         request.headers.set(HttpHeaders.userAgentHeader, 'clash.meta');
         final stopwatch = Stopwatch()..start();
-        final response = await request.close();
+        final response = await request.close().timeout(subscriptionIdleTimeout);
         final bytes = <int>[];
-        await for (final chunk in response) {
+        await for (final chunk in response.timeout(subscriptionIdleTimeout)) {
           bytes.addAll(chunk);
           if (bytes.length > 16 * 1024 * 1024) {
             throw StateError('订阅内容超过 16 MB 限制。');
@@ -997,8 +997,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           contentType: contentType,
           contentLength: bytes.length,
         );
-      })()
-          .timeout(subscriptionDownloadTimeout);
+      })();
     } on TimeoutException {
       throw StateError('连接订阅服务器超时。');
     } finally {
