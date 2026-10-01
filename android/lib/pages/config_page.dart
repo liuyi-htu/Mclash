@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../shared/node_link.dart';
+import '../shared/add_node_dialog.dart';
 import '../shared/subscription_host.dart';
 import '../shared/subscription_host_dialog.dart';
 import '../shared/subscription_filter.dart';
@@ -516,6 +518,25 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  Future<void> _addNode(ConfigProfile profile) async {
+    if (!_ensureStopped()) return;
+    try {
+      final saved = await showAddNodeDialog(
+        context: context,
+        onSave: (link) async {
+          final content = await _service.getConfigContent(profile.id);
+          await _service.saveConfigContent(
+            id: profile.id,
+            content: addNodeLink(content, link),
+          );
+        },
+      );
+      if (saved && mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
   Future<void> _showActions(ConfigProfile profile) async {
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -559,6 +580,12 @@ class _ConfigPageState extends State<ConfigPage> {
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('rename'),
                   ),
+                ListTile(
+                  leading: const Icon(Icons.add_link),
+                  title: const Text('添加节点'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('addNode'),
+                ),
                 ListTile(
                   leading: const Icon(Icons.code_outlined),
                   title: const Text('修改配置文件'),
@@ -620,6 +647,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
+      case 'addNode':
+        await _addNode(profile);
+        return;
       case 'host':
         await _editSubscriptionHost(profile);
         return;

@@ -13,8 +13,16 @@ internal object SubscriptionConfig {
         }))
         val source = loader.load<Any>(subscription.removePrefix("\uFEFF")) as? Map<*, *>
             ?: error("订阅内容必须是 mihomo YAML 配置")
-        val nodes = source["proxies"] as? List<*>
-        require(!nodes.isNullOrEmpty()) { "订阅没有可内置的 proxies 节点，请使用包含节点的 Mihomo 订阅" }
+        val downloaded = source["proxies"] as? List<*>
+        require(!downloaded.isNullOrEmpty()) { "订阅没有可内置的 proxies 节点，请使用包含节点的 Mihomo 订阅" }
+        val manualPrefix = "# Mclash 手动节点: "
+        val manualComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(manualPrefix) }
+        val manualNames = manualComment?.let { loader.load<List<String>>(it.removePrefix(manualPrefix)) }.orEmpty()
+        val previous = previousConfig?.let { loader.load<Any>(it) } as? Map<*, *>
+        val manual = (previous?.get("proxies") as? List<*>).orEmpty().filterIsInstance<Map<*, *>>()
+            .filter { it["name"] in manualNames }
+        val retainedNames = manual.map { it["name"] }.toSet()
+        val nodes = downloaded.filter { (it as? Map<*, *>)?.get("name") !in retainedNames } + manual
         val names = nodes.map { node ->
             require(node is Map<*, *>) { "订阅节点格式无效" }
             val name = node["name"] as? String
@@ -54,7 +62,6 @@ internal object SubscriptionConfig {
         }
         val regionNames = listOf("🚀 国内", "🌍 国外")
         val prefixes = listOf("# Mclash 国内正则: ", "# Mclash 国外正则: ")
-        val previous = previousConfig?.let { loader.load<Any>(it) } as? Map<*, *>
         val previousGroups = (previous?.get("proxy-groups") as? List<*>).orEmpty()
             .filterIsInstance<Map<*, *>>()
         val filters = regionNames.mapIndexed { index, name ->
@@ -80,7 +87,8 @@ internal object SubscriptionConfig {
             group
         }
         val header = prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) } +
-            (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}")
+            (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +
+            (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]")
         return Yaml(DumperOptions().apply {
             defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
         }).dump(config).let { "$header\n$it" }

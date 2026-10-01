@@ -2,17 +2,19 @@ import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 import 'subscription_filter.dart';
 import 'subscription_host.dart';
+import 'node_link.dart';
 
 /// Keeps the bundled routing policy and embeds only downloaded proxy nodes.
 String buildSubscriptionConfig(String template, String subscription,
     {String? previousConfig}) {
   final source = loadYaml(subscription);
-  final nodes = source is YamlMap ? source['proxies'] : null;
-  if (nodes is! YamlList || nodes.isEmpty) {
+  final downloaded = source is YamlMap ? source['proxies'] : null;
+  if (downloaded is! YamlList || downloaded.isEmpty) {
     throw const FormatException(
       '订阅没有可内置的 proxies 节点，请使用包含节点的 Mihomo 订阅',
     );
   }
+  final nodes = mergeManualNodes(downloaded, previousConfig);
   final names = <String>[];
   for (final node in nodes) {
     if (node is! YamlMap ||
@@ -52,5 +54,7 @@ String buildSubscriptionConfig(String template, String subscription,
       name: readSubscriptionFilter(previousConfig ?? template, name),
   });
   final host = readSubscriptionHost(previousConfig ?? template);
-  return host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
+  final result = host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
+  return writeManualNodeNames(
+      result, readManualNodeNames(previousConfig ?? ''));
 }
