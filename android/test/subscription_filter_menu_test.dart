@@ -167,6 +167,44 @@ rules: [MATCH,DIRECT]
     expect(tester.takeException(), isNull);
   });
   testWidgets(
+      'node dialog lists only manual nodes and deletes them without downloading',
+      (tester) async {
+    var saved =
+        '# Mclash 手动节点: ["上海手动"]\nproxies: [{name: KR机场, type: http, server: airport.example, port: 80}, {name: 上海手动, type: http, server: manual.example, port: 80}]\nproxy-groups: [{name: 🚀 国内, type: select, proxies: [DIRECT, 上海手动]}, {name: 🌍 国外, type: select, proxies: [KR机场]}]';
+    var deletes = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') return saved;
+      if (call.method == 'saveConfigContent') {
+        saved = call.arguments['content'] as String;
+        deletes++;
+        return [profile];
+      }
+      throw StateError('Unexpected subscription request: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加节点'));
+    await tester.pumpAndSettle();
+    expect(find.text('手动添加的节点（1）'), findsOneWidget);
+    expect(find.text('上海手动'), findsOneWidget);
+    expect(find.text('KR机场'), findsNothing);
+    await tester.tap(find.byTooltip('删除手动节点'));
+    await tester.pumpAndSettle();
+    expect(find.text('暂无手动节点'), findsOneWidget);
+    expect(deletes, 1);
+    expect(loadYaml(saved)['proxies'].length, 1);
+    expect(loadYaml(saved)['proxies'][0]['name'], 'KR机场');
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'add node uses configured Host without a Host input or subscription request',
       (tester) async {
     String? saved;
@@ -191,9 +229,9 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('已添加的节点（2）'), findsOneWidget);
-    expect(find.text('上海'), findsOneWidget);
-    expect(find.text('KR'), findsOneWidget);
+    expect(find.text('手动添加的节点（0）'), findsOneWidget);
+    expect(find.text('上海'), findsNothing);
+    expect(find.text('KR'), findsNothing);
     await tester.enterText(find.byType(TextField), 'vmess://bad');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();

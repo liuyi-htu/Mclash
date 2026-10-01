@@ -1,3 +1,5 @@
+import 'package:mclash/shared/proxy_chain.dart';
+import 'package:mclash/shared/subscription_filter.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,35 @@ String linkFor(Map<String, dynamic> overrides) =>
 
 void main() {
   final template = File('../assets/default-config.yaml').readAsStringSync();
+  test('explicit Host, filter and chain settings still apply to manual nodes',
+      () {
+    final manual = addNodeLink(template, linkFor({}));
+    final edited = editSubscriptionHost(manual, 'explicit.example');
+    expect(loadYaml(edited)['proxies'][0]['http-opts']['headers']['Host'],
+        ['explicit.example']);
+    final filtered =
+        editSubscriptionFilter(edited, domesticGroup, '__no_match__');
+    expect(loadYaml(filtered)['proxy-groups'][0]['proxies'], ['DIRECT']);
+    final withFront = addNodeLink(filtered, 'http://10.0.0.200/#front');
+    final chained = setGlobalProxyChain(withFront, ['front'], prepend: true);
+    expect(loadYaml(chained)['proxies'][0]['dialer-proxy'], 'front');
+    expect(savedManualNodeNames(chained), ['上海手动', 'front']);
+  });
+  test('deleting manual nodes removes references and rejects airport nodes',
+      () {
+    const content =
+        '# Mclash 手动节点: ["Manual"]\n# Mclash 节点链路: {"Airport":"Manual"}\n# Mclash 链路代理组: {"Chain":["Manual"]}\n# Mclash 全局链路: {"front":["Manual"]}\nproxies: [{name: Airport, type: http, server: airport.example, port: 80, dialer-proxy: Manual}, {name: Manual, type: http, server: manual.example, port: 80}]\nproxy-groups: [{name: Region, type: select, proxies: [Manual]}, {name: Chain, type: select, proxies: [Manual]}]';
+    expect(savedManualNodeNames(content), ['Manual']);
+    expect(() => deleteManualNode(content, 'Airport'), throwsFormatException);
+    final result = deleteManualNode(content, 'Manual');
+    final config = loadYaml(result);
+    expect(savedManualNodeNames(result), isEmpty);
+    expect(config['proxies'].length, 1);
+    expect(config['proxies'][0]['name'], 'Airport');
+    expect(config['proxies'][0]['dialer-proxy'], isNull);
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT']);
+    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
+  });
   test('TCP HTTP disguise imports as HTTP with integer port and Host list', () {
     final node = parseVmessLink(linkFor({}));
     expect(node['network'], 'http');

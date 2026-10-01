@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 Future<bool> showAddNodeDialog({
   required BuildContext context,
   required List<String> nodes,
+  required Future<List<String>> Function(String name) onDelete,
   required Future<void> Function(String link) onSave,
 }) async {
   final controller = TextEditingController();
   var saving = false;
+  var changed = false;
+  var manualNodes = List<String>.from(nodes);
   String? error;
   try {
     return await showDialog<bool>(
@@ -22,19 +25,49 @@ Future<bool> showAddNodeDialog({
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('已添加的节点（${nodes.length}）'),
+                      Text('手动添加的节点（${manualNodes.length}）'),
                       const SizedBox(height: 8),
-                      if (nodes.isEmpty)
-                        const Text('暂无节点')
+                      if (manualNodes.isEmpty)
+                        const Text('暂无手动节点')
                       else
                         SizedBox(
                           width: double.maxFinite,
                           height: MediaQuery.sizeOf(context).height * 0.22,
                           child: ListView.builder(
-                            itemCount: nodes.length,
+                            itemCount: manualNodes.length,
                             itemBuilder: (context, index) => ListTile(
                               dense: true,
-                              title: Text(nodes[index]),
+                              title: Text(manualNodes[index]),
+                              trailing: IconButton(
+                                tooltip: '删除手动节点',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: saving
+                                    ? null
+                                    : () async {
+                                        setDialogState(() {
+                                          saving = true;
+                                          error = null;
+                                        });
+                                        try {
+                                          final remaining = await onDelete(
+                                              manualNodes[index]);
+                                          if (context.mounted) {
+                                            setDialogState(() {
+                                              manualNodes = remaining;
+                                              changed = true;
+                                              saving = false;
+                                            });
+                                          }
+                                        } catch (failure) {
+                                          if (context.mounted) {
+                                            setDialogState(() {
+                                              saving = false;
+                                              error = failure.toString();
+                                            });
+                                          }
+                                        }
+                                      },
+                              ),
                             ),
                           ),
                         ),
@@ -55,9 +88,10 @@ Future<bool> showAddNodeDialog({
                 ),
                 actions: [
                   TextButton(
-                    onPressed:
-                        saving ? null : () => Navigator.of(context).pop(false),
-                    child: const Text('取消'),
+                    onPressed: saving
+                        ? null
+                        : () => Navigator.of(context).pop(changed),
+                    child: Text(changed ? '关闭' : '取消'),
                   ),
                   FilledButton(
                     onPressed: saving
@@ -88,7 +122,7 @@ Future<bool> showAddNodeDialog({
             ),
           ),
         ) ??
-        false;
+        changed;
   } finally {
     // Let the dialog finish its closing animation before disposing its field.
     await Future<void>.delayed(const Duration(milliseconds: 300));

@@ -854,7 +854,8 @@ class _NodeButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   name,
-                  maxLines: 2,
+                  maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,

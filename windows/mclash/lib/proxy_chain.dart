@@ -228,3 +228,40 @@ String setProxyChains(String content, List<String> current, List<String> other,
 String setProxyChain(String content, String current, String other,
         {required bool prepend}) =>
     setProxyChains(content, [current], [other], prepend: prepend);
+
+void validateProxyChains(String content) {
+  final config = loadYaml(content) as YamlMap;
+  _validateChains({
+    for (final node in config['proxies'] as List? ?? [])
+      if (node['dialer-proxy'] is String)
+        node['name'] as String: [node['dialer-proxy'] as String],
+    for (final group in config['proxy-groups'] as List? ?? [])
+      group['name'] as String:
+          List<String>.from(group['proxies'] as List? ?? []),
+  });
+}
+
+String removeProxyChainNode(String content, String name) {
+  final overrides = readProxyChains(content)
+    ..removeWhere((target, upstream) => target == name || upstream == name);
+  final managed = readProxyChainGroups(content);
+  for (final members in managed.values) {
+    members.removeWhere((member) => member == name);
+  }
+  final roles = readGlobalProxyChains(content);
+  for (final members in roles.values) {
+    members.removeWhere((member) => member == name);
+  }
+  roles.removeWhere((_, members) => members.isEmpty);
+  final names = savedProxyNodeNames(content);
+  if (!names
+      .any((node) => !roles.values.any((members) => members.contains(node)))) {
+    roles.clear();
+  }
+  final body = content
+      .split('\n')
+      .where((line) => !line.startsWith(_globalPrefix))
+      .join('\n');
+  final result = _writeMetadata(body, overrides, managed);
+  return roles.isEmpty ? result : '$_globalPrefix${jsonEncode(roles)}\n$result';
+}
