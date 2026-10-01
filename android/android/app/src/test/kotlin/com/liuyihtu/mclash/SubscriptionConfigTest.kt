@@ -42,6 +42,38 @@ class SubscriptionConfigTest {
         assertTrue(text.contains("# Mclash 国内正则: \"广州\""))
     }
 
+
+    @Test fun preservesHostForVmessHttpAndWsOnlyOnRefresh() {
+        val source = """
+            proxies:
+              - {name: KR-http, type: vmess, network: http, server: origin.example, servername: tls.example, http-opts: {path: [/abc], headers: {host: [old.example], X-Test: [keep]}}}
+              - {name: KR-ws, type: vmess, network: ws, ws-opts: {path: /ws, headers: {Host: old.example, X-Test: keep}}}
+              - {name: KR-new, type: vmess, network: ws}
+              - {name: KR-vless, type: vless, network: ws, ws-opts: {headers: {Host: original.example}}}
+              - {name: KR-h2, type: vmess, network: h2, h2-opts: {host: [original.example]}}
+              - {name: KR-tcp, type: vmess, network: tcp}
+        """.trimIndent()
+        val previous = "# Mclash HTTP/WS Host: \"new.example\"\n" + SubscriptionConfig.build(template, source)
+        val text = SubscriptionConfig.build(template, source, previous)
+        val nodes = Yaml().load<Map<String, Any>>(text)["proxies"] as List<*>
+        val original = Yaml().load<Map<String, Any>>(source)["proxies"] as List<*>
+        val httpNode = nodes[0] as Map<*, *>
+        val httpOptions = httpNode["http-opts"] as Map<*, *>
+        val httpHeaders = httpOptions["headers"] as Map<*, *>
+        assertEquals(listOf("new.example"), httpHeaders["Host"])
+        assertFalse(httpHeaders.containsKey("host"))
+        assertEquals(listOf("keep"), httpHeaders["X-Test"])
+        assertEquals(listOf("/abc"), httpOptions["path"])
+        assertEquals("origin.example", httpNode["server"])
+        assertEquals("tls.example", httpNode["servername"])
+        for (i in 1..2) {
+            assertEquals("new.example", (((nodes[i] as Map<*, *>)["ws-opts"] as Map<*, *>)["headers"] as Map<*, *>)["Host"])
+        }
+        assertEquals("/ws", ((nodes[1] as Map<*, *>)["ws-opts"] as Map<*, *>)["path"])
+        for (i in 3..5) assertEquals(original[i], nodes[i])
+        assertTrue(text.contains("# Mclash HTTP/WS Host: \"new.example\""))
+    }
+
     @Test fun rejectsInvalidNodesAndFallsBackForMissingRegions() {
         for (source in listOf("proxies: []", "proxy-providers: {}", "proxies: [bad]",
             "proxies: [{name: DIRECT, type: ss}]",

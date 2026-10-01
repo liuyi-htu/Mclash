@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../shared/subscription_host.dart';
+import '../shared/subscription_host_dialog.dart';
 import '../shared/subscription_filter.dart';
 import '../shared/subscription_filter_dialog.dart';
 
@@ -472,6 +474,32 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  Future<void> _editSubscriptionHost(ConfigProfile profile) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      if (!mounted) return;
+      setState(() => _working = false);
+      final saved = await showSubscriptionHostDialog(
+        context: context,
+        initialHost: readSubscriptionHost(content),
+        onSave: (value) async {
+          final latest = await _service.getConfigContent(profile.id);
+          await _service.saveConfigContent(
+            id: profile.id,
+            content: editSubscriptionHost(latest, value),
+          );
+        },
+      );
+      if (saved && mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _showActions(ConfigProfile profile) async {
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -535,6 +563,12 @@ class _ConfigPageState extends State<ConfigPage> {
                 if (profile.isSubscription) ...[
                   const Divider(height: 1),
                   ListTile(
+                    leading: const Icon(Icons.dns_outlined),
+                    title: const Text('修改 Host'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('host'),
+                  ),
+                  ListTile(
                     leading: const Icon(Icons.filter_alt_outlined),
                     title: const Text('国内正则表达式'),
                     enabled: !widget.proxyRunning,
@@ -570,6 +604,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
+      case 'host':
+        await _editSubscriptionHost(profile);
+        return;
       case 'domesticFilter':
         await _editSubscriptionFilter(profile, domesticGroup);
         return;
