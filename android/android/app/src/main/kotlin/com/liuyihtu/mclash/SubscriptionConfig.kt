@@ -28,7 +28,30 @@ internal object SubscriptionConfig {
             groups.map { (it as Map<*, *>)["name"] }
         require(names.none { it in reserved }) { "订阅节点名称与默认策略冲突" }
         config.remove("proxy-providers")
-        config["proxies"] = nodes
+        val hostPrefix = "# Mclash HTTP/WS Host: "
+        val hostComment = (previousConfig ?: template).lineSequence()
+            .firstOrNull { it.startsWith(hostPrefix) }
+        val host = hostComment?.let { loader.load<String>(it.removePrefix(hostPrefix)) }
+        config["proxies"] = if (host.isNullOrEmpty()) nodes else {
+            require(host.none { it.isWhitespace() || it in "/\\?#" }) { "Host 格式无效" }
+            nodes.map { item ->
+                @Suppress("UNCHECKED_CAST")
+                val node = item as Map<String, Any?>
+                val network = node["network"]
+                if (node["type"] != "vmess" || (network != "http" && network != "ws")) node
+                else {
+                    val key = if (network == "http") "http-opts" else "ws-opts"
+                    @Suppress("UNCHECKED_CAST")
+                    val options = (node[key] as? Map<String, Any?>).orEmpty().toMutableMap()
+                    @Suppress("UNCHECKED_CAST")
+                    val headers = (options["headers"] as? Map<String, Any?>).orEmpty().toMutableMap()
+                    headers.keys.filter { it.equals("host", ignoreCase = true) }.forEach { headers.remove(it) }
+                    headers["Host"] = if (network == "http") listOf(host) else host
+                    options["headers"] = headers
+                    node.toMutableMap().apply { this[key] = options }
+                }
+            }
+        }
         val regionNames = listOf("🚀 国内", "🌍 国外")
         val prefixes = listOf("# Mclash 国内正则: ", "# Mclash 国外正则: ")
         val previous = previousConfig?.let { loader.load<Any>(it) } as? Map<*, *>
@@ -56,7 +79,8 @@ internal object SubscriptionConfig {
             }
             group
         }
-        val header = prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) }
+        val header = prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) } +
+            (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}")
         return Yaml(DumperOptions().apply {
             defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
         }).dump(config).let { "$header\n$it" }

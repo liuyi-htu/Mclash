@@ -1,6 +1,7 @@
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 import 'subscription_filter.dart';
+import 'subscription_host.dart';
 
 /// Keeps the bundled routing policy and embeds only downloaded proxy nodes.
 String buildSubscriptionConfig(String template, String subscription,
@@ -46,8 +47,10 @@ String buildSubscriptionConfig(String template, String subscription,
     final group = groups[i] as YamlMap;
     if (group.containsKey('use')) editor.remove(['proxy-groups', i, 'use']);
   }
-  return applySubscriptionFilters(editor.toString(), {
+  final filtered = applySubscriptionFilters(editor.toString(), {
     for (final name in defaultSubscriptionFilters.keys)
       name: readSubscriptionFilter(previousConfig ?? template, name),
   });
+  final host = readSubscriptionHost(previousConfig ?? template);
+  return host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
 }

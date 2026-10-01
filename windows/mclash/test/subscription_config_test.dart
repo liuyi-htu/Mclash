@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/subscription_config.dart';
 import 'package:mclash/subscription_filter.dart';
+import 'package:mclash/subscription_host.dart';
+import 'subscription_host_test.dart' show hostSource;
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -53,6 +55,20 @@ dns: {enable: false}
         '广州');
     expect(config['proxy-groups'][1]['proxies'].length, 3);
     expect(config['proxy-groups'][0]['filter'], isNull);
+  });
+  test('refresh retains Host override and applies it only to VMess HTTP/WS',
+      () {
+    final previous = editSubscriptionHost(
+        buildSubscriptionConfig(template, hostSource), 'new.example');
+    final refreshed =
+        buildSubscriptionConfig(template, hostSource, previousConfig: previous);
+    final nodes = loadYaml(refreshed)['proxies'];
+    expect(nodes[0]['http-opts']['headers']['Host'], ['new.example']);
+    expect(nodes[1]['ws-opts']['headers']['Host'], 'new.example');
+    expect(nodes[2]['ws-opts']['headers']['Host'], 'new.example');
+    expect(nodes[3], loadYaml(hostSource)['proxies'][3]);
+    expect(nodes[4], loadYaml(hostSource)['proxies'][4]);
+    expect(readSubscriptionHost(refreshed), 'new.example');
   });
   test('rejects empty, provider-only, malformed and conflicting nodes', () {
     for (final source in [

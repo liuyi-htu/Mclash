@@ -39,7 +39,7 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    for (final name in ['国内正则表达式', '国外正则表达式']) {
+    for (final name in ['国内正则表达式', '国外正则表达式', '修改 Host']) {
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
       expect(tile.enabled, isFalse);
@@ -95,6 +95,58 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'KR');
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'Host menu validates, saves the selected profile and cancels safely',
+      (tester) async {
+    String? saved;
+    var saves = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') {
+        return saved ?? 'proxies: [{name: KR, type: vmess, network: ws}]';
+      }
+      if (call.method == 'saveConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        saved = call.arguments['content'] as String;
+        saves++;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('修改 Host'));
+    await tester.tap(find.text('修改 Host'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'http://example.com');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    expect(
+        tester.widget<TextField>(find.byType(TextField)).decoration!.errorText,
+        isNotNull);
+    await tester.enterText(find.byType(TextField), 'new.example');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(loadYaml(saved!)['proxies'][0]['ws-opts']['headers']['Host'],
+        'new.example');
+    expect(saves, 1);
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('修改 Host'));
+    await tester.tap(find.text('修改 Host'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'new.example');
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
