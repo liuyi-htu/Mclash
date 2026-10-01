@@ -18,6 +18,7 @@ internal data class ConfigProfile(
     val type: String,
     val url: String?,
     val updatedAt: Long,
+    val subscriptionUserInfo: String? = null,
 )
 
 internal class ConfigStore(private val context: Context) {
@@ -72,6 +73,7 @@ internal class ConfigStore(private val context: Context) {
                 "type" to profile.type,
                 "url" to profile.url,
                 "updatedAt" to profile.updatedAt,
+                "subscriptionUserInfo" to profile.subscriptionUserInfo,
                 "active" to (profile.id == activeId),
                 "exists" to profileFile(profile.id).isFile,
             )
@@ -124,13 +126,15 @@ internal class ConfigStore(private val context: Context) {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
 
-        val bytes = downloadSubscription(rawUrl)
+        val download = downloadSubscription(rawUrl)
+        val bytes = download.bytes
         val profile = ConfigProfile(
             id = UUID.randomUUID().toString(),
             name = name,
             type = TYPE_SUBSCRIPTION,
             url = rawUrl,
             updatedAt = System.currentTimeMillis(),
+            subscriptionUserInfo = download.userInfo,
         )
         writeAtomically(profileFile(profile.id), bytes)
 
@@ -154,11 +158,13 @@ internal class ConfigStore(private val context: Context) {
         require(index >= 0) { "找不到订阅配置" }
         require(profiles[index].type == TYPE_SUBSCRIPTION) { "本地配置不能修改为订阅" }
 
-        val bytes = downloadSubscription(rawUrl, profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8))
+        val download = downloadSubscription(rawUrl, profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8))
+        val bytes = download.bytes
         val updated = profiles[index].copy(
             name = name,
             url = rawUrl,
             updatedAt = System.currentTimeMillis(),
+            subscriptionUserInfo = download.userInfo,
         )
         profiles[index] = updated
         writeConfigAndProfiles(id, bytes, profiles)
@@ -295,7 +301,9 @@ internal class ConfigStore(private val context: Context) {
         QuickSettingsTileUpdater.request(context)
     }
 
-    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null): ByteArray {
+    private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?)
+
+    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null): SubscriptionDownload {
         val parsed = URL(rawUrl)
         require(parsed.protocol == "http" || parsed.protocol == "https") {
             "订阅链接只支持 http:// 或 https://"
@@ -333,7 +341,10 @@ internal class ConfigStore(private val context: Context) {
 
             val bytes = input.use(::readStreamWithLimit)
 
-            return buildSubscriptionConfig(bytes, previousConfig)
+            return SubscriptionDownload(
+                bytes = buildSubscriptionConfig(bytes, previousConfig),
+                userInfo = connection.getHeaderField("Subscription-Userinfo"),
+            )
         } finally {
             connection.disconnect()
         }
@@ -471,6 +482,8 @@ internal class ConfigStore(private val context: Context) {
                 type = type,
                 url = url,
                 updatedAt = item.optLong("updatedAt", 0L),
+                subscriptionUserInfo = if (item.isNull("subscriptionUserInfo")) null
+                    else item.optString("subscriptionUserInfo"),
             )
         }
         return profiles
@@ -485,7 +498,8 @@ internal class ConfigStore(private val context: Context) {
                     .put("name", profile.name)
                     .put("type", profile.type)
                     .put("url", profile.url ?: JSONObject.NULL)
-                    .put("updatedAt", profile.updatedAt),
+                    .put("updatedAt", profile.updatedAt)
+                    .put("subscriptionUserInfo", profile.subscriptionUserInfo ?: JSONObject.NULL),
             )
         }
         preferences.configProfilesJson = array.toString()

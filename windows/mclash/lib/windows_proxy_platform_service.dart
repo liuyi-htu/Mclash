@@ -482,6 +482,8 @@ public static class WinInetProxy {
               ? 'subscription'
               : 'local',
           url: urls[id]?.toString(),
+          subscriptionUserInfo:
+              _stateMap(state, 'profileSubscriptionInfo')[id]?.toString(),
           active: active == id,
           exists: true,
           updatedAt: stat.modified.millisecondsSinceEpoch,
@@ -828,6 +830,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
+      'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
+        ..remove(id),
       if (deletingDefault) 'defaultProfileDeleted': true,
       if (deletingActive) 'activeProfile': null,
       if (state['activeMihomoProfile'] == id) 'activeMihomoProfile': null,
@@ -996,6 +1000,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           statusCode: response.statusCode,
           contentType: contentType,
           contentLength: bytes.length,
+          subscriptionUserInfo: response.headers.value('subscription-userinfo'),
         );
       })();
     } on TimeoutException {
@@ -1039,6 +1044,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
+      'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
+        ..[id] = download.subscriptionUserInfo,
     });
     return getConfigs();
   }
@@ -1066,6 +1073,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     await _updateSettings(<String, dynamic>{
       'profileNames': names,
       'profileUrls': urls,
+      'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
+        ..[id] = download.subscriptionUserInfo,
     });
     if (state['activeProfile'] == id) {
       await File(_configPath).writeAsString(
@@ -1089,6 +1098,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         previousConfig: await _subscriptionContent(id));
     await _requireConfigStopped();
     await _writeSubscription(id, download.content);
+    await _updateSettings({
+      'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
+        ..[id] = download.subscriptionUserInfo
+    });
     if (state['activeProfile'] == id) {
       await File(_configPath).writeAsString(
         await _runtimeConfigForCurrentMode(download.content),
@@ -1129,6 +1142,7 @@ class _SubscriptionDownload {
     required this.statusCode,
     required this.contentLength,
     required this.contentType,
+    this.subscriptionUserInfo,
   });
 
   final String content;
@@ -1136,6 +1150,7 @@ class _SubscriptionDownload {
   final int statusCode;
   final int contentLength;
   final String? contentType;
+  final String? subscriptionUserInfo;
 }
 
 class _RuntimePreferences {

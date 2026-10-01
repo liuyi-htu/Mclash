@@ -28,7 +28,7 @@ Future<bool> showSubscriptionHostDialog({
                         minLines: 1,
                         maxLines: 1,
                         decoration: InputDecoration(
-                          labelText: 'HTTP / WS Host',
+                          labelText: 'VMess HTTP / WS Host',
                           errorText: error,
                           errorMaxLines: 8,
                         ),

@@ -16,6 +16,7 @@ void main() {
     'exists': true,
     'updatedAt': 0,
     'url': 'https://example.org/sub',
+    'subscriptionUserInfo': 'upload=0;download=0;total=1073741824;expire=0',
   };
   const content = '''
 proxies: [{name: 上海, type: ss}, {name: KR, type: ss}]
@@ -42,6 +43,8 @@ rules: [MATCH,DIRECT]
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
+    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
       '国内正则表达式',
       '国外正则表达式',

@@ -137,7 +137,11 @@ void main() {
     final dir = await Directory.systemTemp.createTemp('subscription-download-');
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     var response = 'proxies: [{name: HK first, type: ss, server: example.org}]';
+    String? userInfo = 'upload=10;download=100;total=1000;expire=2000000000';
     server.listen((request) async {
+      if (userInfo != null) {
+        request.response.headers.set('Subscription-Userinfo', userInfo);
+      }
       request.response.write(response);
       await request.response.close();
     });
@@ -152,6 +156,7 @@ void main() {
       final settings =
           jsonDecode(await File('${dir.path}\\settings.json').readAsString());
       final id = (settings['profileUrls'] as Map).keys.single as String;
+      expect(settings['profileSubscriptionInfo'][id], userInfo);
       final file = File('${dir.path}\\profiles\\$id');
       var config = loadYaml(await file.readAsString());
       expect(config['proxy-providers'], isNull);
@@ -172,18 +177,30 @@ void main() {
           '广州');
       response =
           'proxies: [{name: 广州 refreshed, type: ss, server: example.org}]';
+      userInfo = 'upload=10;download=200;total=1000;expire=2000000000';
       await service.refreshSubscription(id);
+      final refreshedSettings =
+          jsonDecode(await File('${dir.path}\\settings.json').readAsString());
+      expect(refreshedSettings['profileSubscriptionInfo'][id], userInfo);
       config = loadYaml(await file.readAsString());
       expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '广州 refreshed']);
       expect(config['proxy-groups'][0]['filter'], isNull);
       response = 'proxies: [{name: 韩国 edited, type: ss, server: example.org}]';
+      userInfo = null;
       await service.updateSubscription(id: id, name: 'edited', url: url);
+      final editedSettings =
+          jsonDecode(await File('${dir.path}\\settings.json').readAsString());
+      expect(editedSettings['profileSubscriptionInfo'][id], isNull);
       expect(loadYaml(await file.readAsString())['proxies'][0]['name'],
           '韩国 edited');
       final before = await file.readAsString();
       response = 'proxies: []';
+      userInfo = 'total=123';
       await expectLater(service.refreshSubscription(id), throwsFormatException);
       expect(await file.readAsString(), before);
+      final failedSettings =
+          jsonDecode(await File('${dir.path}\\settings.json').readAsString());
+      expect(failedSettings['profileSubscriptionInfo'][id], isNull);
     } finally {
       await server.close(force: true);
       for (final entry in dir.parent.listSync()) {

@@ -57,6 +57,7 @@ class ConfigProfile {
     required this.exists,
     required this.updatedAt,
     this.url,
+    this.subscriptionUserInfo,
   });
 
   factory ConfigProfile.fromMap(Map<Object?, Object?> map) {
@@ -65,6 +66,7 @@ class ConfigProfile {
       name: map['name']! as String,
       type: map['type']! as String,
       url: map['url'] as String?,
+      subscriptionUserInfo: map['subscriptionUserInfo'] as String?,
       active: map['active'] as bool? ?? false,
       exists: map['exists'] as bool? ?? false,
       updatedAt: map['updatedAt'] as int? ?? 0,
@@ -75,6 +77,7 @@ class ConfigProfile {
   final String name;
   final String type;
   final String? url;
+  final String? subscriptionUserInfo;
   final bool active;
   final bool exists;
   final int updatedAt;
