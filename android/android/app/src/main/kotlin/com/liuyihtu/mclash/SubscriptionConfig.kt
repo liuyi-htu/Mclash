@@ -36,13 +36,34 @@ internal object SubscriptionConfig {
             groups.map { (it as Map<*, *>)["name"] }
         require(names.none { it in reserved }) { "订阅节点名称与默认策略冲突" }
         config.remove("proxy-providers")
+        val chainPrefix = "# Mclash 节点链路: "
+        val chainComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(chainPrefix) }
+        val chainOverrides = chainComment?.let { loader.load<Map<String, String>>(it.removePrefix(chainPrefix)) }.orEmpty()
+        val chainedNodes = nodes.map { item ->
+            @Suppress("UNCHECKED_CAST")
+            val node = item as Map<String, Any?>
+            val upstream = chainOverrides[node["name"]]
+            if (upstream != null && upstream in names) node.toMutableMap().apply { this["dialer-proxy"] = upstream }
+            else node
+        }
+        val edges = chainedNodes.mapNotNull { node ->
+            (node["dialer-proxy"] as? String)?.let { (node["name"] as String) to it }
+        }.toMap()
+        for (start in edges.keys) {
+            val visited = mutableSetOf<String>()
+            var next: String? = start
+            while (next != null) {
+                require(visited.add(next)) { "代理链路形成循环，请选择其他节点" }
+                next = edges[next]
+            }
+        }
         val hostPrefix = "# Mclash HTTP/WS Host: "
         val hostComment = (previousConfig ?: template).lineSequence()
             .firstOrNull { it.startsWith(hostPrefix) }
         val host = hostComment?.let { loader.load<String>(it.removePrefix(hostPrefix)) }
-        config["proxies"] = if (host.isNullOrEmpty()) nodes else {
+        config["proxies"] = if (host.isNullOrEmpty()) chainedNodes else {
             require(host.none { it.isWhitespace() || it in "/\\?#" }) { "Host 格式无效" }
-            nodes.map { item ->
+            chainedNodes.map { item ->
                 @Suppress("UNCHECKED_CAST")
                 val node = item as Map<String, Any?>
                 val network = node["network"]
@@ -88,7 +109,8 @@ internal object SubscriptionConfig {
         }
         val header = prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) } +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +
-            (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]")
+            (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]") +
+            (if (chainOverrides.isEmpty()) "" else "\n$chainPrefix{${chainOverrides.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) }}}")
         return Yaml(DumperOptions().apply {
             defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
         }).dump(config).let { "$header\n$it" }

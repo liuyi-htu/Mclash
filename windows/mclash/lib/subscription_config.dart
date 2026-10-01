@@ -3,6 +3,7 @@ import 'package:yaml_edit/yaml_edit.dart';
 import 'subscription_filter.dart';
 import 'subscription_host.dart';
 import 'node_link.dart';
+import 'proxy_chain.dart';
 
 /// Keeps the bundled routing policy and embeds only downloaded proxy nodes.
 String buildSubscriptionConfig(String template, String subscription,
@@ -55,6 +56,7 @@ String buildSubscriptionConfig(String template, String subscription,
   });
   final host = readSubscriptionHost(previousConfig ?? template);
   final result = host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
-  return writeManualNodeNames(
-      result, readManualNodeNames(previousConfig ?? ''));
+  return applySavedProxyChains(
+      writeManualNodeNames(result, readManualNodeNames(previousConfig ?? '')),
+      previousConfig ?? '');
 }

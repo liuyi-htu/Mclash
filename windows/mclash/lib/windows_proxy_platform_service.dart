@@ -17,21 +17,15 @@ typedef ServiceProcessRunner = Future<ProcessResult> Function(
 class WindowsProxyPlatformService implements ProxyPlatformService {
   WindowsProxyPlatformService({
     String? dataDir,
-    String? defaultSubscriptionUrl,
     String? systemProxyBackupPath,
     RegistryProcessRunner? registryProcessRunner,
     ServiceProcessRunner? serviceProcessRunner,
   })  : _dataDirOverride = dataDir,
-        _defaultSubscriptionUrl =
-            defaultSubscriptionUrl ?? _bundledSubscriptionUrl,
         _systemProxyBackupPathOverride = systemProxyBackupPath,
         _registryProcessRunner = registryProcessRunner,
         _serviceProcessRunner = serviceProcessRunner;
 
   final String? _dataDirOverride;
-  final String _defaultSubscriptionUrl;
-  static const _bundledSubscriptionUrl =
-      "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19";
   final String? _systemProxyBackupPathOverride;
   final RegistryProcessRunner? _registryProcessRunner;
   final ServiceProcessRunner? _serviceProcessRunner;
@@ -406,10 +400,6 @@ public static class WinInetProxy {
 
   @override
   Future<ConfigInfo> getConfigInfo() async {
-    if (await File(_configPath).exists() &&
-        (await File(_configPath).readAsString()).contains('# Mclash 默认机场订阅')) {
-      await getConfigs();
-    }
     final state = await _readSettings();
     final exists = await File(_configPath).exists();
     final active = state['activeProfile']?.toString();
@@ -449,18 +439,11 @@ public static class WinInetProxy {
         !await defaultProfile.exists()) {
       await File(_configPath).copy(defaultProfile.path);
       final names = _stateMap(state, 'profileNames')
-        ..[_defaultProfileId] = 'Cloudflare';
+        ..[_defaultProfileId] = 'config.yaml';
       await _updateSettings(<String, dynamic>{
         'activeProfile': _defaultProfileId,
         'activeMihomoProfile': _defaultProfileId,
         'profileNames': names,
-        if ((await defaultProfile.readAsString())
-            .contains('# Mclash 默认机场订阅')) ...{
-          'profileTypes': _stateMap(state, 'profileTypes')
-            ..[_defaultProfileId] = 'subscription',
-          'profileUrls': _stateMap(state, 'profileUrls')
-            ..[_defaultProfileId] = _defaultSubscriptionUrl,
-        },
       });
       state = await _readSettings();
       active = _defaultProfileId;

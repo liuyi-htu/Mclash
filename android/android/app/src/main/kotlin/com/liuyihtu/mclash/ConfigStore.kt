@@ -28,7 +28,6 @@ internal class ConfigStore(private val context: Context) {
 
     init {
         migrateLegacyConfig()
-        installBundledDefaultConfig()
         normalizeLocalProfileNames()
     }
 
@@ -602,38 +601,10 @@ internal class ConfigStore(private val context: Context) {
         legacyConfigFile.delete()
     }
 
-    private fun installBundledDefaultConfig() {
-        if (preferences.bundledDefaultConfigHandled) return
-        if (readProfiles().isNotEmpty()) {
-            preferences.bundledDefaultConfigHandled = true
-            return
-        }
-
-        val bytes = runCatching {
-            context.assets.open(DEFAULT_CONFIG_ASSET).use(::readStreamWithLimit)
-        }.getOrNull() ?: return
-        validateYaml(bytes, "内置默认配置")
-
-        val profile = ConfigProfile(
-            id = UUID.randomUUID().toString(),
-            name = DEFAULT_CONFIG_NAME,
-            type = TYPE_SUBSCRIPTION,
-            url = DEFAULT_SUBSCRIPTION_URL,
-            updatedAt = System.currentTimeMillis(),
-        )
-        writeAtomically(profileFile(profile.id), bytes)
-        writeProfiles(listOf(profile))
-        preferences.activeConfigId = profile.id
-        preferences.configFileName = profile.name
-        preferences.bundledDefaultConfigHandled = true
-    }
-
     companion object {
         const val TYPE_LOCAL = "local"
         const val TYPE_SUBSCRIPTION = "subscription"
         private const val DEFAULT_CONFIG_ASSET = "default-config.yaml"
-        private const val DEFAULT_CONFIG_NAME = "Cloudflare"
-        private const val DEFAULT_SUBSCRIPTION_URL = "https://edt.246.ccwu.cc/sub?token=de0bfcac8b1a218363f0e8ea1103be19"
         private const val MAX_CONFIG_BYTES = 8 * 1024 * 1024
         private val MIHOMO_KEY_REGEX = Regex(
             "(?m)^\\s*(proxies|proxy-providers|proxy-groups|rules|rule-providers|mixed-port|port|socks-port|mode|dns|tun)\\s*:",

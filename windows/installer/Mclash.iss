@@ -40,7 +40,6 @@ Source: "..\mclash\build\windows\x64\runner\Release\Mclash.exe"; DestDir: "{app}
 Source: "..\mclash\build\windows\x64\runner\Release\*"; Excludes: "*.exe"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\windows-package\MclashService.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows-package\mihomo.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\assets\default-config.yaml"; DestDir: "{app}\data"; DestName: "config.yaml"; Flags: onlyifdoesntexist
 Source: "..\windows-package\geosite.dat"; DestDir: "{app}\data"; DestName: "GeoSite.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\geoip.dat"; DestDir: "{app}\data"; DestName: "GeoIP.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\country.mmdb"; DestDir: "{app}\data"; DestName: "Country.mmdb"; Flags: onlyifdoesntexist

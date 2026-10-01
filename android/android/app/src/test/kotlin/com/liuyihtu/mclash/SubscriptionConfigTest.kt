@@ -103,4 +103,19 @@ class SubscriptionConfigTest {
         assertEquals("vmess", (refreshedNodes[0] as Map<*, *>)["type"])
     }
 
+    @Test fun refreshPreservesProxyChainsAndRejectsCycles() {
+        val source = "proxies: [{name: KR, type: ss}, {name: wap, type: http}]"
+        val previous = "# Mclash 节点链路: {\"KR\":\"wap\"}\n" + SubscriptionConfig.build(template, source)
+        val text = SubscriptionConfig.build(template, source, previous)
+        val nodes = Yaml().load<Map<String, Any>>(text)["proxies"] as List<*>
+        assertEquals("wap", (nodes[0] as Map<*, *>)["dialer-proxy"])
+        assertFalse((nodes[1] as Map<*, *>).containsKey("dialer-proxy"))
+        assertTrue(text.contains("# Mclash 节点链路:"))
+        val cycle = "# Mclash 节点链路: {\"KR\":\"wap\",\"wap\":\"KR\"}\n"
+        assertTrue(runCatching { SubscriptionConfig.build(template, source, cycle) }.isFailure)
+        val missing = SubscriptionConfig.build(template, "proxies: [{name: KR, type: ss}]", previous)
+        val remaining = Yaml().load<Map<String, Any>>(missing)["proxies"] as List<*>
+        assertFalse((remaining[0] as Map<*, *>).containsKey("dialer-proxy"))
+    }
+
 }

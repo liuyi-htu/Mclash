@@ -4,12 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
 import 'package:mclash/subscription_filter.dart';
 import 'package:mclash/subscription_host.dart';
+import 'package:mclash/proxy_chain.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
-  test('first launch lists Cloudflare without downloading until manual refresh',
+  test(
+      'fresh installation is empty; manually added subscriptions support Host and chains',
       () async {
     final dir = await Directory.systemTemp.createTemp('default-subscription-');
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -23,38 +25,35 @@ void main() {
     final url = 'http://127.0.0.1:${server.port}/subscription';
     final service = WindowsProxyPlatformService(
       dataDir: dir.path,
-      defaultSubscriptionUrl: url,
       serviceProcessRunner: (_, __) async =>
           ProcessResult(1, 0, '{"state":"stopped"}', ''),
     );
     try {
-      await File('${dir.path}\\config.yaml').writeAsString(
-          File('../../assets/default-config.yaml').readAsStringSync());
-      await service.getConfigInfo();
+      expect((await service.getConfigInfo()).exists, isFalse);
+      expect(await service.getConfigs(), isEmpty);
+      expect((await service.getConfigInfo()).exists, isFalse);
+      expect(await service.getConfigs(), isEmpty);
+      expect(requests, 0);
+      expect(await File('${dir.path}\\config.yaml').exists(), isFalse);
+      expect(
+          await File('${dir.path}\\profiles\\default.yaml').exists(), isFalse);
+      await service.addSubscription(name: 'Manual', url: url);
       final state =
           jsonDecode(await File('${dir.path}\\settings.json').readAsString());
-      expect(state['profileNames']['default.yaml'], 'Cloudflare');
-      expect(state['profileTypes']['default.yaml'], 'subscription');
-      expect(state['profileUrls']['default.yaml'], url);
-      await service.getConfigs();
-      await service.getConfigInfo();
-      await service.getConfigs();
-      expect(requests, 0);
-      final initial =
-          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
-      expect(initial['proxies'], isEmpty);
-      expect(
-          await File('${dir.path}\\profiles\\default.yaml').exists(), isTrue);
-      await service.refreshSubscription('default.yaml');
+      final id = (state['profileUrls'] as Map).keys.single as String;
+      expect(state['profileNames'][id], 'Manual');
+      expect(state['profileTypes'][id], 'subscription');
+      expect(state['profileUrls'][id], url);
+      await service.selectConfig(id);
       final runtime =
           loadYaml(await File('${dir.path}\\config.yaml').readAsString());
       expect(runtime['proxies'][0]['name'], 'KR default');
       expect(runtime['proxy-providers'], isNull);
       expect(runtime['proxy-groups'][1]['filter'], isNull);
       expect(runtime['proxy-groups'][1]['proxies'], ['KR default', 'KR ws']);
-      final profile = File('${dir.path}\\profiles\\default.yaml');
+      final profile = File('${dir.path}\\profiles\\$id');
       await service.saveConfigContent(
-        id: 'default.yaml',
+        id: id,
         content:
             editSubscriptionHost(await profile.readAsString(), 'new.example'),
       );
@@ -69,6 +68,18 @@ void main() {
         expect(
             config['proxies'][1]['ws-opts']['headers']['Host'], 'new.example');
       }
+      await service.saveConfigContent(
+        id: id,
+        content: setProxyChain(
+            await profile.readAsString(), 'KR default', 'KR ws',
+            prepend: true),
+      );
+      final chainedFile =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      final chainedPreview = loadYaml(await service.getRuntimeConfigContent());
+      expect(chainedFile['proxies'][0]['dialer-proxy'], 'KR ws');
+      expect(chainedPreview['proxies'][0]['dialer-proxy'], 'KR ws');
+      expect(chainedFile['proxy-groups'], applied['proxy-groups']);
       await service.getConfigs();
       expect(requests, 1);
     } finally {
