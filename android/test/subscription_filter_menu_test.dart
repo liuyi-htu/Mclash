@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pages/config_page.dart';
+import 'package:mclash/shared/proxy_chain_dialog.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -40,7 +41,14 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    for (final name in ['国内正则表达式', '国外正则表达式', '修改 Host', '添加节点']) {
+    for (final name in [
+      '国内正则表达式',
+      '国外正则表达式',
+      '修改 Host',
+      '添加节点',
+      '添加前置代理',
+      '添加后置代理'
+    ]) {
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
       expect(tile.enabled, isFalse);
@@ -141,9 +149,7 @@ rules: [MATCH,DIRECT]
     expect(loadYaml(saved!)['proxies'][0]['ws-opts']['headers']['Host'],
         'new.example');
     expect(saves, 1);
-    expect(find.text('Host 已修改，无需更新订阅。'), findsOneWidget);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改 Host'));
@@ -200,6 +206,131 @@ rules: [MATCH,DIRECT]
     expect(
         config['proxies'][2]['ws-opts']['headers']['Host'], 'preset.example');
     expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海', '上海手动']);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'proxy chain selects saved nodes, saves the correct profile and cancels safely',
+      (tester) async {
+    String? saved;
+    var saves = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') return saved ?? content;
+      if (call.method == 'saveConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        saved = call.arguments['content'] as String;
+        saves++;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('添加前置代理'));
+    await tester.tap(find.text('添加前置代理'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
+            .onPressed,
+        isNull);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('KR').last);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('选择当前节点'), findsNothing);
+    expect(find.textContaining('本机 →'), findsNothing);
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
+    expect(saves, 1);
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('添加后置代理'));
+    await tester.tap(find.text('添加后置代理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('batch proxies default to every remaining saved node',
+      (tester) async {
+    List<String>? targets;
+    List<String>? proxies;
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => TextButton(
+                onPressed: () => showProxyChainDialog(
+                    context: context,
+                    nodes: ['A', 'B', 'C', 'D'],
+                    prepend: true,
+                    onSave: (current, other) async {
+                      targets = current;
+                      proxies = other;
+                    }),
+                child: const Text('打开')))));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+            .every((tile) => tile.value == true),
+        isTrue);
+    await tester.tap(find.text('清空'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+            .every((tile) => tile.value == false),
+        isTrue);
+    await tester.tap(find.text('C'));
+    await tester.tap(find.text('D'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(targets, ['A', 'B']);
+    expect(proxies, ['C', 'D']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('chain cycle failures keep the dialog open', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => TextButton(
+                  onPressed: () => showProxyChainDialog(
+                    context: context,
+                    nodes: ['A', 'B'],
+                    prepend: false,
+                    onSave: (_, __) async =>
+                        throw const FormatException('代理链路形成循环'),
+                  ),
+                  child: const Text('打开'),
+                ))));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('选择后置节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('B').last);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('代理链路形成循环'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 }

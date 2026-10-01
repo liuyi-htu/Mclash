@@ -8,6 +8,19 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun globalChainsCoverNewNodesAndAvoidFrontBackCycles() {
+        val previous = "# Mclash 全局链路: {\"front\":[\"wap\"],\"back\":[\"exit\"]}\nproxies: []"
+        val subscription = "proxies: [{name: 上海, type: http}, {name: KR, type: http}, {name: wap, type: http}, {name: exit, type: http}]"
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template, subscription, previous))
+        val nodes = (result["proxies"] as List<*>).filterIsInstance<Map<*, *>>()
+        assertEquals("wap", nodes[0]["dialer-proxy"])
+        assertEquals("wap", nodes[1]["dialer-proxy"])
+        assertNull(nodes[2]["dialer-proxy"])
+        val groups = (result["proxy-groups"] as List<*>).filterIsInstance<Map<*, *>>()
+        val group = groups.first { it["name"] == nodes[3]["dialer-proxy"] }
+        assertEquals(listOf("上海", "KR"), group["proxies"])
+    }
+
     @Test fun embedsNodesWithDefaultPolicy() {
         val subscription = """
             proxies:
@@ -101,6 +114,39 @@ class SubscriptionConfigTest {
         val refreshedNodes = Yaml().load<Map<String, Any>>(repeated)["proxies"] as List<*>
         assertEquals(1, refreshedNodes.size)
         assertEquals("vmess", (refreshedNodes[0] as Map<*, *>)["type"])
+    }
+
+    @Test fun refreshPreservesProxyChainsAndRejectsCycles() {
+        val source = "proxies: [{name: KR, type: ss}, {name: wap, type: http}]"
+        val previous = "# Mclash 节点链路: {\"KR\":\"wap\"}\n" + SubscriptionConfig.build(template, source)
+        val text = SubscriptionConfig.build(template, source, previous)
+        val nodes = Yaml().load<Map<String, Any>>(text)["proxies"] as List<*>
+        assertEquals("wap", (nodes[0] as Map<*, *>)["dialer-proxy"])
+        assertFalse((nodes[1] as Map<*, *>).containsKey("dialer-proxy"))
+        assertTrue(text.contains("# Mclash 节点链路:"))
+        val cycle = "# Mclash 节点链路: {\"KR\":\"wap\",\"wap\":\"KR\"}\n"
+        assertTrue(runCatching { SubscriptionConfig.build(template, source, cycle) }.isFailure)
+        val missing = SubscriptionConfig.build(template, "proxies: [{name: KR, type: ss}]", previous)
+        val remaining = Yaml().load<Map<String, Any>>(missing)["proxies"] as List<*>
+        assertFalse((remaining[0] as Map<*, *>).containsKey("dialer-proxy"))
+    }
+
+    @Test fun refreshPreservesBatchChainGroupsAndDetectsGroupCycles() {
+        val source = "proxies: [{name: KR, type: ss}, {name: 广州, type: ss}, {name: wap, type: http}, {name: other, type: http}]"
+        val metadata = """
+            # Mclash 节点链路: {"KR":"Front","广州":"Front"}
+            # Mclash 链路代理组: {"Front":["wap","other"]}
+        """.trimIndent()
+        val text = SubscriptionConfig.build(template, source, metadata)
+        val config = Yaml().load<Map<String, Any>>(text)
+        val nodes = config["proxies"] as List<*>
+        assertEquals("Front", (nodes[0] as Map<*, *>)["dialer-proxy"])
+        assertEquals("Front", (nodes[1] as Map<*, *>)["dialer-proxy"])
+        val groups = config["proxy-groups"] as List<*>
+        assertEquals(listOf("wap", "other"), (groups.last() as Map<*, *>)["proxies"])
+        assertTrue(text.contains("# Mclash 链路代理组:"))
+        val cycle = metadata.replace("[\"wap\",\"other\"]", "[\"KR\",\"other\"]")
+        assertTrue(runCatching { SubscriptionConfig.build(template, source, cycle) }.isFailure)
     }
 
 }

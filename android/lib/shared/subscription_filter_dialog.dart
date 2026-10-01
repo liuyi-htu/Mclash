@@ -31,13 +31,10 @@ Future<bool> showSubscriptionFilterDialog({
                         maxLines: 4,
                         decoration: InputDecoration(
                           labelText: '节点名称匹配规则',
-                          helperText: '例如：上海|广州 或 KR|香港\n留空匹配全部节点，(?i) 忽略大小写',
                           errorText: error,
                           errorMaxLines: 8,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text('保存后更新对应分组的节点筛选。'),
                     ],
                   ),
                 ),

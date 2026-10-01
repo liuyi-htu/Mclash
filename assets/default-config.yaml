@@ -1,4 +1,4 @@
-# Mclash 默认机场订阅
+# Mclash 订阅配置模板
 # Mclash 国内正则: "上海"
 # Mclash 国外正则: "KR"
 mixed-port: 7890

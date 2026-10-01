@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'proxy_chain.dart';
+import 'proxy_chain_dialog.dart';
 import 'node_link.dart';
 import 'add_node_dialog.dart';
 import 'subscription_host.dart';
@@ -129,7 +131,6 @@ class _ConfigPageState extends State<ConfigPage> {
                       decoration: const InputDecoration(
                         labelText: '订阅链接',
                         hintText: 'https://...',
-                        helperText: '下载 Mihomo 节点并套用默认配置',
                       ),
                       keyboardType: TextInputType.url,
                       autocorrect: false,
@@ -486,23 +487,7 @@ class _ConfigPageState extends State<ConfigPage> {
           );
         },
       );
-      if (saved && mounted) {
-        await _load();
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('修改 Host'),
-            content: const Text('Host 已修改，无需更新订阅。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('知道了'),
-              ),
-            ],
-          ),
-        );
-      }
+      if (saved && mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -526,6 +511,35 @@ class _ConfigPageState extends State<ConfigPage> {
       if (saved && mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _editProxyChain(ConfigProfile profile, bool prepend) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      final nodes = savedProxyNodeNames(content);
+      if (nodes.length < 2) throw const FormatException('请先保存至少两个节点');
+      if (!mounted) return;
+      setState(() => _working = false);
+      final saved = await showProxyChainDialog(
+        context: context,
+        nodes: nodes,
+        prepend: prepend,
+        onSave: (current, other) async {
+          final latest = await _service.getConfigContent(profile.id);
+          await _service.saveConfigContent(
+            id: profile.id,
+            content: setGlobalProxyChain(latest, other, prepend: prepend),
+          );
+        },
+      );
+      if (saved && mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
     }
   }
 
@@ -577,6 +591,18 @@ class _ConfigPageState extends State<ConfigPage> {
                   title: const Text('添加节点'),
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('addNode'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.first_page),
+                  title: const Text('添加前置代理'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('prependProxy'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.last_page),
+                  title: const Text('添加后置代理'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('appendProxy'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.code_outlined),
@@ -639,6 +665,12 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
+      case 'prependProxy':
+        await _editProxyChain(profile, true);
+        return;
+      case 'appendProxy':
+        await _editProxyChain(profile, false);
+        return;
       case 'addNode':
         await _addNode(profile);
         return;

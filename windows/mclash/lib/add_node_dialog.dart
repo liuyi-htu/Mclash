@@ -28,14 +28,10 @@ Future<bool> showAddNodeDialog({
                         maxLines: 6,
                         decoration: InputDecoration(
                           labelText: '节点链接',
-                          helperText: '支持 vmess://、http://、https://，一次添加一个节点',
                           errorText: error,
                           errorMaxLines: 8,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                          '自动使用此配置已设置的 Host，未设置时保留链接中的 Host。节点按现有正则分组，更新订阅后保留。'),
                     ],
                   ),
                 ),
