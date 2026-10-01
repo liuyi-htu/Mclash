@@ -587,32 +587,12 @@ class _ConfigPageState extends State<ConfigPage> {
                   ),
                 ),
                 const Divider(height: 1),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.edit_outlined),
-                    title: const Text('修改订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('edit'),
-                  )
-                else
+                if (!profile.isSubscription)
                   ListTile(
                     leading: const Icon(Icons.drive_file_rename_outline),
                     title: const Text('修改配置名称'),
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('rename'),
-                  ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.refresh),
-                    title: const Text('更新订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
-                  ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.link_outlined),
-                    title: const Text('检测订阅链接'),
-                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
                   ),
                 ListTile(
                   leading: const Icon(Icons.add_link),
@@ -656,6 +636,26 @@ class _ConfigPageState extends State<ConfigPage> {
                   onTap: () => Navigator.of(sheetContext).pop('appendProxy'),
                 ),
                 const Divider(height: 1),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('修改订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('edit'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: const Text('更新订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.link_outlined),
+                    title: const Text('检测订阅链接'),
+                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
+                  ),
                 if (!profile.isSubscription)
                   ListTile(
                     leading: const Icon(Icons.code_outlined),
