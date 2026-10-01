@@ -25,7 +25,7 @@ String subscriptionUsageSummary(String? header) {
     }
     remaining = '${bytes.toStringAsFixed(unit == 0 ? 0 : 2)} ${units[unit]}';
   }
-  String expiration = '未提供';
+  String expiration = '不限时';
   final expire = values['expire'];
   if (expire == 0) {
     expiration = '不限时';
@@ -36,7 +36,7 @@ String subscriptionUsageSummary(String? header) {
       expiration =
           '${date.year}-${pad(date.month)}-${pad(date.day)} ${pad(date.hour)}:${pad(date.minute)}';
     } on ArgumentError {
-      expiration = '未提供';
+      expiration = '不限时';
     }
   }
   return '剩余流量：$remaining\n到期时间：$expiration';
