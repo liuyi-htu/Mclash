@@ -37,8 +37,8 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('取消')),
                 FilledButton(
-                    onPressed: () => Navigator.of(context)
-                        .pop(nodes.where(selected.contains).toList()),
+                    onPressed: () =>
+                        Navigator.of(context).pop(selected.toList()),
                     child: const Text('确定')),
               ],
             )),
@@ -49,10 +49,11 @@ Future<bool> showProxyChainDialog({
   required BuildContext context,
   required List<String> nodes,
   required bool prepend,
+  List<String> initialNodes = const [],
   required Future<void> Function(List<String> current, List<String> other)
       onSave,
 }) async {
-  var other = <String>[];
+  var other = initialNodes.where(nodes.contains).toSet().toList();
   String? error;
   var saving = false;
   return await showDialog<bool>(
@@ -83,6 +84,40 @@ Future<bool> showProxyChainDialog({
                             },
                       child: Text(
                           '${prepend ? '选择前置节点' : '选择后置节点'}（已选 ${other.length} 个）'),
+                    ),
+                    SizedBox(
+                      width: double.maxFinite,
+                      height: (other.length * 64.0)
+                          .clamp(0.0, MediaQuery.sizeOf(context).height * 0.4),
+                      child: ReorderableListView(
+                        primary: false,
+                        buildDefaultDragHandles: false,
+                        onReorder: (oldIndex, newIndex) {
+                          if (saving) return;
+                          setDialogState(() {
+                            if (newIndex > oldIndex) newIndex--;
+                            final name = other.removeAt(oldIndex);
+                            other.insert(newIndex, name);
+                          });
+                        },
+                        children: [
+                          for (var index = 0; index < other.length; index++)
+                            ListTile(
+                              key: ValueKey(other[index]),
+                              contentPadding: EdgeInsets.zero,
+                              minTileHeight: 64,
+                              title: Text(other[index]),
+                              trailing: ReorderableDragStartListener(
+                                index: index,
+                                enabled: !saving,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(Icons.drag_handle),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                     if (error != null) ...[
                       const SizedBox(height: 12),

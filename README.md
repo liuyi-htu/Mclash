@@ -211,3 +211,5 @@ Mclash 自身源代码依据 [GNU General Public License v3.0](LICENSE) 开源�
 - [heiher/hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)
 - [Flutter](https://github.com/flutter/flutter)
 - [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat)
+
+前置代理可选择多个节点，按列表顺序依次连接，再连接普通节点；前置和后置列表支持拖动排序并保留已选节点。设置操作取消或保存后返回原订阅设置菜单。

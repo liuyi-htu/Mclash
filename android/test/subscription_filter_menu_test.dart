@@ -101,8 +101,7 @@ rules: [MATCH,DIRECT]
     expect(saved, contains('上海|广州'));
     expect(yaml['rules'], loadYaml(content)['rules']);
     expect(saves, 1);
-    await tester.longPress(find.text('Airport'));
-    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
     await tester.ensureVisible(find.text('国外正则表达式'));
     await tester.tap(find.text('国外正则表达式'));
     await tester.pumpAndSettle();
@@ -111,6 +110,7 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    expect(find.text('修改订阅'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -154,8 +154,7 @@ rules: [MATCH,DIRECT]
         'new.example');
     expect(saves, 1);
     expect(find.byType(AlertDialog), findsNothing);
-    await tester.longPress(find.text('Airport'));
-    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
     await tester.ensureVisible(find.text('修改 Host'));
     await tester.tap(find.text('修改 Host'));
     await tester.pumpAndSettle();
@@ -164,6 +163,7 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    expect(find.text('修改订阅'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -251,6 +251,8 @@ rules: [MATCH,DIRECT]
     expect(
         config['proxies'][2]['ws-opts']['headers']['Host'], 'preset.example');
     expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海', '上海手动']);
+    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('修改订阅'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -294,14 +296,81 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
     expect(saves, 1);
-    await tester.longPress(find.text('Airport'));
+    expect(find.text('修改订阅'), findsOneWidget);
+    await tester.ensureVisible(find.text('添加前置代理'));
+    await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
+    expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
+    expect(find.text('KR'), findsOneWidget);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<CheckboxListTile>(
+                find.widgetWithText(CheckboxListTile, 'KR'))
+            .value,
+        isTrue);
+    await tester.tap(find.text('取消').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
+    expect(saves, 1);
     await tester.ensureVisible(find.text('添加后置代理'));
     await tester.tap(find.text('添加后置代理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    expect(find.text('修改订阅'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('subscription edit save and cancel return to updated menu',
+      (tester) async {
+    var current = Map<String, Object>.from(profile);
+    var updates = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [current];
+      if (call.method == 'updateSubscription') {
+        updates++;
+        current = {...current, 'name': call.arguments['name'] as String};
+        return [current];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('修改订阅'));
+    await tester.tap(find.text('修改订阅'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
+    expect(updates, 0);
+    await tester.ensureVisible(find.text('修改订阅'));
+    await tester.tap(find.text('修改订阅'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'New Airport');
+    await tester.tap(find.text('保存并更新'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'New Airport'), findsOneWidget);
+    expect(updates, 1);
+    await tester.ensureVisible(find.text('删除'));
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -348,6 +417,55 @@ rules: [MATCH,DIRECT]
     expect(targets, ['A', 'B']);
     expect(proxies, ['C', 'D']);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saved chain order survives selection and can be dragged',
+      (tester) async {
+    for (final prepend in [true, false]) {
+      List<String>? savedOrder;
+      await tester.pumpWidget(MaterialApp(
+          home: Builder(
+              builder: (context) => TextButton(
+                  onPressed: () => showProxyChainDialog(
+                      context: context,
+                      nodes: ['A', 'B', 'C', 'D'],
+                      initialNodes: ['D', 'C'],
+                      prepend: prepend,
+                      onSave: (current, other) async => savedOrder = other),
+                  child: const Text('打开')))));
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widgetList<ListTile>(find.byType(ListTile))
+              .map((tile) => (tile.title as Text).data),
+          ['D', 'C']);
+      await tester.tap(find.textContaining('节点（已选'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widgetList<ListTile>(find.byType(ListTile))
+              .map((tile) => (tile.title as Text).data),
+          ['D', 'C']);
+      final handle = find.byType(ReorderableDragStartListener).last;
+      final gesture = await tester.startGesture(tester.getCenter(handle));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -5));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -40));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump(const Duration(milliseconds: 500));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('C')).dy,
+          lessThan(tester.getTopLeft(find.text('D')).dy));
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+      expect(savedOrder, ['C', 'D']);
+    }
   });
 
   testWidgets('chain cycle failures keep the dialog open', (tester) async {

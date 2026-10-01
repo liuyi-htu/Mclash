@@ -102,7 +102,11 @@ String _applyGlobalProxyChains(
           !line.startsWith(_globalPrefix))
       .join('\n');
   if (front.isNotEmpty) {
-    result = setProxyChains(result, normal, front, prepend: true);
+    for (var index = 1; index < front.length; index++) {
+      result =
+          setProxyChain(result, front[index], front[index - 1], prepend: true);
+    }
+    result = setProxyChains(result, normal, [front.last], prepend: true);
   }
   if (back.isNotEmpty) {
     result = setProxyChains(result, normal, back, prepend: false);
