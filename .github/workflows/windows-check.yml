@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: windows-check-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: windows-check-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.32.8"
           cache: true
 
       - name: Set up Go

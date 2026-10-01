@@ -53,7 +53,17 @@ class ProxyVpnService : VpnService() {
         if (running || starting) return
         lastError = null
         stopping = false
-        starting = true
+        try {
+            RuntimeEdits.start {
+                starting = true
+                startRequested = false
+            }
+        } catch (error: Throwable) {
+            startRequested = false
+            lastError = error.message
+            stopSelf()
+            return
+        }
         QuickSettingsTileUpdater.request(this)
         StartupLog.reset(this)
         StartupLog.append(this, "收到启动请求；ABI=${Build.SUPPORTED_ABIS.joinToString()}")
@@ -262,6 +272,7 @@ class ProxyVpnService : VpnService() {
     }
 
     private fun stopProxy() {
+        startRequested = false
         StartupLog.append(this, "收到停止请求")
         stopping = true
         stopNativeComponents()
@@ -351,10 +362,23 @@ class ProxyVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1001
         private const val IPV6_TUN_ADDRESS = "fc00::1"
 
+        @Volatile
+        var startRequested: Boolean = false
+            private set
+
         fun start(context: android.content.Context) {
-            lastError = null
-            val intent = Intent(context, ProxyVpnService::class.java).setAction(ACTION_START)
-            ContextCompat.startForegroundService(context, intent)
+            RuntimeEdits.start {
+                if (running || starting || startRequested) return@start
+                lastError = null
+                startRequested = true
+                try {
+                    val intent = Intent(context, ProxyVpnService::class.java).setAction(ACTION_START)
+                    ContextCompat.startForegroundService(context, intent)
+                } catch (error: Throwable) {
+                    startRequested = false
+                    throw error
+                }
+            }
         }
 
         fun stop(context: android.content.Context) {

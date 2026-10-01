@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Client to build
+        description: all = VPN + Root + Windows; android = VPN + Root
         required: true
         default: all
         type: choice
@@ -70,9 +70,11 @@ jobs:
           }
           echo "mihomo_version=$mihomo_version" >> "$GITHUB_OUTPUT"
           python3 <<'PY'
+          import json
           import os
           import pathlib
           import re
+          import subprocess
 
           version_pattern = re.compile(r"^\d+\.\d+\.\d+$")
           build_pattern = re.compile(r"^[1-9]\d*$")
@@ -92,6 +94,19 @@ jobs:
               raise SystemExit("build_number must be a positive integer")
           version = requested_version or source_version
           selected_previous_build = source_build if version == source_version else 0
+          if not version_pattern.fullmatch(version):
+              raise SystemExit("version must use x.y.z format")
+
+          releases = json.loads(subprocess.check_output(
+              ["gh", "api", "--paginate", "--slurp",
+               f"repos/{os.environ['GITHUB_REPOSITORY']}/releases?per_page=100"],
+              text=True,
+          ))
+          for page in releases:
+              for release in page:
+                  match = re.fullmatch(r"v(\d+\.\d+\.\d+)-b([1-9]\d*)", release["tag_name"])
+                  if not release.get("draft") and match and match.group(1) == version:
+                      selected_previous_build = max(selected_previous_build, int(match.group(2)))
 
           default_values_unchanged = (
               version != source_version and requested_build == str(source_build)
@@ -129,14 +144,26 @@ jobs:
           PY
 
   android:
-    name: Android
+    name: Android (${{ matrix.client.name }})
     if: ${{ inputs.target == 'all' || inputs.target == 'android' }}
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        client:
+          - name: VPN
+            directory: android
+            artifact: android
+          - name: Root
+            directory: root
+            artifact: root-android
     env:
       APP_VERSION: ${{ needs.validate.outputs.version }}
       BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
+      CLIENT_DIR: ${{ matrix.client.directory }}
+      MIHOMO_VERSION: ${{ needs.validate.outputs.mihomo_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -161,12 +188,12 @@ jobs:
           import pathlib
           import re
 
-          path = pathlib.Path("android/pubspec.yaml")
+          path = pathlib.Path(os.environ["CLIENT_DIR"], "pubspec.yaml")
           text = path.read_text(encoding="utf-8")
           version = f"{os.environ['APP_VERSION']}+{os.environ['BUILD_NUMBER']}"
           updated, count = re.subn(r"(?m)^version:\s*.*$", f"version: {version}", text)
           if count != 1:
-              raise SystemExit("android/pubspec.yaml must contain exactly one version field")
+              raise SystemExit("Selected client pubspec.yaml must contain exactly one version field")
           path.write_text(updated, encoding="utf-8")
           PY
 
@@ -196,10 +223,11 @@ jobs:
             echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
             echo "keyAlias=$ANDROID_KEY_ALIAS"
             echo "keyPassword=$ANDROID_KEY_PASSWORD"
-          } > android/android/key.properties
-          chmod 600 android/android/key.properties
+          } > "$CLIENT_DIR/android/key.properties"
+          chmod 600 "$CLIENT_DIR/android/key.properties"
 
       - name: Build HevSocks5Tunnel JNI library
+        if: ${{ matrix.client.directory == 'android' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -257,6 +285,7 @@ jobs:
           import pathlib
           import re
           import urllib.request
+          import urllib.parse
 
           headers = {
               "Accept": "application/vnd.github+json",
@@ -272,9 +301,10 @@ jobs:
                   urllib.request.Request(url, headers=selected_headers)
               )
 
-          def asset(repo, pattern):
+          def asset(repo, pattern, tag=None):
               with request(
-                  f"https://api.github.com/repos/{repo}/releases/latest", api=True
+                  f"https://api.github.com/repos/{repo}/releases/"
+                  + ("tags/" + urllib.parse.quote(tag, safe="") if tag else "latest"), api=True
               ) as response:
                   release = json.load(response)
               matches = [item for item in release.get("assets", []) if re.fullmatch(pattern, item["name"])]
@@ -291,43 +321,55 @@ jobs:
                   raise SystemExit(f"SHA-256 mismatch for {item['name']}")
               return data
 
-          native = pathlib.Path("android/android/app/src/main/jniLibs/arm64-v8a")
-          geodata = pathlib.Path("android/android/app/src/main/assets/geodata")
+          client = pathlib.Path(os.environ["CLIENT_DIR"])
+          native = client / "android/app/src/main/jniLibs/arm64-v8a"
+          geodata = client / "android/app/src/main/assets/geodata"
           native.mkdir(parents=True, exist_ok=True)
           geodata.mkdir(parents=True, exist_ok=True)
 
-          mihomo = asset("MetaCubeX/mihomo", r"mihomo-android-arm64-v8-v[^/]+\.gz")
+          mihomo = asset("MetaCubeX/mihomo", r"mihomo-android-arm64-v8-v[^/]+\.gz", os.environ["MIHOMO_VERSION"])
           (native / "libmihomo.so").write_bytes(gzip.decompress(mihomo))
           for name in ("geosite.dat", "geoip.dat", "country.mmdb"):
               (geodata / name).write_bytes(asset("MetaCubeX/meta-rules-dat", re.escape(name)))
           PY
-          chmod 0755 \
-            android/android/app/src/main/jniLibs/arm64-v8a/libmihomo.so \
-            android/android/app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so
+          chmod 0755 "$CLIENT_DIR/android/app/src/main/jniLibs/arm64-v8a/libmihomo.so"
 
       - name: Build Android APK
         shell: bash
-        working-directory: android
+        working-directory: ${{ matrix.client.directory }}
         env:
           BUILD_MODE: release
-        run: ./build-mclash-android.sh
+          PREPARE_RUNTIME: "0"
+        run: |
+          set -euo pipefail
+          if [[ "$CLIENT_DIR" == root ]]; then
+            flutter pub get
+            dart format lib test
+            ./build-root-android.sh
+          else
+            ./build-mclash-android.sh
+          fi
 
       - name: Name Android artifacts
         shell: bash
         run: |
           set -euo pipefail
-          source_file="android/dist/Mclash-android-arm64-v8a-release.apk"
-          output_file="android/dist/Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
+          if [[ "$CLIENT_DIR" == root ]]; then
+            source_file="root/dist/Mclash-root-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a-release.apk"
+          else
+            source_file="android/dist/Mclash-android-arm64-v8a-release.apk"
+          fi
+          output_file="$CLIENT_DIR/dist/Mclash-${{ matrix.client.artifact }}-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
           mv "$source_file" "$output_file"
-          (cd android/dist && sha256sum "$(basename "$output_file")" > "$(basename "$output_file").sha256")
+          (cd "$CLIENT_DIR/dist" && sha256sum "$(basename "$output_file")" > "$(basename "$output_file").sha256")
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
+          name: Mclash-${{ matrix.client.artifact }}-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}
           path: |
-            android/dist/Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk
-            android/dist/Mclash-android-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk.sha256
+            ${{ matrix.client.directory }}/dist/Mclash-${{ matrix.client.artifact }}-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk
+            ${{ matrix.client.directory }}/dist/Mclash-${{ matrix.client.artifact }}-${{ needs.validate.outputs.version }}+${{ needs.validate.outputs.build_number }}-arm64-v8a.apk.sha256
           if-no-files-found: error
 
   windows:
@@ -375,6 +417,7 @@ jobs:
         env:
           MCLASH_VERSION: ${{ needs.validate.outputs.version }}
           MCLASH_BUILD_NUMBER: ${{ needs.validate.outputs.build_number }}
+          MIHOMO_VERSION: ${{ needs.validate.outputs.mihomo_version }}
           GH_TOKEN: ${{ github.token }}
         run: ./windows/scripts/build-windows.ps1
 
@@ -441,6 +484,8 @@ jobs:
           expected=(
             "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
             "Mclash-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
+            "Mclash-root-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk"
+            "Mclash-root-android-${APP_VERSION}+${BUILD_NUMBER}-arm64-v8a.apk.sha256"
             "Mclash-Windows-Setup-${APP_VERSION}+${BUILD_NUMBER}-x64.exe"
             "Mclash-Windows-Setup-${APP_VERSION}+${BUILD_NUMBER}-x64.exe.sha256"
           )
@@ -464,8 +509,8 @@ jobs:
           import pathlib
 
           lines = [f"Mihomo 内核：`{os.environ['MIHOMO_VERSION']}`"]
-          custom_notes = os.environ["RELEASE_NOTES"].strip()
-          if custom_notes:
+          custom_notes = os.environ["RELEASE_NOTES"]
+          if custom_notes.strip():
               lines.extend(("", custom_notes))
           pathlib.Path(os.environ["RUNNER_TEMP"], "release-notes.md").write_text(
               "\n".join(lines) + "\n", encoding="utf-8"
@@ -526,6 +571,7 @@ jobs:
           release_version = f"{values['version']}+{values['build_number']}"
           for pubspec_path in (
               pathlib.Path("android/pubspec.yaml"),
+              pathlib.Path("root/pubspec.yaml"),
               pathlib.Path("windows/mclash/pubspec.yaml"),
           ):
               text = pubspec_path.read_text(encoding="utf-8")
@@ -538,10 +584,11 @@ jobs:
                   )
               pubspec_path.write_text(replaced, encoding="utf-8")
           PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "liuyi-htu"
+          git config user.email "293212179+liuyi-htu@users.noreply.github.com"
           git add -- .github/workflows/build-all.yml \
             android/pubspec.yaml \
+            root/pubspec.yaml \
             windows/mclash/pubspec.yaml
           if git diff --cached --quiet; then
             echo "Workflow defaults and source versions already match ${APP_VERSION}+${BUILD_NUMBER}."

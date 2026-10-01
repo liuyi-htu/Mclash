@@ -2,6 +2,9 @@
 
 *.sh text eol=lf
 *.dart text eol=lf
+*.kt text eol=lf
+*.py text eol=lf
+*.md text eol=lf
 *.go text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf

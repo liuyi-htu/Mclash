@@ -38,6 +38,7 @@ class MainActivity : FlutterActivity() {
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
+            if (call.method in MUTATING_METHODS) requireProxyStopped()
             when (call.method) {
                 "getUsageNoticeAccepted" -> result.success(
                     preferences.acceptedUsageNoticeVersion >= USAGE_NOTICE_VERSION,
@@ -109,6 +110,13 @@ class MainActivity : FlutterActivity() {
                 }
                 "restart" -> restartProxy(result)
                 "isRunning" -> result.success(ProxyVpnService.running)
+                "getProxyStatus" -> result.success(
+                    when {
+                        ProxyVpnService.running -> "running"
+                        ProxyVpnService.starting || ProxyVpnService.startRequested -> "starting"
+                        else -> "stopped"
+                    },
+                )
                 "getTrafficStats" -> result.success(
                     mapOf(
                         "rxBytes" to TrafficStats.getUidRxBytes(android.os.Process.myUid()),
@@ -300,7 +308,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requireProxyStopped() {
-        require(!ProxyVpnService.running && !ProxyVpnService.starting) {
+        require(!ProxyVpnService.running && !ProxyVpnService.starting &&
+            !ProxyVpnService.startRequested && !MihomoProcess.isRunning()) {
             "请先停止代理再修改配置"
         }
     }
@@ -312,7 +321,9 @@ class MainActivity : FlutterActivity() {
     ) {
         Thread({
             try {
-                val value = block()
+                val value = if (threadName in CONFIG_WRITE_WORKERS) {
+                    RuntimeEdits.edit(::requireProxyStopped, block)
+                } else block()
                 runOnUiThread { result.success(value) }
             } catch (error: Throwable) {
                 runOnUiThread {
@@ -524,6 +535,14 @@ class MainActivity : FlutterActivity() {
         handleTileStartRequest()
     }
 
+    private fun startProxyFromTile() {
+        runCatching { ProxyVpnService.start(this) }.onFailure { error ->
+            Toast.makeText(this, error.message, Toast.LENGTH_SHORT)
+                .apply { setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 96) }
+                .show()
+        }
+    }
+
     private fun handleTileStartRequest() {
         if (!intent.getBooleanExtra(EXTRA_START_FROM_TILE, false)) return
         intent.removeExtra(EXTRA_START_FROM_TILE)
@@ -544,7 +563,7 @@ class MainActivity : FlutterActivity() {
 
         val permissionIntent = VpnService.prepare(this)
         if (permissionIntent == null) {
-            ProxyVpnService.start(this)
+            startProxyFromTile()
             QuickSettingsTileUpdater.request(this)
         } else {
             pendingTileVpnRequest = true
@@ -644,7 +663,7 @@ class MainActivity : FlutterActivity() {
                 if (!pendingTileVpnRequest) return
                 pendingTileVpnRequest = false
                 if (resultCode == Activity.RESULT_OK) {
-                    ProxyVpnService.start(this)
+                    startProxyFromTile()
                 } else {
                     Toast.makeText(
                         this,
@@ -660,6 +679,15 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private val MUTATING_METHODS = setOf(
+            "saveAppFilter", "saveVpnTunnelSettings", "setDebugLoggingEnabled",
+            "importConfigs", "addSubscription", "updateSubscription", "refreshSubscription",
+            "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
+        )
+        private val CONFIG_WRITE_WORKERS = setOf(
+            "mclash-import-configs", "mclash-add-subscription", "mclash-update-subscription",
+            "mclash-refresh-subscription", "mclash-save-config-content",
+        )
         const val EXTRA_START_FROM_TILE = "start_from_quick_settings_tile"
 
         private const val CHANNEL = "mclash/native"

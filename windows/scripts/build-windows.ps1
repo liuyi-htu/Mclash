@@ -52,10 +52,15 @@ if ($env:GH_TOKEN) {
 
 if (-not (Test-Path -LiteralPath $mihomo -PathType Leaf) -or
     (Get-Item -LiteralPath $mihomo).Length -eq 0) {
-    Write-Host "Downloading the latest official mihomo Windows amd64 core..."
+    $mihomoReleasePath = if ($env:MIHOMO_VERSION) {
+        "tags/$([uri]::EscapeDataString($env:MIHOMO_VERSION))"
+    } else {
+        "latest"
+    }
+    Write-Host "Downloading official mihomo Windows amd64 core ($mihomoReleasePath)..."
     $mihomoRelease = Invoke-RestMethod `
         -Headers $releaseHeaders `
-        -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
+        -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/$mihomoReleasePath"
     $mihomoAsset = $mihomoRelease.assets | Where-Object {
         $_.name -match '^mihomo-windows-amd64-compatible-.*\.zip$'
     } | Select-Object -First 1

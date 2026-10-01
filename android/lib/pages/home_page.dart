@@ -39,6 +39,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   double _uploadBytesPerSecond = 0;
   String _proxyMode = 'rule';
   bool _changingProxyMode = false;
+  bool _toggling = false;
+  int _transitionGeneration = 0;
   int _selectedHomeTab = 0;
 
   @override
@@ -88,6 +90,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _updateTrafficSpeed() async {
     try {
+      if (!_toggling && _status == ProxyStatus.starting) await _refresh();
       final stats = await _service.getTrafficStats();
       final now = DateTime.now();
       final rx = stats['rxBytes'] ?? 0;
@@ -271,17 +274,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _refresh() async {
+    final generation = _transitionGeneration;
     try {
       final config = await _service.getConfigInfo();
-      final running = await _service.isRunning();
+      final status = await _service.getProxyStatus();
       final debugLoggingEnabled = await _service.getDebugLoggingEnabled();
       if (!mounted) return;
       setState(() {
         _config = config;
-        _status = running ? ProxyStatus.running : ProxyStatus.stopped;
+        if (!_toggling && generation == _transitionGeneration) {
+          _status = status;
+        }
         _debugLoggingEnabled = debugLoggingEnabled;
       });
-      if (running) await _loadProxyMode();
+      if (status == ProxyStatus.running) await _loadProxyMode();
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -841,6 +847,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
+    _toggling = true;
+    _transitionGeneration++;
     try {
       if (_status == ProxyStatus.running) {
         setState(() => _status = ProxyStatus.stopping);
@@ -870,6 +878,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _status = ProxyStatus.stopped);
       _showError(error);
+    } finally {
+      _toggling = false;
+      _transitionGeneration++;
     }
   }
 

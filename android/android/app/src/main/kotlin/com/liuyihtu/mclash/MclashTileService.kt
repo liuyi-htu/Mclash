@@ -51,7 +51,11 @@ class MclashTileService : TileService() {
             }
 
             if (VpnService.prepare(this) == null) {
-                ProxyVpnService.start(this)
+                runCatching { ProxyVpnService.start(this) }.onFailure { error ->
+                    Toast.makeText(this, error.message, Toast.LENGTH_SHORT)
+                        .apply { setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 96) }
+                        .show()
+                }
                 updateTileState()
                 handler.postDelayed(::updateTileState, 700)
             } else {

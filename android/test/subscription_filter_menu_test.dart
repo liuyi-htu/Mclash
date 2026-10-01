@@ -401,8 +401,12 @@ rules: [MATCH,DIRECT]
             .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
             .every((tile) => tile.value == true),
         isTrue);
-    await tester.tap(find.text('清空'));
+    await tester.tap(find.text('清除前置代理'));
     await tester.pumpAndSettle();
+    expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CheckboxListTile), findsNWidgets(4));
     expect(
         tester
             .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))

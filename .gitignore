@@ -1,4 +1,5 @@
 # Build outputs and tool caches
+**/__pycache__/
 **/build/
 **/.dart_tool/
 **/.pub/
@@ -22,8 +23,13 @@
 *.keystore
 
 # Downloaded Android runtime files
-android/android/app/src/main/jniLibs/
-android/android/app/src/main/assets/geodata/
+**/android/app/src/main/jniLibs/
+**/android/app/src/main/assets/geodata/
+
+# Local agent instructions and workspace state
+/AGENTS.md
+/.agents/
+/.codex/
 
 # Packaged artifacts and Windows staging files
 **/dist/

@@ -24,6 +24,7 @@ void main() {
         updatedAt: 0);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return null;
       if (call.method == 'isRunning') return false;
       if (call.method == 'getConfigContent') return 'rules: []\n';
       throw StateError('Unexpected write or runtime read: ${call.method}');
@@ -42,11 +43,29 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  testWidgets('starting proxy shows runtime config read-only', (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return 'starting';
+      if (call.method == 'getRuntimeConfigContent') return 'rules: []\n';
+      throw StateError('Unexpected config access: ${call.method}');
+    });
+    await tester.pumpWidget(const MaterialApp(
+        home: ConfigEditorPage(profile: profile, proxyRunning: true)));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    expect(find.text('保存'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
   testWidgets('running editor shows runtime read-only and unlocks when stopped',
       (tester) async {
     var running = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return null;
       if (call.method == 'isRunning') return running;
       if (call.method == 'getRuntimeConfigContent') return 'mixed-port: 7890\n';
       if (call.method == 'getConfigContent') return 'rules: []\n';
