@@ -601,12 +601,6 @@ class _ConfigPageState extends State<ConfigPage> {
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('rename'),
                   ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.link_outlined),
-                    title: const Text('检测订阅链接'),
-                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
-                  ),
                 ListTile(
                   leading: const Icon(Icons.add_link),
                   title: const Text('添加节点'),
@@ -655,6 +649,12 @@ class _ConfigPageState extends State<ConfigPage> {
                     title: const Text('更新订阅'),
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('refresh'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.link_outlined),
+                    title: const Text('检测订阅链接'),
+                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
                   ),
                 if (!profile.isSubscription)
                   ListTile(
