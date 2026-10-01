@@ -64,14 +64,28 @@ class SubscriptionConfigTest {
         assertEquals(original["dns"], result["dns"])
         assertEquals(original["rules"], result["rules"])
         val groups = result["proxy-groups"] as List<*>
-        assertEquals(listOf("DIRECT", "上海专线"), (groups[0] as Map<*, *>)["proxies"])
-        assertEquals(listOf("DIRECT"), (groups[1] as Map<*, *>)["proxies"])
+        assertEquals(listOf("DIRECT", "上海专线", "hk Premium"), (groups[0] as Map<*, *>)["proxies"])
+        assertEquals(listOf("上海专线", "hk Premium"), (groups[1] as Map<*, *>)["proxies"])
+    }
+
+    @Test fun missingFilterMetadataDefaultsToEmptyAndIncludesAllNodes() {
+        val bareTemplate = template.lineSequence()
+            .filterNot { it.startsWith("# Mclash 国内正则:") || it.startsWith("# Mclash 国外正则:") }
+            .joinToString("\n")
+        val source = "proxies: [{name: 广州, type: http}, {name: 美国, type: http}]"
+        val text = SubscriptionConfig.build(bareTemplate, source)
+        assertTrue(text.contains("# Mclash 国内正则: \"\""))
+        assertTrue(text.contains("# Mclash 国外正则: \"\""))
+        val groups = Yaml().load<Map<String, Any>>(text)["proxy-groups"] as List<*>
+        assertEquals(listOf("DIRECT", "广州", "美国"), (groups[0] as Map<*, *>)["proxies"])
+        assertEquals(listOf("广州", "美国"), (groups[1] as Map<*, *>)["proxies"])
     }
 
     @Test fun preservesFiltersWhenRefreshingNodes() {
         val source = "proxies: [{name: KR, type: ss}, {name: 广州, type: ss}]"
-        val previous = SubscriptionConfig.build(template, source)
-            .replace("# Mclash 国内正则: \"上海\"", "# Mclash 国内正则: \"广州\"")
+        val previous = SubscriptionConfig.build(
+            template.replace("# Mclash 国外正则: \"\"", "# Mclash 国外正则: \"KR\""), source)
+            .replace("# Mclash 国内正则: \"\"", "# Mclash 国内正则: \"广州\"")
             .replace("# Mclash 国外正则: \"KR\"", "# Mclash 国外正则: \"\"")
         val text = SubscriptionConfig.build(template, source, previous)
         val result = Yaml().load<Map<String, Any>>(text)
@@ -120,7 +134,8 @@ class SubscriptionConfigTest {
             "proxies: [{name: duplicate, type: ss}, {name: duplicate, type: ss}]")) {
             assertTrue(runCatching { SubscriptionConfig.build(template, source) }.isFailure)
         }
-        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template,
+        val filteredTemplate = template.replace("# Mclash 国外正则: \"\"", "# Mclash 国外正则: \"KR\"")
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(filteredTemplate,
             "proxies: [{name: 美国, type: ss}]"))
         val groups = result["proxy-groups"] as List<*>
         assertEquals(listOf("DIRECT"), (groups[1] as Map<*, *>)["proxies"])

@@ -1,6 +1,6 @@
 # Mclash 订阅配置模板
-# Mclash 国内正则: "上海"
-# Mclash 国外正则: "KR"
+# Mclash 国内正则: ""
+# Mclash 国外正则: ""
 mixed-port: 7890
 redir-port: 7891
 tproxy-port: 1536

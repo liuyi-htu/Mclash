@@ -4,7 +4,7 @@ import 'package:yaml_edit/yaml_edit.dart';
 
 const domesticGroup = '🚀 国内';
 const foreignGroup = '🌍 国外';
-const defaultSubscriptionFilters = {domesticGroup: '上海', foreignGroup: 'KR'};
+const defaultSubscriptionFilters = {domesticGroup: '', foreignGroup: ''};
 const _prefixes = {
   domesticGroup: '# Mclash 国内正则: ',
   foreignGroup: '# Mclash 国外正则: '

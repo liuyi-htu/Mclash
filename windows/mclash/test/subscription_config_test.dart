@@ -39,8 +39,11 @@ dns: {enable: false}
     expect(config['proxies'], loadYaml(subscription)['proxies']);
     expect(config['rules'], original['rules']);
     expect(config['dns'], original['dns']);
-    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海专线']);
-    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
+    expect(config['proxy-groups'][0]['proxies'],
+        ['DIRECT', '上海专线', 'hk Premium', '美国']);
+    expect(config['proxy-groups'][1]['proxies'], ['上海专线', 'hk Premium', '美国']);
+    expect(readSubscriptionFilter(result, domesticGroup), isEmpty);
+    expect(readSubscriptionFilter(result, foreignGroup), isEmpty);
     for (final group in config['proxy-groups']) {
       expect(group['use'], isNull);
       expect(group['include-all-proxies'], isNull);
@@ -49,8 +52,11 @@ dns: {enable: false}
     expect(result, isNot(contains('token=')));
   });
   test('unmatched regions retain usable DIRECT fallback', () {
-    final config = loadYaml(buildSubscriptionConfig(
-        template, 'proxies: [{name: 美国, type: ss, server: us.example}]'));
+    final config = loadYaml(editSubscriptionFilter(
+        buildSubscriptionConfig(
+            template, 'proxies: [{name: 美国, type: ss, server: us.example}]'),
+        foreignGroup,
+        'KR'));
     expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
   });
   test('refresh retains customized and blank filters from the subscription',
