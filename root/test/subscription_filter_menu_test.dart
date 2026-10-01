@@ -19,6 +19,8 @@ void main() {
     'subscriptionUserInfo': 'upload=0;download=0;total=1073741824;expire=0',
   };
   const content = '''
+# Mclash 国内正则: "上海"
+# Mclash 国外正则: "KR"
 proxies: [{name: 上海, type: ss}, {name: KR, type: ss}]
 proxy-groups:
   - {name: 🚀 国内, type: select, proxies: [DIRECT, 上海]}
@@ -56,6 +58,34 @@ rules: [MATCH,DIRECT]
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
       expect(tile.enabled, isFalse);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('region regex dialogs default to empty without saved filters',
+      (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') {
+        return content.split('\n')
+            .where((line) => !line.startsWith('# Mclash ')).join('\n');
+      }
+      throw StateError('Unexpected mutation: ${call.method}');
+    });
+    await tester.pumpWidget(
+        const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    for (final title in ['国内正则表达式', '国外正则表达式']) {
+      await tester.ensureVisible(find.text(title));
+      await tester.tap(find.text(title));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          isEmpty);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
     }
     expect(tester.takeException(), isNull);
   });

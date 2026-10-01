@@ -114,7 +114,7 @@ internal object SubscriptionConfig {
             val oldGroup = previousGroups.firstOrNull { it["name"] == name }
             val defaultGroup = groups.filterIsInstance<Map<*, *>>().first { it["name"] == name }
             if (comment != null) loader.load<String>(comment.removePrefix(prefixes[index]))
-            else (oldGroup?.get("filter") ?: defaultGroup["filter"] ?: if (index == 0) "上海" else "KR") as String
+            else (oldGroup?.get("filter") ?: defaultGroup["filter"] ?: "") as String
         }
         config["proxy-groups"] = groups.map { item ->
             @Suppress("UNCHECKED_CAST")
