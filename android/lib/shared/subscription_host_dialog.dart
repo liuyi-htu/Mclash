@@ -29,13 +29,10 @@ Future<bool> showSubscriptionHostDialog({
                         maxLines: 1,
                         decoration: InputDecoration(
                           labelText: 'HTTP / WS Host',
-                          helperText: '例如：example.com，不包含 http:// 或路径',
                           errorText: error,
                           errorMaxLines: 8,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text('仅修改 VMess 中 HTTP 和 WS 传输的 Host，更新订阅后保留。'),
                     ],
                   ),
                 ),

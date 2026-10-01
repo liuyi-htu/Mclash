@@ -1,3 +1,4 @@
+import 'proxy_chain.dart';
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
@@ -222,12 +223,16 @@ String addNodeLink(String content, String link) {
     // Local configurations keep their routing and gain the node in manual groups.
     for (var i = 0; i < groups.length; i++) {
       final group = groups[i];
-      if (group['type'] == 'select' && group['proxies'] is List) {
+      if (group['type'] == 'select' &&
+          group['proxies'] is List &&
+          !readProxyChainGroups(content).containsKey(group['name'])) {
         editor.update(
             ['proxy-groups', i, 'proxies'], [...group['proxies'], name]);
       }
     }
     result = editor.toString();
   }
-  return writeManualNodeNames(result, [...readManualNodeNames(content), name]);
+  return applySavedProxyChains(
+      writeManualNodeNames(result, [...readManualNodeNames(content), name]),
+      content);
 }

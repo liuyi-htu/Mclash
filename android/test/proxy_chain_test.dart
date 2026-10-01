@@ -15,6 +15,28 @@ rules: [MATCH,DIRECT]
 
 void main() {
   test(
+      'global front and back cover all normal nodes, including refreshed nodes',
+      () {
+    final front = setGlobalProxyChain(source, ['wap'], prepend: true);
+    expect(loadYaml(front)['proxies'][0]['dialer-proxy'], 'wap');
+    expect(loadYaml(front)['proxies'][1]['dialer-proxy'], 'wap');
+    final both = setGlobalProxyChain(front, ['KR'], prepend: false);
+    final yaml = loadYaml(both);
+    expect(yaml['proxies'][0]['dialer-proxy'], 'wap');
+    expect(yaml['proxies'][1]['dialer-proxy'], '上海');
+    expect(yaml['proxies'][2]['dialer-proxy'], isNull);
+    final refreshed = source.replaceFirst('  - {name: wap',
+        '  - {name: New, type: http, server: new.example, port: 80}\n  - {name: wap');
+    final restored = loadYaml(applySavedProxyChains(refreshed, both));
+    expect(restored['proxies'][2]['dialer-proxy'], 'wap');
+    final groupName = restored['proxies'][1]['dialer-proxy'];
+    expect(restored['proxy-groups'].last['name'], groupName);
+    expect(restored['proxy-groups'].last['proxies'], ['上海', 'New']);
+    expect(() => setGlobalProxyChain(both, ['wap'], prepend: false),
+        throwsFormatException);
+  });
+
+  test(
       'prepend sets dialer on current exit, append sets it on the selected post proxy',
       () {
     final before = loadYaml(source);
@@ -53,5 +75,34 @@ void main() {
         applySavedProxyChains('proxies: [{name: 上海, type: vmess}]', previous);
     expect(loadYaml(missing)['proxies'][0]['dialer-proxy'], isNull);
     expect(readProxyChains(missing), {'上海': 'wap'});
+  });
+  test(
+      'batch chains use a select group for multiple upstreams and preserve routing',
+      () {
+    const multiple =
+        "proxies: [{name: A, type: http}, {name: B, type: http}, {name: C, type: http}, {name: D, type: http}]\nproxy-groups: [{name: Existing, type: select, proxies: [A, B]}]\nrules: ['MATCH,Existing']\n";
+    final front =
+        setProxyChains(multiple, ['A', 'B'], ['C', 'D'], prepend: true);
+    final pre = loadYaml(front);
+    final group = pre['proxies'][0]['dialer-proxy'];
+    expect(pre['proxies'][1]['dialer-proxy'], group);
+    expect(pre['proxy-groups'][1]['proxies'], ['C', 'D']);
+    expect(pre['proxy-groups'][0], loadYaml(multiple)['proxy-groups'][0]);
+    expect(readProxyChainGroups(front)[group], ['C', 'D']);
+    final restored = loadYaml(applySavedProxyChains(multiple, front));
+    expect(restored['proxies'][0]['dialer-proxy'], group);
+    expect(restored['proxy-groups'][1]['proxies'], ['C', 'D']);
+    final post = loadYaml(
+        setProxyChains(multiple, ['A', 'B'], ['C', 'D'], prepend: false));
+    expect(
+        post['proxies'][2]['dialer-proxy'], post['proxies'][3]['dialer-proxy']);
+    expect(post['proxy-groups'][1]['proxies'], ['A', 'B']);
+    expect(() => setProxyChains(front, ['C'], ['A'], prepend: true),
+        throwsFormatException);
+    expect(
+        () => setProxyChains(multiple, ['A', 'B'], ['B', 'C'], prepend: true),
+        throwsFormatException);
+    expect(() => setProxyChains(multiple, [], ['B'], prepend: true),
+        throwsFormatException);
   });
 }

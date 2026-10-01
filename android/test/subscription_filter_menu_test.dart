@@ -149,9 +149,7 @@ rules: [MATCH,DIRECT]
     expect(loadYaml(saved!)['proxies'][0]['ws-opts']['headers']['Host'],
         'new.example');
     expect(saves, 1);
-    expect(find.text('Host 已修改，无需更新订阅。'), findsOneWidget);
-    await tester.tap(find.text('知道了'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改 Host'));
@@ -240,15 +238,13 @@ rules: [MATCH,DIRECT]
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNull);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('上海').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KR').last);
+    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('本机 → KR → 上海 → 目标'), findsOneWidget);
+    expect(find.textContaining('选择当前节点'), findsNothing);
+    expect(find.textContaining('本机 →'), findsNothing);
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
@@ -261,6 +257,51 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('batch proxies default to every remaining saved node',
+      (tester) async {
+    List<String>? targets;
+    List<String>? proxies;
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => TextButton(
+                onPressed: () => showProxyChainDialog(
+                    context: context,
+                    nodes: ['A', 'B', 'C', 'D'],
+                    prepend: true,
+                    onSave: (current, other) async {
+                      targets = current;
+                      proxies = other;
+                    }),
+                child: const Text('打开')))));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('全选'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+            .every((tile) => tile.value == true),
+        isTrue);
+    await tester.tap(find.text('清空'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+            .every((tile) => tile.value == false),
+        isTrue);
+    await tester.tap(find.text('C'));
+    await tester.tap(find.text('D'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(targets, ['A', 'B']);
+    expect(proxies, ['C', 'D']);
     expect(tester.takeException(), isNull);
   });
 
@@ -279,13 +320,10 @@ rules: [MATCH,DIRECT]
                 ))));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('A').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+    await tester.tap(find.textContaining('选择后置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('B').last);
+    await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();

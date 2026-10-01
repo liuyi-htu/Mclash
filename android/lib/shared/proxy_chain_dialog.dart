@@ -1,13 +1,58 @@
 import 'package:flutter/material.dart';
 
+Future<List<String>?> _selectNodes(BuildContext context, String title,
+    List<String> nodes, List<String> initial) async {
+  final selected = initial.toSet();
+  return showDialog<List<String>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+              title: Text(title),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: MediaQuery.sizeOf(context).height * 0.4,
+                child: ListView.builder(
+                  itemCount: nodes.length,
+                  itemBuilder: (context, index) => CheckboxListTile(
+                    title: Text(nodes[index]),
+                    value: selected.contains(nodes[index]),
+                    onChanged: (checked) => setState(() {
+                      if (checked == true) {
+                        selected.add(nodes[index]);
+                      } else {
+                        selected.remove(nodes[index]);
+                      }
+                    }),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => setState(() => selected.addAll(nodes)),
+                    child: const Text('全选')),
+                TextButton(
+                    onPressed: () => setState(selected.clear),
+                    child: const Text('清空')),
+                TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.of(context)
+                        .pop(nodes.where(selected.contains).toList()),
+                    child: const Text('确定')),
+              ],
+            )),
+  );
+}
+
 Future<bool> showProxyChainDialog({
   required BuildContext context,
   required List<String> nodes,
   required bool prepend,
-  required Future<void> Function(String current, String other) onSave,
+  required Future<void> Function(List<String> current, List<String> other)
+      onSave,
 }) async {
-  String? current;
-  String? other;
+  var other = <String>[];
   String? error;
   var saving = false;
   return await showDialog<bool>(
@@ -23,54 +68,22 @@ Future<bool> showProxyChainDialog({
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('current-$current'),
-                      initialValue: current,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: '当前节点'),
-                      items: [
-                        for (final name in nodes)
-                          DropdownMenuItem(
-                              value: name,
-                              child:
-                                  Text(name, overflow: TextOverflow.ellipsis))
-                      ],
-                      onChanged: saving
+                    OutlinedButton(
+                      onPressed: saving
                           ? null
-                          : (value) => setDialogState(() {
-                                current = value;
-                                if (other == current) other = null;
-                                error = null;
-                              }),
+                          : () async {
+                              final values = await _selectNodes(context,
+                                  prepend ? '选择前置节点' : '选择后置节点', nodes, other);
+                              if (values != null && context.mounted) {
+                                setDialogState(() {
+                                  other = values;
+                                  error = null;
+                                });
+                              }
+                            },
+                      child: Text(
+                          '${prepend ? '选择前置节点' : '选择后置节点'}（已选 ${other.length} 个）'),
                     ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('other-$current-$other'),
-                      initialValue: other,
-                      isExpanded: true,
-                      decoration:
-                          InputDecoration(labelText: prepend ? '前置节点' : '后置节点'),
-                      items: [
-                        for (final name
-                            in nodes.where((name) => name != current))
-                          DropdownMenuItem(
-                              value: name,
-                              child:
-                                  Text(name, overflow: TextOverflow.ellipsis))
-                      ],
-                      onChanged: saving
-                          ? null
-                          : (value) => setDialogState(() {
-                                other = value;
-                                error = null;
-                              }),
-                    ),
-                    const SizedBox(height: 16),
-                    if (current != null && other != null)
-                      Text(
-                          '本机 → ${prepend ? other : current} → ${prepend ? current : other} → 目标\n使用时选择出口节点：${prepend ? current : other}'),
-                    const SizedBox(height: 12),
-                    const Text('保存后直接修改配置并同步当前启用配置，会替换出口节点已有的前置设置。'),
                     if (error != null) ...[
                       const SizedBox(height: 12),
                       Text(error!,
@@ -86,27 +99,32 @@ Future<bool> showProxyChainDialog({
                         saving ? null : () => Navigator.of(context).pop(false),
                     child: const Text('取消')),
                 FilledButton(
-                  onPressed: saving || current == null || other == null
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            saving = true;
-                            error = null;
-                          });
-                          try {
-                            await onSave(current!, other!);
-                            if (context.mounted) {
-                              Navigator.of(context).pop(true);
-                            }
-                          } catch (failure) {
-                            if (context.mounted) {
+                  onPressed:
+                      saving || other.isEmpty || other.length == nodes.length
+                          ? null
+                          : () async {
                               setDialogState(() {
-                                saving = false;
-                                error = failure.toString();
+                                saving = true;
+                                error = null;
                               });
-                            }
-                          }
-                        },
+                              try {
+                                await onSave(
+                                    nodes
+                                        .where((name) => !other.contains(name))
+                                        .toList(),
+                                    other);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop(true);
+                                }
+                              } catch (failure) {
+                                if (context.mounted) {
+                                  setDialogState(() {
+                                    saving = false;
+                                    error = failure.toString();
+                                  });
+                                }
+                              }
+                            },
                   child: Text(saving ? '保存中…' : '保存'),
                 ),
               ],

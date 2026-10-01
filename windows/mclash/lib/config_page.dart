@@ -131,7 +131,6 @@ class _ConfigPageState extends State<ConfigPage> {
                       decoration: const InputDecoration(
                         labelText: '订阅链接',
                         hintText: 'https://...',
-                        helperText: '下载 Mihomo 节点并套用默认配置',
                       ),
                       keyboardType: TextInputType.url,
                       autocorrect: false,
@@ -488,23 +487,7 @@ class _ConfigPageState extends State<ConfigPage> {
           );
         },
       );
-      if (saved && mounted) {
-        await _load();
-        if (!mounted) return;
-        await showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('修改 Host'),
-            content: const Text('Host 已修改，无需更新订阅。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('知道了'),
-              ),
-            ],
-          ),
-        );
-      }
+      if (saved && mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -548,7 +531,7 @@ class _ConfigPageState extends State<ConfigPage> {
           final latest = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
             id: profile.id,
-            content: setProxyChain(latest, current, other, prepend: prepend),
+            content: setGlobalProxyChain(latest, other, prepend: prepend),
           );
         },
       );
