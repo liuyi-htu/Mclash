@@ -484,7 +484,23 @@ class _ConfigPageState extends State<ConfigPage> {
           );
         },
       );
-      if (saved && mounted) await _load();
+      if (saved && mounted) {
+        await _load();
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('修改 Host'),
+            content: const Text('Host 已修改，请重新更新订阅。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('知道了'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (error) {
       if (mounted) _showError(error);
     } finally {

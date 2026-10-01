@@ -26,8 +26,6 @@ internal class ConfigStore(private val context: Context) {
     private val configsDirectory = File(mihomoDirectory, "configs")
     private val legacyConfigFile = File(mihomoDirectory, "config.yaml")
 
-    private var bundledSubscriptionAttempted = false
-
     init {
         migrateLegacyConfig()
         installBundledDefaultConfig()
@@ -602,18 +600,6 @@ internal class ConfigStore(private val context: Context) {
         preferences.activeConfigId = profile.id
         preferences.configFileName = profile.name
         legacyConfigFile.delete()
-    }
-
-    @Synchronized
-    fun initializeDefaultSubscription() {
-        if (bundledSubscriptionAttempted || ProxyVpnService.running || ProxyVpnService.starting) return
-        bundledSubscriptionAttempted = true
-        val profile = readProfiles().firstOrNull {
-            it.type == TYPE_SUBSCRIPTION && it.url == DEFAULT_SUBSCRIPTION_URL &&
-                profileFile(it.id).isFile && profileFile(it.id).readText().contains("# Mclash 默认机场订阅")
-        } ?: return
-        // Keep the subscription available offline so it can be refreshed later.
-        runCatching { refreshSubscription(profile.id) }
     }
 
     private fun installBundledDefaultConfig() {
