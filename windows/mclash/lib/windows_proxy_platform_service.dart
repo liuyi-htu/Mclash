@@ -17,6 +17,7 @@ typedef ServiceProcessRunner = Future<ProcessResult> Function(
 class WindowsProxyPlatformService implements ProxyPlatformService {
   WindowsProxyPlatformService({
     String? dataDir,
+    this.subscriptionDownloadTimeout = const Duration(seconds: 25),
     String? systemProxyBackupPath,
     RegistryProcessRunner? registryProcessRunner,
     ServiceProcessRunner? serviceProcessRunner,
@@ -25,6 +26,7 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
         _registryProcessRunner = registryProcessRunner,
         _serviceProcessRunner = serviceProcessRunner;
 
+  final Duration subscriptionDownloadTimeout;
   final String? _dataDirOverride;
   final String? _systemProxyBackupPathOverride;
   final RegistryProcessRunner? _registryProcessRunner;
@@ -945,7 +947,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       {String? previousConfig}) async {
     final uri = _subscriptionUri(url);
     final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 15)
+      ..connectionTimeout = const Duration(seconds: 10)
       ..userAgent = 'clash.meta';
     try {
       return await (() async {
@@ -996,7 +998,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           contentLength: bytes.length,
         );
       })()
-          .timeout(const Duration(seconds: 45));
+          .timeout(subscriptionDownloadTimeout);
     } on TimeoutException {
       throw StateError('连接订阅服务器超时。');
     } finally {

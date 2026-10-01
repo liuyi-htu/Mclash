@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 Future<bool> showAddNodeDialog({
   required BuildContext context,
+  required List<String> nodes,
   required Future<void> Function(String link) onSave,
 }) async {
   final controller = TextEditingController();
@@ -21,6 +22,23 @@ Future<bool> showAddNodeDialog({
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Text('已添加的节点（${nodes.length}）'),
+                      const SizedBox(height: 8),
+                      if (nodes.isEmpty)
+                        const Text('暂无节点')
+                      else
+                        SizedBox(
+                          width: double.maxFinite,
+                          height: MediaQuery.sizeOf(context).height * 0.22,
+                          child: ListView.builder(
+                            itemCount: nodes.length,
+                            itemBuilder: (context, index) => ListTile(
+                              dense: true,
+                              title: Text(nodes[index]),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: controller,
                         enabled: !saving,

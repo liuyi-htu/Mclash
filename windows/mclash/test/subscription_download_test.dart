@@ -10,6 +10,41 @@ import 'package:yaml/yaml.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
+  test('slow streaming subscription stops at the total deadline without saving',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('slow-subscription-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) async {
+      try {
+        for (var i = 0; i < 60; i++) {
+          request.response.write('p');
+          await request.response.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+        }
+        await request.response.close();
+      } catch (_) {}
+    });
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        subscriptionDownloadTimeout: const Duration(milliseconds: 300),
+        serviceProcessRunner: (_, __) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
+    final elapsed = Stopwatch()..start();
+    try {
+      await expectLater(
+          service.addSubscription(
+              name: 'Slow', url: 'http://127.0.0.1:${server.port}/slow'),
+          throwsA(isA<StateError>()
+              .having((e) => e.message, 'message', contains('超时'))));
+      expect(elapsed.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(await service.getConfigs(), isEmpty);
+      expect(await File('${dir.path}\\settings.json').exists(), isFalse);
+    } finally {
+      await server.close(force: true);
+      await dir.delete(recursive: true);
+    }
+  });
+
   test(
       'fresh installation is empty; manually added subscriptions support Host and chains',
       () async {
