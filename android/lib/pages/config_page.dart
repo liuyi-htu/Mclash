@@ -501,12 +501,20 @@ class _ConfigPageState extends State<ConfigPage> {
                   ),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.drive_file_rename_outline),
-                  title: const Text('修改配置名称'),
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('rename'),
-                ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('修改订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('edit'),
+                  )
+                else
+                  ListTile(
+                    leading: const Icon(Icons.drive_file_rename_outline),
+                    title: const Text('修改配置名称'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('rename'),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.code_outlined),
                   title: const Text('修改配置文件'),
@@ -550,12 +558,6 @@ class _ConfigPageState extends State<ConfigPage> {
                     title: const Text('更新订阅'),
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('refresh'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.edit_outlined),
-                    title: const Text('修改订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('edit'),
                   ),
                 ],
                 const SizedBox(height: 8),
