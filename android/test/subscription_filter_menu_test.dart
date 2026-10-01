@@ -140,7 +140,7 @@ rules: [MATCH,DIRECT]
     expect(loadYaml(saved!)['proxies'][0]['ws-opts']['headers']['Host'],
         'new.example');
     expect(saves, 1);
-    expect(find.text('Host 已修改，请重新更新订阅。'), findsOneWidget);
+    expect(find.text('Host 已修改，无需更新订阅。'), findsOneWidget);
     await tester.tap(find.text('知道了'));
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
