@@ -506,8 +506,13 @@ class _ConfigPageState extends State<ConfigPage> {
   Future<void> _addNode(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      if (!mounted) return;
+      setState(() => _working = false);
       final saved = await showAddNodeDialog(
         context: context,
+        nodes: savedProxyNodeNames(content),
         onSave: (link) async {
           final content = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
@@ -519,6 +524,8 @@ class _ConfigPageState extends State<ConfigPage> {
       if (saved && mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
     }
   }
 
@@ -594,12 +601,48 @@ class _ConfigPageState extends State<ConfigPage> {
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('rename'),
                   ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: const Text('更新订阅'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.link_outlined),
+                    title: const Text('检测订阅链接'),
+                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.add_link),
                   title: const Text('添加节点'),
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('addNode'),
                 ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.dns_outlined),
+                    title: const Text('修改 Host'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('host'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.filter_alt_outlined),
+                    title: const Text('国内正则表达式'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () =>
+                        Navigator.of(sheetContext).pop('domesticFilter'),
+                  ),
+                if (profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.filter_alt_outlined),
+                    title: const Text('国外正则表达式'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () =>
+                        Navigator.of(sheetContext).pop('foreignFilter'),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.first_page),
                   title: const Text('添加前置代理'),
@@ -612,6 +655,7 @@ class _ConfigPageState extends State<ConfigPage> {
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('appendProxy'),
                 ),
+                const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.code_outlined),
                   title: const Text('修改配置文件'),
@@ -629,40 +673,6 @@ class _ConfigPageState extends State<ConfigPage> {
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('delete'),
                 ),
-                if (profile.isSubscription) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.dns_outlined),
-                    title: const Text('修改 Host'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('host'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.filter_alt_outlined),
-                    title: const Text('国内正则表达式'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () =>
-                        Navigator.of(sheetContext).pop('domesticFilter'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.filter_alt_outlined),
-                    title: const Text('国外正则表达式'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () =>
-                        Navigator.of(sheetContext).pop('foreignFilter'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.link_outlined),
-                    title: const Text('检测订阅链接'),
-                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.refresh),
-                    title: const Text('更新订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
-                  ),
-                ],
                 const SizedBox(height: 8),
               ],
             ),

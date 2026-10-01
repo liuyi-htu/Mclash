@@ -187,6 +187,9 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('已添加的节点（2）'), findsOneWidget);
+    expect(find.text('上海'), findsOneWidget);
+    expect(find.text('KR'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'vmess://bad');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();

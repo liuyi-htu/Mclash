@@ -296,47 +296,7 @@ internal class ConfigStore(private val context: Context) {
     }
 
     private fun downloadSubscription(rawUrl: String, previousConfig: String? = null): ByteArray {
-        val parsed = URL(rawUrl)
-        require(parsed.protocol == "http" || parsed.protocol == "https") {
-            "订阅链接只支持 http:// 或 https://"
-        }
-
-        val connection = parsed.openConnection() as HttpURLConnection
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 30_000
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "clash.meta")
-        connection.setRequestProperty(
-            "Accept",
-            "application/yaml, text/yaml, text/plain, application/octet-stream, */*",
-        )
-        connection.setRequestProperty("Accept-Encoding", "gzip")
-
-        try {
-            val code = connection.responseCode
-            require(code in 200..299) { "订阅下载失败：HTTP $code" }
-
-            val contentLength = connection.contentLengthLong
-            require(contentLength <= MAX_CONFIG_BYTES || contentLength < 0) {
-                "订阅内容超过 8 MB"
-            }
-
-            val rawInput = connection.inputStream
-            val input = if (
-                connection.contentEncoding?.contains("gzip", ignoreCase = true) == true
-            ) {
-                GZIPInputStream(rawInput)
-            } else {
-                rawInput
-            }
-
-            val bytes = input.use(::readStreamWithLimit)
-
-            return buildSubscriptionConfig(bytes, previousConfig)
-        } finally {
-            connection.disconnect()
-        }
+        return buildSubscriptionConfig(SubscriptionDownloader.download(rawUrl), previousConfig)
     }
 
     private fun writeConfigAndProfiles(id: String, bytes: ByteArray, profiles: List<ConfigProfile>) {
