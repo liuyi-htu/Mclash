@@ -13,6 +13,35 @@ void main() {
       active: true,
       exists: true,
       updatedAt: 0);
+  testWidgets('subscription config stays read-only even when proxy is stopped',
+      (tester) async {
+    const subscription = ConfigProfile(
+        id: 'airport',
+        name: 'Airport',
+        type: 'subscription',
+        active: true,
+        exists: true,
+        updatedAt: 0);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'isRunning') return false;
+      if (call.method == 'getConfigContent') return 'rules: []\n';
+      throw StateError('Unexpected write or runtime read: ${call.method}');
+    });
+    await tester.pumpWidget(const MaterialApp(
+        home: ConfigEditorPage(profile: subscription, proxyRunning: false)));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    expect(find.text('订阅配置（只读）'), findsOneWidget);
+    expect(find.text('保存'), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+
   testWidgets('running editor shows runtime read-only and unlocks when stopped',
       (tester) async {
     var running = true;

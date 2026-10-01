@@ -648,12 +648,13 @@ class _ConfigPageState extends State<ConfigPage> {
                   onTap: () => Navigator.of(sheetContext).pop('appendProxy'),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.code_outlined),
-                  title: const Text('修改配置文件'),
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('editContent'),
-                ),
+                if (!profile.isSubscription)
+                  ListTile(
+                    leading: const Icon(Icons.code_outlined),
+                    title: const Text('修改配置文件'),
+                    enabled: !widget.proxyRunning,
+                    onTap: () => Navigator.of(sheetContext).pop('editContent'),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.visibility_outlined),
                   title: const Text('查看当前运行配置'),
@@ -711,6 +712,7 @@ class _ConfigPageState extends State<ConfigPage> {
         );
         return;
       case 'editContent':
+        if (profile.isSubscription) return;
         if (!_ensureStopped()) return;
         await Navigator.of(context).push<void>(
           MaterialPageRoute(builder: (_) => ConfigEditorPage(profile: profile)),

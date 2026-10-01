@@ -27,6 +27,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   late final _service = widget.service ?? NativeProxyService.instance;
   final _controller = TextEditingController();
   bool _readOnly = false;
+  bool _runtimeContent = false;
   Timer? _stateTimer;
   bool _checkingState = false;
   bool _loading = true;
@@ -55,7 +56,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     _checkingState = true;
     try {
       final running = await _service.isRunning();
-      if (mounted && running != _readOnly) await _load();
+      if (mounted && running != _runtimeContent) await _load();
     } catch (_) {
       // Keep the current view; native save guards still reject unsafe writes.
     } finally {
@@ -67,13 +68,16 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     try {
       final running = await _service.isRunning();
       if (!mounted) return;
-      setState(() => _readOnly = widget.runtimeView || running);
+      setState(() {
+        _runtimeContent = widget.runtimeView || running;
+        _readOnly = _runtimeContent || widget.profile.isSubscription;
+      });
       final content = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _controller.removeListener(_markDirty);
-      _readOnly = widget.runtimeView || running;
+      _readOnly = _runtimeContent || widget.profile.isSubscription;
       _dirty = false;
       _lastText = content;
       _controller.text = content;
@@ -157,7 +161,11 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(_readOnly ? '当前运行配置（只读）' : '修改配置'),
+          title: Text(_runtimeContent
+              ? '当前运行配置（只读）'
+              : _readOnly
+                  ? '订阅配置（只读）'
+                  : '修改配置'),
           actions: [
             if (!_readOnly)
               Padding(
@@ -184,13 +192,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        _readOnly ? '当前内核实际运行配置' : widget.profile.name,
+                        _runtimeContent ? '当前内核实际运行配置' : widget.profile.name,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      if (!_readOnly && widget.profile.isSubscription) ...[
-                        const SizedBox(height: 6),
-                        const Text('这是订阅配置，后续更新订阅时会覆盖手工修改的内容。'),
-                      ],
                       if (_error != null) ...[
                         const SizedBox(height: 8),
                         Text(

@@ -10,35 +10,39 @@ import 'package:yaml/yaml.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
-  test('slow streaming subscription stops at the total deadline without saving',
+  test('slow streaming subscription succeeds while chunks keep arriving',
       () async {
     final dir = await Directory.systemTemp.createTemp('slow-subscription-');
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final chunks = [
+      'proxies: [',
+      '{name: KR slow, type: http, server: example.org, port: 80}',
+      ']'
+    ];
     server.listen((request) async {
-      try {
-        for (var i = 0; i < 60; i++) {
-          request.response.write('p');
-          await request.response.flush();
-          await Future<void>.delayed(const Duration(milliseconds: 40));
-        }
-        await request.response.close();
-      } catch (_) {}
+      request.response.bufferOutput = false;
+      for (final chunk in chunks) {
+        request.response.write(chunk);
+        await request.response.flush();
+        await Future<void>.delayed(const Duration(milliseconds: 450));
+      }
+      await request.response.close();
     });
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
-        subscriptionDownloadTimeout: const Duration(milliseconds: 300),
+        subscriptionIdleTimeout: const Duration(seconds: 1),
         serviceProcessRunner: (_, __) async =>
             ProcessResult(1, 0, '{"state":"stopped"}', ''));
     final elapsed = Stopwatch()..start();
     try {
-      await expectLater(
-          service.addSubscription(
-              name: 'Slow', url: 'http://127.0.0.1:${server.port}/slow'),
-          throwsA(isA<StateError>()
-              .having((e) => e.message, 'message', contains('超时'))));
-      expect(elapsed.elapsed, lessThan(const Duration(seconds: 2)));
-      expect(await service.getConfigs(), isEmpty);
-      expect(await File('${dir.path}\\settings.json').exists(), isFalse);
+      await service.addSubscription(
+          name: 'Slow', url: 'http://127.0.0.1:${server.port}/slow');
+      expect(elapsed.elapsed, greaterThan(const Duration(seconds: 1)));
+      final state =
+          jsonDecode(await File('${dir.path}\\settings.json').readAsString());
+      final id = (state['profileUrls'] as Map).keys.single as String;
+      expect(loadYaml(await service.getConfigContent(id))['proxies'][0]['name'],
+          'KR slow');
     } finally {
       await server.close(force: true);
       await dir.delete(recursive: true);

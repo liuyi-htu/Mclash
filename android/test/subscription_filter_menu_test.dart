@@ -41,6 +41,7 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
+    expect(find.text('修改配置文件'), findsNothing);
     for (final name in [
       '国内正则表达式',
       '国外正则表达式',
