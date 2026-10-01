@@ -8,6 +8,21 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun refreshDoesNotRewriteManualHostOrDialer() {
+        val previous = """
+            # Mclash 手动节点: ["Manual"]
+            # Mclash HTTP/WS Host: "preset.example"
+            # Mclash 节点链路: {"Manual":"KR New"}
+            proxies: [{name: Manual, type: vmess, server: manual.example, port: 443, uuid: test, network: ws, dialer-proxy: KR, ws-opts: {headers: {Host: custom.example}}, udp: true}, {name: KR, type: http, server: old.example, port: 80}]
+        """.trimIndent()
+        val incoming = "proxies: [{name: Manual, type: http, server: overwritten.example, port: 80}, {name: KR, type: http, server: updated.example, port: 80}, {name: KR New, type: http, server: new.example, port: 80}]"
+        val yaml = Yaml()
+        val result = yaml.load<Map<String, Any>>(SubscriptionConfig.build(template, incoming, previous))
+        val nodes = (result["proxies"] as List<*>).filterIsInstance<Map<*, *>>()
+        assertEquals((yaml.load<Map<String, Any>>(previous)["proxies"] as List<*>)[0], nodes.first { it["name"] == "Manual" })
+        assertEquals("updated.example", nodes.first { it["name"] == "KR" }["server"])
+    }
+
     @Test fun globalChainsCoverNewNodesAndAvoidFrontBackCycles() {
         val previous = "# Mclash 全局链路: {\"front\":[\"wap\"],\"back\":[\"exit\"]}\nproxies: []"
         val subscription = "proxies: [{name: 上海, type: http}, {name: KR, type: http}, {name: wap, type: http}, {name: exit, type: http}]"

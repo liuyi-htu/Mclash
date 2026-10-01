@@ -513,7 +513,13 @@ class _ConfigPageState extends State<ConfigPage> {
       setState(() => _working = false);
       final saved = await showAddNodeDialog(
         context: context,
-        nodes: savedProxyNodeNames(content),
+        nodes: savedManualNodeNames(content),
+        onDelete: (name) async {
+          final latest = await _service.getConfigContent(profile.id);
+          final updated = deleteManualNode(latest, name);
+          await _service.saveConfigContent(id: profile.id, content: updated);
+          return savedManualNodeNames(updated);
+        },
         onSave: (link) async {
           final content = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(

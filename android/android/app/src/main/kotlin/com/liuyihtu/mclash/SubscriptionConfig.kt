@@ -77,7 +77,7 @@ internal object SubscriptionConfig {
             @Suppress("UNCHECKED_CAST")
             val node = item as Map<String, Any?>
             val upstream = chainOverrides[node["name"]]
-            if (upstream != null && (upstream in names || groups.any { (it as Map<*, *>)["name"] == upstream })) node.toMutableMap().apply { this["dialer-proxy"] = upstream }
+            if (node["name"] !in retainedNames && upstream != null && (upstream in names || groups.any { (it as Map<*, *>)["name"] == upstream })) node.toMutableMap().apply { this["dialer-proxy"] = upstream }
             else node
         }
         val hostPrefix = "# Mclash HTTP/WS Host: "
@@ -90,7 +90,7 @@ internal object SubscriptionConfig {
                 @Suppress("UNCHECKED_CAST")
                 val node = item as Map<String, Any?>
                 val network = node["network"]
-                if (node["type"] != "vmess" || (network != "http" && network != "ws")) node
+                if (node["name"] in retainedNames || node["type"] != "vmess" || (network != "http" && network != "ws")) node
                 else {
                     val key = if (network == "http") "http-opts" else "ws-opts"
                     @Suppress("UNCHECKED_CAST")

@@ -16,6 +16,21 @@ proxies:
 rules: [MATCH,REJECT]
 dns: {enable: false}
 ''';
+  test('refresh preserves all manual fields despite Host and chain overrides',
+      () {
+    const previous =
+        '# Mclash 手动节点: ["Manual"]\n# Mclash HTTP/WS Host: "preset.example"\n# Mclash 节点链路: {"Manual":"KR New"}\nproxies: [{name: Manual, type: vmess, server: manual.example, port: 443, uuid: test, network: ws, dialer-proxy: KR, ws-opts: {headers: {Host: custom.example}}, udp: true}, {name: KR, type: http, server: old.example, port: 80}]\nproxy-groups: [{name: 🚀 国内, type: select, proxies: [DIRECT]}, {name: 🌍 国外, type: select, proxies: [KR]}]';
+    const incoming =
+        'proxies: [{name: Manual, type: http, server: overwritten.example, port: 80}, {name: KR, type: http, server: updated.example, port: 80}, {name: KR New, type: http, server: new.example, port: 80}]';
+    final config = loadYaml(
+        buildSubscriptionConfig(template, incoming, previousConfig: previous));
+    final manual =
+        config['proxies'].firstWhere((node) => node['name'] == 'Manual');
+    expect(manual, loadYaml(previous)['proxies'][0]);
+    expect(
+        config['proxies'].firstWhere((node) => node['name'] == 'KR')['server'],
+        'updated.example');
+  });
   test('embeds full nodes and keeps default routing and regional groups', () {
     final original = loadYaml(template);
     final result = buildSubscriptionConfig(template, subscription);

@@ -236,3 +236,56 @@ String addNodeLink(String content, String link) {
       writeManualNodeNames(result, [...readManualNodeNames(content), name]),
       content);
 }
+
+List<String> savedManualNodeNames(String content) {
+  final saved = savedProxyNodeNames(content).toSet();
+  return readManualNodeNames(content).where(saved.contains).toList();
+}
+
+String restoreManualNodes(String content, String? previous) {
+  if (previous == null) return content;
+  final names = readManualNodeNames(previous).toSet();
+  if (names.isEmpty) return content;
+  final old = (loadYaml(previous) as YamlMap)['proxies'] as List? ?? [];
+  final manual = {
+    for (final node in old)
+      if (names.contains(node['name'])) node['name']: node
+  };
+  final nodes = (loadYaml(content) as YamlMap)['proxies'] as List? ?? [];
+  final result = (YamlEditor(content)
+        ..update(['proxies'],
+            [for (final node in nodes) manual[node['name']] ?? node]))
+      .toString();
+  validateProxyChains(result);
+  return result;
+}
+
+String deleteManualNode(String content, String name) {
+  if (!savedManualNodeNames(content).contains(name)) {
+    throw const FormatException('只能删除手动添加的节点');
+  }
+  final config = loadYaml(content) as YamlMap;
+  final nodes = [
+    for (final node in config['proxies'] as List)
+      if (node['name'] != name) Map<dynamic, dynamic>.from(node as Map)
+  ];
+  for (final node in nodes) {
+    if (node['dialer-proxy'] == name) node.remove('dialer-proxy');
+  }
+  final editor = YamlEditor(content)..update(['proxies'], nodes);
+  final groups = config['proxy-groups'] as List? ?? [];
+  for (var i = 0; i < groups.length; i++) {
+    final members = groups[i]['proxies'];
+    if (members is List && members.contains(name)) {
+      final retained = members.where((node) => node != name).toList();
+      editor.update(['proxy-groups', i, 'proxies'],
+          retained.isEmpty ? ['DIRECT'] : retained);
+    }
+  }
+  final result = removeProxyChainNode(
+      writeManualNodeNames(editor.toString(),
+          readManualNodeNames(content).where((node) => node != name).toList()),
+      name);
+  validateProxyChains(result);
+  return result;
+}

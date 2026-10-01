@@ -56,7 +56,10 @@ String buildSubscriptionConfig(String template, String subscription,
   });
   final host = readSubscriptionHost(previousConfig ?? template);
   final result = host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
-  return applySavedProxyChains(
-      writeManualNodeNames(result, readManualNodeNames(previousConfig ?? '')),
-      previousConfig ?? '');
+  return restoreManualNodes(
+      applySavedProxyChains(
+          writeManualNodeNames(
+              result, readManualNodeNames(previousConfig ?? '')),
+          previousConfig ?? ''),
+      previousConfig);
 }
