@@ -491,7 +491,7 @@ class _ConfigPageState extends State<ConfigPage> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('修改 Host'),
-            content: const Text('Host 已修改，请重新更新订阅。'),
+            content: const Text('Host 已修改，无需更新订阅。'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),

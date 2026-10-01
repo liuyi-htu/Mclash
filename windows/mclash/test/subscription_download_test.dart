@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
 import 'package:mclash/subscription_filter.dart';
+import 'package:mclash/subscription_host.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -16,7 +17,7 @@ void main() {
     server.listen((request) async {
       requests++;
       request.response.write(
-          'proxies: [{name: KR default, type: ss, server: example.org}]');
+          'proxies: [{name: KR default, type: vmess, network: http, server: example.org}, {name: KR ws, type: vmess, network: ws, server: example.org}]');
       await request.response.close();
     });
     final url = 'http://127.0.0.1:${server.port}/subscription';
@@ -50,7 +51,24 @@ void main() {
       expect(runtime['proxies'][0]['name'], 'KR default');
       expect(runtime['proxy-providers'], isNull);
       expect(runtime['proxy-groups'][1]['filter'], isNull);
-      expect(runtime['proxy-groups'][1]['proxies'], ['KR default']);
+      expect(runtime['proxy-groups'][1]['proxies'], ['KR default', 'KR ws']);
+      final profile = File('${dir.path}\\profiles\\default.yaml');
+      await service.saveConfigContent(
+        id: 'default.yaml',
+        content:
+            editSubscriptionHost(await profile.readAsString(), 'new.example'),
+      );
+      expect(requests, 1); // Saving Host must not download the subscription.
+      final saved = loadYaml(await profile.readAsString());
+      final applied =
+          loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+      final preview = loadYaml(await service.getRuntimeConfigContent());
+      for (final config in [saved, applied, preview]) {
+        expect(config['proxies'][0]['http-opts']['headers']['Host'],
+            ['new.example']);
+        expect(
+            config['proxies'][1]['ws-opts']['headers']['Host'], 'new.example');
+      }
       await service.getConfigs();
       expect(requests, 1);
     } finally {
