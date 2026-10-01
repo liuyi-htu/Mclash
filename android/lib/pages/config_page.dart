@@ -1,3 +1,4 @@
+import '../shared/subscription_usage.dart';
 import 'package:flutter/material.dart';
 import '../shared/proxy_chain.dart';
 import '../shared/proxy_chain_dialog.dart';
@@ -580,7 +581,7 @@ class _ConfigPageState extends State<ConfigPage> {
                   title: Text(profile.name),
                   subtitle: Text(
                     profile.isSubscription
-                        ? (profile.url ?? '订阅链接不可用')
+                        ? subscriptionUsageSummary(profile.subscriptionUserInfo)
                         : '本地 YAML 配置',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
