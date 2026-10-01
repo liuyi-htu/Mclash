@@ -94,9 +94,9 @@ cd android
 
 默认构建 ARM64 Release APK，最终 APK 和 SHA-256 写入
 `android/dist/`。Android APK 和 Windows 安装包共用仓库中的
-`assets/default-config.yaml`，构建时直接内置，不再访问远程配置地址。Android
-应用仅在首次运行且没有现有配置时创建默认机场订阅 `Cloudflare`，
-首次加载时下载预设订阅链接的节点。离线时保留订阅条目，联网后可手动更新。
+`assets/default-config.yaml`，仅作为用户主动添加订阅时的配置模板。
+Android 和 Windows 首次安装均为空配置、空订阅，项目不内置任何公开机场订阅
+或预设机场订阅链接。用户可自行导入 YAML 配置或添加自己的订阅。
 
 Android 和 Windows 添加、修改或更新机场订阅时，先下载 Mihomo/Clash YAML
 订阅，提取其中的 `proxies` 节点并内置到默认配置生成的订阅配置中。默认 DNS、
