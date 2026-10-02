@@ -255,7 +255,7 @@ String setProxyChains(String content, List<String> current, List<String> other,
       for (final group in config['proxy-groups'] as List? ?? [])
         group['name'] as String
     };
-    final base = '${prepend ? '🔗 前置代理' : '🔗 后置入口'}$groupSuffix';
+    final base = '${prepend ? '🔗 链式节点' : '🔗 后置入口'}$groupSuffix';
     upstream = base;
     var index = 2;
     while (used.contains(upstream)) {
@@ -469,12 +469,13 @@ String _applyProxyChainSets(String content, String previous,
   ].join()}$result';
 }
 
-const frontChainPrefix = '# Mclash 前置链路 ';
+const frontChainPrefix = '# Mclash 链式节点 ';
 const backChainPrefix = '# Mclash 后置链路 ';
 
 String? proxyChainCommentPrefix(String line) {
   for (final prefix in [
     frontChainPrefix,
+    '# Mclash 前置链路 ',
     backChainPrefix,
     numberedChainPrefix
   ]) {
@@ -500,7 +501,8 @@ String runtimeProxyChainComments(String content, {String? profileContent}) {
           : frontChainPrefix;
       visible.add('$direction${line.substring(prefix.length).trimRight()}');
     } else {
-      visible.add(line.trimRight());
+      visible.add(
+          line.replaceFirst('# Mclash 前置链路 ', frontChainPrefix).trimRight());
     }
   }
   if (visible.isEmpty) {

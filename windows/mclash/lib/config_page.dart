@@ -637,7 +637,8 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
-  Future<void> _editProxyChain(ConfigProfile profile, bool prepend) async {
+  Future<void> _editProxyChain(ConfigProfile profile) async {
+    const prepend = true;
     if (!_ensureStopped()) return;
     try {
       setState(() => _working = true);
@@ -647,7 +648,7 @@ class _ConfigPageState extends State<ConfigPage> {
       if (!mounted) return;
       setState(() => _working = false);
       final sets = readProxyChainSets(content);
-      final role = prepend ? 'front' : 'back';
+      const role = 'front';
       final existing = sets.entries
           .where((entry) => (entry.value[role] ?? []).isNotEmpty)
           .toList();
@@ -662,7 +663,7 @@ class _ConfigPageState extends State<ConfigPage> {
             children: [
               for (final entry in existing)
                 ListTile(
-                  title: Text('${prepend ? '前置链路' : '后置链路'} ${entry.key}'),
+                  title: Text('链式节点 ${entry.key}'),
                   subtitle: Text(
                       '${entry.value[role]!.join(' → ')}\n作用节点：${(entry.value['${role}Targets'] ?? []).join('、')}'),
                   isThreeLine: true,
@@ -671,7 +672,7 @@ class _ConfigPageState extends State<ConfigPage> {
               const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.add),
-                title: Text(prepend ? '新增前置链路' : '新增后置链路'),
+                title: const Text('新增链式节点'),
                 onTap: () => Navigator.of(sheetContext).pop('new'),
               ),
             ],
@@ -686,7 +687,7 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         nodes: nodes,
         prepend: prepend,
-        chainLabel: '${prepend ? '前置链路' : '后置链路'} $chainId',
+        chainLabel: '链式节点 $chainId',
         initialNodes: initial[role] ?? const [],
         initialTargets: initial['${role}Targets'] ?? const [],
         excludedTargets: [
@@ -941,8 +942,7 @@ class _ConfigPageState extends State<ConfigPage> {
     const editingActions = {
       'addNode': ('添加节点', Icons.add_link),
       'host': ('修改 Host', Icons.dns_outlined),
-      'prependProxy': ('添加前置代理', Icons.first_page),
-      'appendProxy': ('添加后置代理', Icons.last_page),
+      'prependProxy': ('链式节点', Icons.link),
       'groups': ('代理组管理', Icons.account_tree_outlined),
       'filters': ('正则设置', Icons.filter_alt_outlined),
       'rules': ('规则管理', Icons.rule),
@@ -1034,11 +1034,7 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
 
       case 'prependProxy':
-        await _editProxyChain(profile, true);
-        await _returnToActions(profile);
-        return;
-      case 'appendProxy':
-        await _editProxyChain(profile, false);
+        await _editProxyChain(profile);
         await _returnToActions(profile);
         return;
       case 'addNode':

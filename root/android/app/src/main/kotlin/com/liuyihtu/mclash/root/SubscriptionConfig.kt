@@ -10,7 +10,7 @@ internal object SubscriptionConfig {
     fun runtimeMetadata(source: String): String {
         val generic = "# Mclash 代理组正则: "
         val regions = linkedMapOf("🚀 国内" to "# Mclash 国内正则: ", "🌍 国外" to "# Mclash 国外正则: ")
-        val lines = source.removePrefix("\uFEFF").lineSequence().toList()
+        val lines = source.removePrefix("\uFEFF").replace("# Mclash 前置链路 ", "# Mclash 链式节点 ").lineSequence().toList()
         val loader = Yaml(SafeConstructor(LoaderOptions().apply { codePointLimit = 8 * 1024 * 1024 }))
         val saved = lines.firstOrNull { it.startsWith(generic) }
         val legacy = regions.filterValues { prefix -> lines.any { it.startsWith(prefix) } }
@@ -28,7 +28,7 @@ internal object SubscriptionConfig {
         val globalPrefix = "# Mclash 全局链路: "
         val global = lines.firstOrNull { it.startsWith(globalPrefix) }
             ?.let { loader.load<Map<String, List<String>>>(it.removePrefix(globalPrefix)) }.orEmpty()
-        val frontPrefix = "# Mclash 前置链路 "
+        val frontPrefix = "# Mclash 链式节点 "
         val backPrefix = "# Mclash 后置链路 "
         val numberedPrefix = "# Mclash 节点链路 "
         val aggregatePrefix = "# Mclash 节点链路: "
@@ -221,7 +221,7 @@ internal object SubscriptionConfig {
                     for (target in targets) assign(target, upstream)
                 }
                 for (index in 1 until front.size) assign(front[index], front[index - 1])
-                if (front.isNotEmpty()) connect((roles["frontTargets"] ?: normal).filter { it in normal && it !in allRoleNodes }, listOf(front.last()), "🔗 前置代理")
+                if (front.isNotEmpty()) connect((roles["frontTargets"] ?: normal).filter { it in normal && it !in allRoleNodes }, listOf(front.last()), "🔗 链式节点")
                 connect(back, (roles["backTargets"] ?: normal).filter { it in normal && it !in allRoleNodes }, "🔗 后置入口")
                 if (setId.isNotEmpty()) numberedChains[setId] = ownChains
             }
@@ -323,7 +323,7 @@ internal object SubscriptionConfig {
         val setMetadata = if (roleSets == null) "" else setsPrefix + "{" + roleSets.entries.joinToString(",") { (id, roles) ->
             quote(id) + ":{" + roles.entries.joinToString(",") { (role, members) -> quote(role) + ":[" + members.joinToString(",", transform = ::quote) + "]" } + "}"
         } + "}\n" + numberedChains.entries.joinToString("") { (id, chains) ->
-            (if (roleSets[id]?.containsKey("back") == true) "# Mclash 后置链路 $id: {" else "# Mclash 前置链路 $id: {") + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
+            (if (roleSets[id]?.containsKey("back") == true) "# Mclash 后置链路 $id: {" else "# Mclash 链式节点 $id: {") + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
         }
         val header = setMetadata + (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +

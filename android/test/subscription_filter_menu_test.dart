@@ -36,15 +36,7 @@ rules: ["MATCH,DIRECT"]
   testWidgets(
       'configuration menu follows YAML section order and handles unreadable files',
       (tester) async {
-    const defaults = [
-      '添加节点',
-      '修改 Host',
-      '添加前置代理',
-      '添加后置代理',
-      '代理组管理',
-      '正则设置',
-      '规则管理'
-    ];
+    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '正则设置', '规则管理'];
     final cases = <String?>[
       content,
       '# proxies: comment only\nrules: ["MATCH,DIRECT"]\nproxy-groups: []\nproxies: []\n',
@@ -68,7 +60,7 @@ rules: ["MATCH,DIRECT"]
       await tester.longPress(find.text('Airport'));
       await tester.pumpAndSettle();
       final expected = index == 1
-          ? ['规则管理', '代理组管理', '正则设置', '添加节点', '修改 Host', '添加前置代理', '添加后置代理']
+          ? ['规则管理', '代理组管理', '正则设置', '添加节点', '修改 Host', '链式节点']
           : defaults;
       for (var position = 1; position < expected.length; position++) {
         expect(
@@ -176,8 +168,7 @@ rules: ["MATCH,DIRECT"]
       '正则设置',
       '修改 Host',
       '添加节点',
-      '添加前置代理',
-      '添加后置代理'
+      '链式节点',
     ]) {
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
@@ -441,15 +432,15 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('添加前置代理'));
-    await tester.tap(find.text('添加前置代理'));
+    await tester.ensureVisible(find.text('链式节点'));
+    await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
     expect(
         tester
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNull);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.textContaining('选择链式节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KR').last);
     await tester.tap(find.text('确定'));
@@ -466,14 +457,14 @@ rules: ["MATCH,DIRECT"]
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
     expect(saves, 1);
     expect(find.text('订阅管理'), findsOneWidget);
-    await tester.ensureVisible(find.text('添加前置代理'));
-    await tester.tap(find.text('添加前置代理'));
+    await tester.ensureVisible(find.text('链式节点'));
+    await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('前置链路 1'));
+    await tester.tap(find.text('链式节点 1'));
     await tester.pumpAndSettle();
-    expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
+    expect(find.text('选择链式节点（已选 1 个）'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.textContaining('选择链式节点（已选'));
     await tester.pumpAndSettle();
     expect(
         tester
@@ -487,11 +478,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.text('订阅管理'), findsOneWidget);
     expect(saves, 1);
-    await tester.ensureVisible(find.text('添加后置代理'));
-    await tester.tap(find.text('添加后置代理'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
+    expect(find.text('添加后置代理'), findsNothing);
     expect(saves, 1);
     expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -520,14 +507,14 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('添加前置代理'));
-    await tester.tap(find.text('添加前置代理'));
+    await tester.ensureVisible(find.text('链式节点'));
+    await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
-    expect(find.text('前置链路 1'), findsOneWidget);
-    await tester.tap(find.text('新增前置链路'));
+    expect(find.text('链式节点 1'), findsOneWidget);
+    await tester.tap(find.text('新增链式节点'));
     await tester.pumpAndSettle();
-    expect(find.text('前置链路 2'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    expect(find.text('链式节点 2'), findsOneWidget);
+    await tester.tap(find.textContaining('选择链式节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('front2'));
     await tester.tap(find.text('确定'));
@@ -541,12 +528,12 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(saves, 1);
     expect(readProxyChains(saved), {'上海': 'wap', 'KR': 'front2'});
-    await tester.ensureVisible(find.text('添加前置代理'));
-    await tester.tap(find.text('添加前置代理'));
+    await tester.ensureVisible(find.text('链式节点'));
+    await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
-    expect(find.text('前置链路 1'), findsOneWidget);
-    expect(find.text('前置链路 2'), findsOneWidget);
-    await tester.tap(find.text('前置链路 2'));
+    expect(find.text('链式节点 1'), findsOneWidget);
+    expect(find.text('链式节点 2'), findsOneWidget);
+    await tester.tap(find.text('链式节点 2'));
     await tester.pumpAndSettle();
     expect(find.text('front2'), findsOneWidget);
     await tester.tap(find.text('取消'));
@@ -761,7 +748,7 @@ rules: ["MATCH,DIRECT"]
                 child: const Text('打开')))));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.textContaining('选择链式节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
@@ -770,10 +757,10 @@ rules: ["MATCH,DIRECT"]
             .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
             .every((tile) => tile.value == true),
         isTrue);
-    await tester.tap(find.text('清除前置代理'));
+    await tester.tap(find.text('清除链式节点'));
     await tester.pumpAndSettle();
-    expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    expect(find.text('选择链式节点（已选 0 个）'), findsOneWidget);
+    await tester.tap(find.textContaining('选择链式节点（已选'));
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNWidgets(4));
     expect(
@@ -831,7 +818,7 @@ rules: ["MATCH,DIRECT"]
               .map((tile) => (tile.title as Text).data),
           ['D', 'C']);
       await tester
-          .tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
+          .tap(find.textContaining(prepend ? '选择链式节点（已选' : '选择后置节点（已选'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();

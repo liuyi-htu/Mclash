@@ -31,8 +31,8 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  for (final prepend in [true, false]) {
-    final side = prepend ? '前置' : '后置';
+  for (final prepend in [true]) {
+    const side = '链式';
     testWidgets('clear $side proxy saves zero nodes and removes the chain',
         (tester) async {
       var saved = setGlobalProxyChain(source, ['B'],
@@ -55,15 +55,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.longPress(find.text('Airport'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('添加$side代理'));
-      await tester.tap(find.text('添加$side代理'));
+      await tester.ensureVisible(find.text('链式节点'));
+      await tester.tap(find.text('链式节点'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('$side链路 1'));
+      await tester.tap(find.text('链式节点 1'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('选择$side节点（已选 1 个）'));
       await tester.pumpAndSettle();
       expect(find.text('清空'), findsNothing);
-      await tester.tap(find.text('清除$side代理'));
+      await tester.tap(find.text('清除链式节点'));
       await tester.pumpAndSettle();
       expect(find.text('选择$side节点（已选 0 个）'), findsOneWidget);
       expect(saves, 0);

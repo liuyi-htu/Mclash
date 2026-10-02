@@ -17,6 +17,14 @@ rules: [MATCH,DIRECT]
 ''';
 
 void main() {
+  test('legacy front comments display the chain node name', () {
+    const source = '# Mclash 前置链路 1: {"JP":"入口"}\nproxies: []\n';
+    final runtime = runtimeProxyChainComments(source);
+    expect(runtime, contains('# Mclash 链式节点 1: {"JP":"入口"}'));
+    expect(runtime, isNot(contains('前置链路')));
+    expect(runtimeProxyChainComments(runtime), runtime);
+  });
+
   test(
       'legacy front and back metadata uses directional labels without changing YAML',
       () {
@@ -25,7 +33,7 @@ void main() {
     final both =
         setGlobalProxyChain(front, ['KR'], prepend: false, targets: ['上海']);
     final runtime = runtimeProxyChainComments(both);
-    expect(runtime, contains('# Mclash 前置链路 1: {"上海":"wap"}'));
+    expect(runtime, contains('# Mclash 链式节点 1: {"上海":"wap"}'));
     expect(runtime, contains('# Mclash 后置链路 2: {"KR":"上海"}'));
     expect(runtime, isNot(contains('# Mclash 节点链路')));
     expect(loadYaml(runtime), loadYaml(both));
@@ -46,8 +54,8 @@ void main() {
     expect(readProxyChainSets(third).keys, ['1', '2', '3']);
     expect(
         readProxyChains(third), {'上海': 'wap', 'KR': 'front2', 'back1': 'US'});
-    expect(third, contains('# Mclash 前置链路 1: {"上海":"wap"}'));
-    expect(third, contains('# Mclash 前置链路 2: {"KR":"front2"}'));
+    expect(third, contains('# Mclash 链式节点 1: {"上海":"wap"}'));
+    expect(third, contains('# Mclash 链式节点 2: {"KR":"front2"}'));
     expect(third, contains('# Mclash 后置链路 3: {"back1":"US"}'));
     final refreshed = applySavedProxyChains(expanded, third);
     expect(readProxyChains(refreshed), readProxyChains(third));
