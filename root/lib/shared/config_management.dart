@@ -248,3 +248,50 @@ String deleteConfigGroup(String content, String name) {
   return writeSubscriptionFilters(
       editor.toString(), readSubscriptionFilters(content)..remove(name));
 }
+
+/// Match visible profile metadata to the same actions used by the config menu.
+String orderRuntimeMetadata(String content, {String? profileContent}) {
+  final source = profileContent ?? content;
+  final actions = configActionOrder(source);
+  final sets = readProxyChainSets(source);
+  final lines = content.replaceFirst(RegExp(r'^\uFEFF'), '').split('\n');
+  String? action(String line) {
+    if (line.startsWith('# Mclash 手动节点: ')) return 'addNode';
+    if (line.startsWith('# Mclash HTTP/WS Host: ')) return 'host';
+    if (line.startsWith(numberedChainPrefix)) {
+      final id = line.substring(numberedChainPrefix.length).split(':').first;
+      return sets[id]?.containsKey('back') == true
+          ? 'appendProxy'
+          : 'prependProxy';
+    }
+    if (line.startsWith('# Mclash 节点链路: ')) return 'prependProxy';
+    if (line.startsWith('# Mclash 链路代理组: ')) return 'groups';
+    if (line.startsWith(groupFilterPrefix)) return 'filters';
+    return null;
+  }
+
+  final metadata = [
+    for (var index = 0; index < lines.length; index++)
+      if (lines[index].startsWith('# Mclash '))
+        (index, lines[index].trimRight())
+  ];
+  int rank(String line) {
+    final value = action(line);
+    return value == null ? actions.length : actions.indexOf(value);
+  }
+
+  int chainId(String line) {
+    if (!line.startsWith(numberedChainPrefix)) return 0;
+    final id = line.substring(numberedChainPrefix.length).split(':').first;
+    return sets.containsKey(id) ? int.tryParse(id) ?? 0 : 0;
+  }
+
+  metadata.sort((a, b) {
+    final byAction = rank(a.$2).compareTo(rank(b.$2));
+    if (byAction != 0) return byAction;
+    final byId = chainId(a.$2).compareTo(chainId(b.$2));
+    return byId != 0 ? byId : a.$1.compareTo(b.$1);
+  });
+  final body = lines.where((line) => !line.startsWith('# Mclash ')).join('\n');
+  return '${metadata.map((entry) => '${entry.$2}\n').join()}$body';
+}

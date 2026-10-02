@@ -31,7 +31,35 @@ internal object SubscriptionConfig {
                 regions.values.any { line.startsWith(it) } || line.startsWith("# Mclash 代理组「")
         }.joinToString("\n")
         val header = if (hasFilters) generic + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n" else ""
-        return header + body
+        val normalized = header + body
+        val loader = Yaml(SafeConstructor(LoaderOptions().apply { codePointLimit = 8 * 1024 * 1024 }))
+        val config = loader.load<Map<String, Any?>>(source.removePrefix("\uFEFF"))
+        val sections = (config.keys.filter { it in listOf("proxies", "proxy-groups", "rules") } +
+            listOf("proxies", "proxy-groups", "rules")).distinct()
+        val setsPrefix = "# Mclash 链路设置: "
+        val setsLine = lines.firstOrNull { it.startsWith(setsPrefix) }
+        val sets = setsLine?.let { loader.load<Map<String, Map<String, List<String>>>>(it.removePrefix(setsPrefix)) }.orEmpty()
+        fun action(line: String): Pair<String, Int>? = when {
+            line.startsWith("# Mclash 手动节点: ") -> "proxies" to 0
+            line.startsWith("# Mclash HTTP/WS Host: ") -> "proxies" to 1
+            line.startsWith("# Mclash 节点链路 ") -> {
+                val id = line.removePrefix("# Mclash 节点链路 ").substringBefore(":")
+                "proxies" to if (sets[id]?.containsKey("back") == true) 3 else 2
+            }
+            line.startsWith("# Mclash 节点链路: ") -> "proxies" to 2
+            line.startsWith("# Mclash 链路代理组: ") -> "proxy-groups" to 0
+            line.startsWith(generic) -> "proxy-groups" to 1
+            else -> null
+        }
+        val metadata = normalized.lineSequence().filter { it.startsWith("# Mclash ") }.toList()
+            .sortedWith(compareBy<String> { line ->
+                action(line)?.let { (section, index) -> sections.indexOf(section) * 10 + index } ?: 1000
+            }.thenBy { line ->
+                val id = if (line.startsWith("# Mclash 节点链路 ")) line.removePrefix("# Mclash 节点链路 ").substringBefore(":") else ""
+                if (sets.containsKey(id)) id.toIntOrNull() ?: 0 else 0
+            })
+        val yaml = normalized.lineSequence().filterNot { it.startsWith("# Mclash ") }.joinToString("\n")
+        return metadata.joinToString("") { "$it\n" } + yaml
     }
 
     fun links(value: String): List<String> {

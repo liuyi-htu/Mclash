@@ -60,6 +60,29 @@ class SubscriptionConfigTest {
         assertTrue(runCatching { SubscriptionConfig.build(template, source, bad) }.isFailure)
     }
 
+    @Test fun runtimeMetadataFollowsMenuSectionsAndChainDirections() {
+        val metadata = """
+            # Mclash 代理组正则: {"测速":"^JP"}
+            # Mclash 链路设置: {"1":{"back":["A"]},"2":{"front":["B"]},"3":{"back":["C"]}}
+            # Mclash 节点链路 3: {"C":"JP"}
+            # Mclash 节点链路 1: {"A":"JP"}
+            # Mclash 链路代理组: {"Chain":["JP"]}
+            # Mclash HTTP/WS Host: "gw.alicdn.com"
+            # Mclash 节点链路 2: {"JP":"B"}
+            # Mclash 手动节点: ["A"]
+        """.trimIndent()
+        val nodes = listOf(metadata.lines()[7], metadata.lines()[5], metadata.lines()[6], metadata.lines()[3], metadata.lines()[2])
+        val groups = listOf(metadata.lines()[4], metadata.lines()[0])
+        for (groupsFirst in listOf(false, true)) {
+            val body = if (groupsFirst) "proxy-groups: []\nproxies: []\nrules: []\n" else "proxies: []\nproxy-groups: []\nrules: []\n"
+            val source = metadata + "\n" + body + "description: |\n  # Mclash HTTP/WS Host: literal text\n"
+            val result = SubscriptionConfig.runtimeMetadata("\uFEFF" + source.replace("\n", "\r\n"))
+            assertEquals(if (groupsFirst) groups + nodes else nodes + groups, result.lines().filter { it.startsWith("# Mclash ") })
+            assertEquals(Yaml().load<Any>(source), Yaml().load<Any>(result))
+            assertEquals(result, SubscriptionConfig.runtimeMetadata(result))
+        }
+    }
+
     @Test fun runtimeMetadataConsolidatesFiltersAndKeepsEffectiveNodeChains() {
         val source = """
             # Mclash 全局链路: {"front":["wap"]}
@@ -71,7 +94,8 @@ class SubscriptionConfigTest {
             proxy-groups: [{name: 测速, type: select, proxies: [JP]}]
         """.trimIndent()
         val result = SubscriptionConfig.runtimeMetadata("\uFEFF" + source.replace("\n", "\r\n"))
-        assertTrue(result.startsWith("# Mclash 代理组正则: {\"🚀 国内\":\"北京\",\"🌍 国外\":\"JP\",\"测速\":\"^JP\"}\n"))
+        assertTrue(result.contains("# Mclash 代理组正则: {\"🚀 国内\":\"北京\",\"🌍 国外\":\"JP\",\"测速\":\"^JP\"}\n"))
+        assertTrue(result.startsWith("# Mclash 节点链路: "))
         assertFalse(result.contains("# Mclash 全局链路:"))
         assertFalse(result.contains("# Mclash 国内正则:"))
         assertFalse(result.contains("# Mclash 国外正则:"))
