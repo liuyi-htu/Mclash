@@ -18,7 +18,6 @@ const _configActionSections = {
   'addNode': 'proxies',
   'host': 'proxies',
   'prependProxy': 'proxies',
-  'appendProxy': 'proxies',
   'groups': 'proxy-groups',
   'filters': 'proxy-groups',
   'rules': 'rules',
@@ -145,7 +144,7 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
     throw const FormatException('代理组名称不能为空，也不能包含逗号或换行');
   }
   if (readProxyChainGroups(content).containsKey(oldName)) {
-    throw const FormatException('链路代理组由前置/后置代理管理');
+    throw const FormatException('链路代理组由链式节点管理');
   }
   final policies = configPolicies(content).where((value) => value != oldName);
   if (policies.contains(name) || name == 'GLOBAL') {
@@ -227,7 +226,7 @@ String deleteConfigGroup(String content, String name) {
     throw const FormatException('国内和国外代理组不可删除');
   }
   if (readProxyChainGroups(content).containsKey(name)) {
-    throw const FormatException('链路代理组由前置/后置代理管理');
+    throw const FormatException('链路代理组由链式节点管理');
   }
   final config = loadYaml(content) as YamlMap;
   final groups = configGroups(content);
@@ -260,11 +259,11 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
     if (line.startsWith('# Mclash 手动节点: ')) return 'addNode';
     if (line.startsWith('# Mclash HTTP/WS Host: ')) return 'host';
     if (line.startsWith(frontChainPrefix)) return 'prependProxy';
-    if (line.startsWith(backChainPrefix)) return 'appendProxy';
+    if (line.startsWith(backChainPrefix)) return 'prependProxy';
     if (line.startsWith(numberedChainPrefix)) {
       final id = line.substring(numberedChainPrefix.length).split(':').first;
       return sets[id]?.containsKey('back') == true
-          ? 'appendProxy'
+          ? 'prependProxy'
           : 'prependProxy';
     }
     if (line.startsWith('# Mclash 节点链路: ')) return 'prependProxy';
@@ -278,7 +277,10 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
       if (lines[index].startsWith('# Mclash '))
         (index, lines[index].trimRight())
   ];
-  int rank(String line) {
+  num rank(String line) {
+    if (line.startsWith(backChainPrefix)) {
+      return actions.indexOf("prependProxy") + 0.5;
+    }
     final value = action(line);
     return value == null ? actions.length : actions.indexOf(value);
   }

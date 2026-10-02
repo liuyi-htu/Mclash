@@ -92,7 +92,7 @@ Future<bool> showProxyChainDialog({
           builder: (context, setDialogState) => PopScope(
             canPop: !saving,
             child: AlertDialog(
-              title: Text(prepend ? '添加前置代理' : '添加后置代理'),
+              title: Text(prepend ? '链式节点' : '添加后置代理'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -109,10 +109,10 @@ Future<bool> showProxyChainDialog({
                           : () async {
                               final values = await _selectNodes(
                                   context,
-                                  prepend ? '选择前置节点' : '选择后置节点',
+                                  prepend ? '选择链式节点' : '选择后置节点',
                                   nodes,
                                   other,
-                                  prepend ? '清除前置代理' : '清除后置代理');
+                                  prepend ? '清除链式节点' : '清除后置代理');
                               if (values != null && context.mounted) {
                                 setDialogState(() {
                                   other = values;
@@ -122,7 +122,7 @@ Future<bool> showProxyChainDialog({
                               }
                             },
                       child: Text(
-                          '${prepend ? '选择前置节点' : '选择后置节点'}（已选 ${other.length} 个）'),
+                          '${prepend ? '选择链式节点' : '选择后置节点'}（已选 ${other.length} 个）'),
                     ),
                     SizedBox(
                       width: double.maxFinite,

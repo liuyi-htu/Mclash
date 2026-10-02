@@ -31,7 +31,7 @@ void main() {
     final nodeHeaders = [
       headers[6],
       headers[4],
-      '# Mclash 前置链路 2: {"JP":"B"}',
+      '# Mclash 链式节点 2: {"JP":"B"}',
       '# Mclash 后置链路 1: {"A":"JP"}',
       '# Mclash 后置链路 3: {"C":"JP"}'
     ];

@@ -185,7 +185,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                               return ListTile(
                                   title: Text(name),
                                   subtitle: Text(locked
-                                      ? '由前置/后置代理管理'
+                                      ? '由链式节点管理'
                                       : mode == ConfigManagementMode.filters
                                           ? filters.containsKey(name)
                                               ? (filters[name]!.isEmpty
