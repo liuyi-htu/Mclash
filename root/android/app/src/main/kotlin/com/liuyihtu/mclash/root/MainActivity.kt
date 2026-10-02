@@ -225,7 +225,7 @@ class MainActivity : FlutterActivity() {
         requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         runAsync(result, "mclash-refresh-subscription") {
-            configStore.refreshSubscription(id)
+            configStore.refreshSubscription(id, call.argument<String>("url"))
             configStore.listMaps()
         }
     }

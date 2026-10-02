@@ -6,6 +6,62 @@ import 'subscription_host.dart';
 import 'node_link.dart';
 import 'proxy_chain.dart';
 
+Object? _plainSubscriptionValue(Object? value) {
+  if (value is Map) {
+    return {
+      for (final entry in value.entries)
+        entry.key: _plainSubscriptionValue(entry.value)
+    };
+  }
+  if (value is List) return value.map(_plainSubscriptionValue).toList();
+  return value;
+}
+
+/// Resolves names in source order and retains dialer references within a source.
+String mergeSubscriptionSources(List<String> sources) {
+  if (sources.isEmpty) throw const FormatException('请输入订阅链接');
+  if (sources.length == 1) return sources.single;
+  final batches = <List<Map<String, dynamic>>>[];
+  for (var i = 0; i < sources.length; i++) {
+    final source = loadYaml(sources[i]);
+    final proxies = source is Map ? source['proxies'] : null;
+    if (proxies is! List || proxies.isEmpty) {
+      throw FormatException('第 ${i + 1} 个订阅没有可内置的 proxies 节点');
+    }
+    final batch = <Map<String, dynamic>>[];
+    for (final node in proxies) {
+      if (node is! Map ||
+          node['name'] is! String ||
+          (node['name'] as String).trim().isEmpty ||
+          node['type'] is! String) {
+        throw FormatException('第 ${i + 1} 个订阅节点缺少名称或类型');
+      }
+      batch
+          .add(Map<String, dynamic>.from(_plainSubscriptionValue(node) as Map));
+    }
+    if (batch.map((node) => node['name']).toSet().length != batch.length) {
+      throw FormatException('第 ${i + 1} 个订阅节点名称重复');
+    }
+    batches.add(batch);
+  }
+  final merged = <Map<String, dynamic>>[];
+  for (var i = 0; i < batches.length; i++) {
+    final renamed = {
+      for (final node in batches[i])
+        node['name'] as String: '${i + 1}-${node['name']}'
+    };
+    for (final node in batches[i]) {
+      node['name'] = renamed[node['name']];
+      final upstream = node['dialer-proxy'];
+      if (renamed.containsKey(upstream)) {
+        node['dialer-proxy'] = renamed[upstream];
+      }
+    }
+    merged.addAll(batches[i]);
+  }
+  return (YamlEditor('')..update([], {'proxies': merged})).toString();
+}
+
 /// Refreshes nodes while retaining user routing and proxy groups.
 String buildSubscriptionConfig(String template, String subscription,
     {String? previousConfig}) {

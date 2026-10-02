@@ -10,6 +10,85 @@ import 'package:yaml/yaml.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
+  test(
+      'multiple airports prefix nodes; single refresh retains other caches and failed refresh is atomic',
+      () async {
+    final dir =
+        await Directory.systemTemp.createTemp('multiple-subscriptions-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final counts = <String, int>{};
+    var secondName = '香港';
+    var failSecond = false;
+    server.listen((request) async {
+      final path = request.uri.path;
+      counts[path] = (counts[path] ?? 0) + 1;
+      if (path == '/b' && failSecond) {
+        request.response.statusCode = 503;
+      } else {
+        final name = path == '/a' ? '香港' : secondName;
+        request.response.write(
+            'proxies: [{name: $name, type: http, server: example.org, port: 80}]');
+      }
+      await request.response.close();
+    });
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, __) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
+    final first = 'http://127.0.0.1:${server.port}/a';
+    final second = 'http://127.0.0.1:${server.port}/b';
+    try {
+      await service.addSubscription(name: '合并', url: '$first\n$second');
+      final settings = File('${dir.path}\\settings.json');
+      final state = jsonDecode(await settings.readAsString());
+      final id = (state['profileUrls'] as Map).keys.single as String;
+      expect(state['profileUrls'][id], '$first\n$second');
+      final profile = File('${dir.path}\\profiles\\$id');
+      final cache = File('${profile.path}.subscriptions.json');
+      List<String> names(String content) =>
+          (loadYaml(content)['proxies'] as List)
+              .map((node) => node['name'] as String)
+              .toList();
+      expect(names(await profile.readAsString()), ['1-香港', '2-香港']);
+      await service.selectConfig(id);
+      secondName = '日本';
+      await service.refreshSubscription(id, url: second);
+      expect(counts, {'/a': 1, '/b': 2});
+      expect(names(await profile.readAsString()), ['1-香港', '2-日本']);
+      final runtime = File('${dir.path}\\config.yaml');
+      expect(names(await runtime.readAsString()), ['1-香港', '2-日本']);
+      final before = await profile.readAsString();
+      final beforeCache = await cache.readAsString();
+      final beforeSettings = await settings.readAsString();
+      final beforeRuntime = await runtime.readAsString();
+      failSecond = true;
+      await expectLater(
+          service.refreshSubscription(id, url: second), throwsStateError);
+      expect(counts, {'/a': 1, '/b': 3});
+      expect(await profile.readAsString(), before);
+      expect(await cache.readAsString(), beforeCache);
+      expect(await settings.readAsString(), beforeSettings);
+      expect(await runtime.readAsString(), beforeRuntime);
+      final testResult = await service.testSubscriptionUrl(id);
+      expect(testResult.success, isFalse);
+      expect(await cache.readAsString(), beforeCache);
+      failSecond = false;
+      await service.updateSubscription(
+          id: id, name: '重排', url: '$second\n$first');
+      expect(names(await profile.readAsString()), ['1-日本', '2-香港']);
+      await service.refreshSubscription(id, url: first);
+      expect(names(await profile.readAsString()), ['1-日本', '2-香港']);
+    } finally {
+      await server.close(force: true);
+      for (final entry in dir.parent.listSync()) {
+        if (entry.path.startsWith('${dir.path}\\')) {
+          await entry.delete(recursive: true);
+        }
+      }
+      await dir.delete(recursive: true);
+    }
+  });
+
   test('slow streaming subscription succeeds while chunks keep arriving',
       () async {
     final dir = await Directory.systemTemp.createTemp('slow-subscription-');

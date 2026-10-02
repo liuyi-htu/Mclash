@@ -7,6 +7,30 @@ import 'subscription_host_test.dart' show hostSource;
 import 'package:yaml/yaml.dart';
 
 void main() {
+  test('merge preserves nested options and remaps duplicate node dialers', () {
+    final merged = mergeSubscriptionSources([
+      'proxies: [{name: Same, type: http}, {name: "Same (订阅 2)", type: http}]',
+      'proxies: [{name: Same, type: vmess, ws-opts: {headers: {Host: example.org}}}, {name: Child, type: http, dialer-proxy: Same}]',
+    ]);
+    final nodes = loadYaml(merged)['proxies'];
+    expect(nodes.map((node) => node['name']).toList(),
+        ['1-Same', '1-Same (订阅 2)', '2-Same', '2-Child']);
+    expect(nodes.last['dialer-proxy'], '2-Same');
+    expect(nodes[2]['ws-opts']['headers']['Host'], 'example.org');
+  });
+  test('merge rejects empty or malformed sources', () {
+    for (final invalid in [
+      'proxies: []',
+      'proxies: [{name: A}]',
+      'proxies: [{name: A, type: http}, {name: A, type: http}]'
+    ]) {
+      expect(
+          () => mergeSubscriptionSources(
+              ['proxies: [{name: Good, type: http}]', invalid]),
+          throwsFormatException);
+    }
+  });
+
   final template = File('../../assets/default-config.yaml').readAsStringSync();
   const subscription = '''
 proxies:

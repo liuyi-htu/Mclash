@@ -103,10 +103,11 @@ class NativeProxyService {
         .toList(growable: false);
   }
 
-  Future<List<ConfigProfile>> refreshSubscription(String id) async {
+  Future<List<ConfigProfile>> refreshSubscription(String id,
+      {String? url}) async {
     final result = await _channel.invokeListMethod<Object?>(
           'refreshSubscription',
-          <String, Object>{'id': id},
+          <String, Object>{'id': id, if (url != null) 'url': url},
         ) ??
         const [];
     return result

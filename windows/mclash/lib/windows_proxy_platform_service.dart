@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'subscription_config.dart';
+import 'subscription_links.dart';
 
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
@@ -821,6 +822,13 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
     final file = File(_profilePath(id));
     if (await file.exists()) await file.delete();
+    for (final path in [
+      _subscriptionCache(id).path,
+      '${_subscriptionCache(id).path}.bak'
+    ]) {
+      final cache = File(path);
+      if (await cache.exists()) await cache.delete();
+    }
     final names = Map<String, dynamic>.from(
       state['profileNames'] is Map ? state['profileNames'] as Map : const {},
     )..remove(id);
@@ -931,16 +939,6 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   Future<void> updateCore(CoreType core) =>
       _runService('update-core').then((_) {});
 
-  Uri _subscriptionUri(String value) {
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null ||
-        !uri.hasAuthority ||
-        (uri.scheme != 'https' && uri.scheme != 'http')) {
-      throw ArgumentError('请输入有效的 HTTP 或 HTTPS 订阅链接。');
-    }
-    return uri;
-  }
-
   bool _looksLikeMihomoConfig(String content) => RegExp(
         r'^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:',
         caseSensitive: false,
@@ -948,8 +946,54 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       ).hasMatch(content);
 
   Future<_SubscriptionDownload> _downloadSubscription(String url,
-      {String? previousConfig}) async {
-    final uri = _subscriptionUri(url);
+      {String? previousConfig,
+      String? selectedUrl,
+      Map<String, String> cachedSources = const {}}) async {
+    final links = subscriptionLinks(url);
+    if (selectedUrl != null && !links.contains(selectedUrl)) {
+      throw ArgumentError('订阅链接不存在');
+    }
+    final sources = <String, String>{};
+    final downloads = <_SubscriptionDownload>[];
+    var totalBytes = 0;
+    for (var i = 0; i < links.length; i++) {
+      final link = links[i];
+      if (selectedUrl != null && link != selectedUrl) {
+        final cached = cachedSources[link];
+        if (cached == null) throw StateError('缺少其他订阅的缓存，请先更新全部订阅');
+        sources[link] = cached;
+      } else {
+        try {
+          final download = await _downloadSubscriptionSource(link);
+          downloads.add(download);
+          sources[link] = download.content;
+        } catch (error) {
+          if (links.length == 1) rethrow;
+          throw StateError('第 ${i + 1} 个订阅下载失败：$error；原配置已保留');
+        }
+      }
+      totalBytes += utf8.encode(sources[link]!).length;
+      if (totalBytes > 16 * 1024 * 1024) throw StateError('订阅总内容超过 16 MB 限制');
+    }
+    return _SubscriptionDownload(
+      content: buildSubscriptionConfig(
+        await rootBundle.loadString('assets/default-config.yaml'),
+        mergeSubscriptionSources(sources.values.toList()),
+        previousConfig: previousConfig,
+      ),
+      responseTimeMs:
+          downloads.fold(0, (sum, download) => sum + download.responseTimeMs),
+      statusCode: downloads.last.statusCode,
+      contentType: downloads.last.contentType,
+      contentLength: totalBytes,
+      subscriptionUserInfo:
+          links.length == 1 ? downloads.single.subscriptionUserInfo : null,
+      sources: sources,
+    );
+  }
+
+  Future<_SubscriptionDownload> _downloadSubscriptionSource(String url) async {
+    final uri = Uri.parse(url);
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
       ..userAgent = 'clash.meta';
@@ -991,11 +1035,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           throw StateError('订阅内容不是 mihomo/Clash YAML 配置，请检查订阅链接类型。');
         }
         return _SubscriptionDownload(
-          content: buildSubscriptionConfig(
-            await rootBundle.loadString('assets/default-config.yaml'),
-            content,
-            previousConfig: previousConfig,
-          ),
+          content: content,
           responseTimeMs: stopwatch.elapsedMilliseconds,
           statusCode: response.statusCode,
           contentType: contentType,
@@ -1015,9 +1055,47 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     return await file.exists() ? file.readAsString() : null;
   }
 
-  Future<void> _writeSubscription(String id, String content) async {
+  File _subscriptionCache(String id) =>
+      File('${_profilePath(id)}.subscriptions.json');
+
+  Future<Map<String, String>> _readSubscriptionCache(String id) async {
+    final file = _subscriptionCache(id);
+    if (!await file.exists()) return {};
+    return Map<String, String>.from(
+        jsonDecode(await file.readAsString()) as Map);
+  }
+
+  Future<void> _saveSubscription(String id, _SubscriptionDownload download,
+      Map<String, dynamic> changes) async {
+    final state = await _readSettings();
+    final files = <File, String>{
+      File(_profilePath(id)): download.content,
+      _subscriptionCache(id): jsonEncode(download.sources),
+      if (state['activeProfile'] == id)
+        File(_configPath): await _runtimeConfigForCurrentMode(download.content),
+    };
+    final previous = <File, String?>{};
+    for (final file in files.keys) {
+      previous[file] = await file.exists() ? await file.readAsString() : null;
+    }
+    await _requireConfigStopped();
     await _ensureDirectories();
-    await _replaceConfig(File(_profilePath(id)), content);
+    try {
+      for (final entry in files.entries) {
+        await _replaceConfig(entry.key, entry.value);
+      }
+      await _writeSettings({...state, ...changes});
+    } catch (_) {
+      for (final entry in previous.entries) {
+        if (entry.value == null) {
+          if (await entry.key.exists()) await entry.key.delete();
+        } else {
+          await _replaceConfig(entry.key, entry.value!);
+        }
+      }
+      await _writeSettings(state);
+      rethrow;
+    }
   }
 
   String _newSubscriptionId() =>
@@ -1031,16 +1109,15 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     await _requireConfigStopped();
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
-    final cleanUrl = _subscriptionUri(url).toString();
+    final cleanUrl = normalizeSubscriptionLinks(url);
     final download = await _downloadSubscription(cleanUrl);
     final id = _newSubscriptionId();
     await _requireConfigStopped();
-    await _writeSubscription(id, download.content);
     final state = await _readSettings();
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final types = _stateMap(state, 'profileTypes')..[id] = 'subscription';
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
-    await _updateSettings(<String, dynamic>{
+    await _saveSubscription(id, download, <String, dynamic>{
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
@@ -1063,51 +1140,41 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
       throw StateError('所选配置不是机场订阅。');
     }
-    final cleanUrl = _subscriptionUri(url).toString();
+    final cleanUrl = normalizeSubscriptionLinks(url);
     final download = await _downloadSubscription(cleanUrl,
         previousConfig: await _subscriptionContent(id));
     await _requireConfigStopped();
-    await _writeSubscription(id, download.content);
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
-    await _updateSettings(<String, dynamic>{
+    await _saveSubscription(id, download, <String, dynamic>{
       'profileNames': names,
       'profileUrls': urls,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..[id] = download.subscriptionUserInfo,
     });
-    if (state['activeProfile'] == id) {
-      await File(_configPath).writeAsString(
-        await _runtimeConfigForCurrentMode(download.content),
-        flush: true,
-      );
-    }
     return getConfigs();
   }
 
   @override
-  Future<List<ConfigProfile>> refreshSubscription(String id) async {
+  Future<List<ConfigProfile>> refreshSubscription(String id,
+      {String? url}) async {
     await _requireConfigStopped();
     final state = await _readSettings();
     if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
       throw StateError('所选配置不是机场订阅。');
     }
-    final url = _stateMap(state, 'profileUrls')[id]?.toString();
-    if (url == null || url.isEmpty) throw StateError('订阅链接不存在。');
-    final download = await _downloadSubscription(url,
-        previousConfig: await _subscriptionContent(id));
+    final storedUrl = _stateMap(state, 'profileUrls')[id]?.toString();
+    if (storedUrl == null || storedUrl.isEmpty) throw StateError('订阅链接不存在。');
+    final download = await _downloadSubscription(storedUrl,
+        previousConfig: await _subscriptionContent(id),
+        selectedUrl: url,
+        cachedSources:
+            url == null ? const {} : await _readSubscriptionCache(id));
     await _requireConfigStopped();
-    await _writeSubscription(id, download.content);
-    await _updateSettings({
+    await _saveSubscription(id, download, {
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..[id] = download.subscriptionUserInfo
     });
-    if (state['activeProfile'] == id) {
-      await File(_configPath).writeAsString(
-        await _runtimeConfigForCurrentMode(download.content),
-        flush: true,
-      );
-    }
     return getConfigs();
   }
 
@@ -1124,7 +1191,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         statusCode: result.statusCode,
         contentLength: result.contentLength,
         contentType: result.contentType,
-        message: '订阅链接有效，节点可内置到默认配置。',
+        message: '${subscriptionLinks(url).length} 个订阅链接有效，节点可合并。',
       );
     } catch (error) {
       return SubscriptionUrlTestResult(
@@ -1143,6 +1210,7 @@ class _SubscriptionDownload {
     required this.contentLength,
     required this.contentType,
     this.subscriptionUserInfo,
+    this.sources = const {},
   });
 
   final String content;
@@ -1151,6 +1219,7 @@ class _SubscriptionDownload {
   final int contentLength;
   final String? contentType;
   final String? subscriptionUserInfo;
+  final Map<String, String> sources;
 }
 
 class _RuntimePreferences {

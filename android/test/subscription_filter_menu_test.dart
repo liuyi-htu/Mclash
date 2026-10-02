@@ -129,7 +129,7 @@ rules: ["MATCH,DIRECT"]
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsNothing);
     expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
       '规则管理',
@@ -235,7 +235,7 @@ rules: ["MATCH,DIRECT"]
     expect(saves, 1);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -279,7 +279,7 @@ rules: ["MATCH,DIRECT"]
         'new.example');
     expect(saves, 1);
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     await tester.ensureVisible(find.text('修改 Host'));
     await tester.tap(find.text('修改 Host'));
     await tester.pumpAndSettle();
@@ -288,7 +288,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -376,8 +376,8 @@ rules: ["MATCH,DIRECT"]
     expect(
         config['proxies'][2]['ws-opts']['headers']['Host'], 'preset.example');
     expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海', '上海手动']);
-    expect(find.text('修改订阅'), findsOneWidget);
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -426,7 +426,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
     expect(saves, 1);
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     await tester.ensureVisible(find.text('添加前置代理'));
     await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
@@ -444,7 +444,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(saves, 1);
     await tester.ensureVisible(find.text('添加后置代理'));
     await tester.tap(find.text('添加后置代理'));
@@ -452,7 +452,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -465,7 +465,11 @@ rules: ["MATCH,DIRECT"]
       if (call.method == 'getConfigs') return [current];
       if (call.method == 'updateSubscription') {
         updates++;
-        current = {...current, 'name': call.arguments['name'] as String};
+        current = {
+          ...current,
+          'name': call.arguments['name'] as String,
+          'url': call.arguments['url'] as String
+        };
         return [current];
       }
       throw StateError('Unexpected call: ${call.method}');
@@ -475,32 +479,98 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('订阅管理'));
+    await tester.tap(find.text('订阅管理'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改订阅'));
     await tester.tap(find.text('修改订阅'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(updates, 0);
+    await tester.ensureVisible(find.text('订阅管理'));
+    await tester.tap(find.text('订阅管理'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改订阅'));
     await tester.tap(find.text('修改订阅'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'New Airport');
+    await tester.enterText(
+        find.byType(TextField).last, ' https://example.org/a ');
+    await tester.tap(find.text('添加订阅链接'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextField).last, 'https://example.org/b');
+    final subscriptionHandle = find.byType(ReorderableDragStartListener).last;
+    final subscriptionGesture =
+        await tester.startGesture(tester.getCenter(subscriptionHandle));
+    await tester.pump();
+    await subscriptionGesture.moveBy(const Offset(0, -5));
+    await tester.pump();
+    await subscriptionGesture.moveBy(const Offset(0, -40));
+    await tester.pump();
+    await subscriptionGesture.moveBy(const Offset(0, -65));
+    await tester.pump(const Duration(milliseconds: 500));
+    await subscriptionGesture.up();
+    await tester.pumpAndSettle();
     await tester.tap(find.text('保存并更新'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsOneWidget);
-    expect(find.widgetWithText(ListTile, 'New Airport'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('New Airport'), findsOneWidget);
     expect(updates, 1);
+    expect(current['url'], 'https://example.org/b\nhttps://example.org/a');
     await tester.ensureVisible(find.text('删除'));
     await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsOneWidget);
+    expect(find.text('订阅管理'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('single refresh sends only the selected subscription URL',
+      (tester) async {
+    final current = {
+      ...profile,
+      'url': 'https://example.org/a\nhttps://example.org/b'
+    };
+    String? updatedUrl;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [current];
+      if (call.method == 'getConfigContent') throw StateError('Unavailable');
+      if (call.method == 'refreshSubscription') {
+        updatedUrl = call.arguments['url'] as String?;
+        return [current];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改订阅'), findsNothing);
+    expect(find.text('更新订阅'), findsNothing);
+    expect(find.text('检测订阅链接'), findsNothing);
+    await tester.ensureVisible(find.text('订阅管理'));
+    await tester.tap(find.text('订阅管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新订阅'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('机场 2'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(updatedUrl, 'https://example.org/b');
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
