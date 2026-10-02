@@ -16,7 +16,8 @@ class _Controller extends HttpOverrides {
 
   Map<String, Object> respond(String method, Uri url, String body) {
     if (method == 'PATCH' || method == 'PUT') {
-      writes.add({'method': method, 'path': url.path, 'body': jsonDecode(body)});
+      writes
+          .add({'method': method, 'path': url.path, 'body': jsonDecode(body)});
       return {};
     }
     if (url.path == '/configs') return {'mode': 'rule'};
@@ -130,24 +131,40 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(controller.writes, [
-      {'method': 'PATCH', 'path': '/configs', 'body': {'mode': 'global'}},
-      {'method': 'PATCH', 'path': '/configs', 'body': {'mode': 'direct'}},
-      {'method': 'PATCH', 'path': '/configs', 'body': {'mode': 'rule'}},
+      {
+        'method': 'PATCH',
+        'path': '/configs',
+        'body': {'mode': 'global'}
+      },
+      {
+        'method': 'PATCH',
+        'path': '/configs',
+        'body': {'mode': 'direct'}
+      },
+      {
+        'method': 'PATCH',
+        'path': '/configs',
+        'body': {'mode': 'rule'}
+      },
     ]);
     await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('running proxy can select a node in a selector group',
       (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-        home: ProxyPanelPage(proxyRunning: true)));
+    await tester.pumpWidget(
+        const MaterialApp(home: ProxyPanelPage(proxyRunning: true)));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Test group'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Node B'));
     await tester.pumpAndSettle();
     expect(controller.writes, [
-      {'method': 'PUT', 'path': '/proxies/Test%20group', 'body': {'name': 'Node B'}},
+      {
+        'method': 'PUT',
+        'path': '/proxies/Test%20group',
+        'body': {'name': 'Node B'}
+      },
     ]);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

@@ -134,8 +134,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Text(switch (mode) {
                   ConfigManagementMode.rules => '规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。',
-                  ConfigManagementMode.groups =>
-                    '这里只显示当前成员，请通过正则设置调整。',
+                  ConfigManagementMode.groups => '这里只显示当前成员，请通过正则设置调整。',
                   ConfigManagementMode.filters =>
                     '选择任意代理组设置正则。留空匹配全部节点；更新订阅时自动重新匹配。',
                 })),

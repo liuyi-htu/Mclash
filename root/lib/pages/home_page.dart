@@ -93,7 +93,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _updateTrafficSpeed() async {
     try {
       if (!_toggling &&
-          (_status == ProxyStatus.starting || _status == ProxyStatus.stopping)) {
+          (_status == ProxyStatus.starting ||
+              _status == ProxyStatus.stopping)) {
         await _refresh();
       }
       final stats = await _service.getTrafficStats();
@@ -1067,7 +1068,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Switch(
                                   value: running,
                                   onChanged: (_) => _toggle(),
-                                  activeColor: const Color(0xFF315FE8),
+                                  activeThumbColor: const Color(0xFF315FE8),
                                   activeTrackColor: Colors.white,
                                   inactiveThumbColor: Colors.white,
                                   inactiveTrackColor: Colors.white.withValues(

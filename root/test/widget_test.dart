@@ -210,7 +210,8 @@ void main() {
         tester
             .widget<TextButton>(find.ancestor(
               of: find.text('清除'),
-              matching: find.byWidgetPredicate((widget) => widget is TextButton),
+              matching:
+                  find.byWidgetPredicate((widget) => widget is TextButton),
             ))
             .onPressed,
         isNull);

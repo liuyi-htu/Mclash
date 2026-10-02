@@ -1165,7 +1165,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 Switch(
                                   value: running,
                                   onChanged: (_) => _toggle(),
-                                  activeColor: const Color(0xFF315FE8),
+                                  activeThumbColor: const Color(0xFF315FE8),
                                   activeTrackColor: Colors.white,
                                   inactiveThumbColor: Colors.white,
                                   inactiveTrackColor: Colors.white.withValues(
