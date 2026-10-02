@@ -18,10 +18,11 @@ class HotspotRulesTest {
     }
 
     @Test fun capturesHotspotTcpUdpAndDnsWithoutCapturingUpstreamOrLocalServices() {
-        val script = HotspotRules.update(setOf("wlan2"), true)
+        val script = HotspotRules.update(setOf("wlan2"), true, setOf("127.0.0.1", "192.168.241.201"))
         assertFalse(script.contains("rmnet"))
         assertTrue(script.contains("--noflush"))
-        assertTrue(script.contains("-i wlan2 -m addrtype --dst-type LOCAL -j RETURN"))
+        assertFalse(script.contains("addrtype"))
+        assertTrue(script.contains("-i wlan2 -d 192.168.241.201/32 -j RETURN"))
         assertTrue(script.contains("-i wlan2 -d 255.255.255.255/32 -j RETURN"))
         for (protocol in listOf("tcp", "udp")) {
             assertTrue(script.contains("-i wlan2 -p $protocol -j TPROXY"))
@@ -42,4 +43,39 @@ class HotspotRulesTest {
     fun rejectsUntrustedInterfaceNames() {
         HotspotRules.update(setOf("wlan2;id"), true)
     }
+    @Test fun snapshotTracksLocalAddressesAlongsideTetherState() {
+        val output = """
+            Tether state:
+              wlan0 - AvailableState - lastError = 0
+              wlan2 - TetheredState - lastError = 0
+            MCLASH_LOCAL_IPV4 127.0.0.1
+            MCLASH_LOCAL_IPV4 100.84.162.133
+            MCLASH_LOCAL_IPV4 192.168.241.201
+        """.trimIndent()
+        val state = HotspotRules.snapshot(output)
+        assertEquals(setOf("wlan2"), state.interfaces)
+        assertEquals(setOf("127.0.0.1", "100.84.162.133", "192.168.241.201"), state.localAddresses)
+        assertNotEquals(state, HotspotRules.snapshot(output.replace("192.168.241.201", "192.168.100.1")))
+    }
+
+    @Test fun localPhoneServicesRemainReachableWhenLanBypassIsDisabled() {
+        val script = HotspotRules.update(setOf("wlan2"), false, setOf("192.168.241.201", "100.84.162.133"))
+        assertFalse(script.contains("addrtype"))
+        assertFalse(script.contains("-d 192.168.0.0/16"))
+        assertTrue(script.contains("-i wlan2 -d 192.168.241.201/32 -j RETURN"))
+        assertTrue(script.contains("-i wlan2 -d 100.84.162.133/32 -j RETURN"))
+        assertTrue(script.indexOf("--dport 53 -j RETURN") < script.indexOf("-d 192.168.241.201/32"))
+        assertTrue(script.indexOf("-d 192.168.241.201/32") < script.indexOf("-j TPROXY"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun snapshotWithoutLocalAddressesFailsClosed() {
+        HotspotRules.snapshot("wlan2 - TetheredState - lastError = 0")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsInvalidLocalAddresses() {
+        HotspotRules.update(setOf("wlan2"), false, setOf("192.168.0.1;id"))
+    }
+
 }

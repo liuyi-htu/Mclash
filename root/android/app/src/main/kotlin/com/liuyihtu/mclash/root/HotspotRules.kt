@@ -4,7 +4,32 @@ package com.liuyihtu.mclash.root
 internal object HotspotRules {
     // RootShell bounds captured output. Exclude the large historical event log
     // so the live tether state cannot be truncated from the beginning.
-    const val SNAPSHOT_COMMAND = "dumpsys tethering | sed -n '/Tether state:/,/Hardware offload:/p'"
+    val SNAPSHOT_COMMAND = """
+        set -eu
+        dumpsys tethering | sed -n '/Tether state:/,/Hardware offload:/p'
+        ip -o -4 addr show | awk '{split(${'$'}4, address, "/"); print "MCLASH_LOCAL_IPV4 " address[1]}'
+    """.trimIndent()
+
+    data class Snapshot(val interfaces: Set<String>, val localAddresses: Set<String>)
+
+    fun snapshot(output: String): Snapshot {
+        val addresses = output.lineSequence()
+            .filter { it.startsWith("MCLASH_LOCAL_IPV4 ") }
+            .map { it.removePrefix("MCLASH_LOCAL_IPV4 ").trim() }
+            .toSet()
+        require(addresses.isNotEmpty() && addresses.all(::validIpv4)) {
+            "无法读取本机 IPv4 地址，未安装热点接管规则"
+        }
+        return Snapshot(interfaces(output), addresses)
+    }
+
+    private fun validIpv4(address: String): Boolean {
+        val octets = address.split('.')
+        return octets.size == 4 && octets.all { octet ->
+            octet.isNotEmpty() && octet.all { it in '0'..'9' } &&
+                octet.toIntOrNull() in 0..255
+        }
+    }
     private const val DATA = "MCLASH_R_HOT"
     private const val DNS = "MCLASH_R_HDNS"
     private const val V6 = "MCLASH_R_HV6"
@@ -27,8 +52,9 @@ internal object HotspotRules {
         }
     }
 
-    fun update(interfaces: Set<String>, bypassLan: Boolean): String {
+    fun update(interfaces: Set<String>, bypassLan: Boolean, localAddresses: Set<String> = setOf("127.0.0.1")): String {
         require(interfaces.all { it != "lo" && ifacePattern.matches(it) })
+        require(localAddresses.all(::validIpv4)) { "本机 IPv4 地址无效" }
         val data = mutableListOf("-F $DATA")
         val dns = mutableListOf("-F $DNS")
         val ipv6 = mutableListOf("-F $V6")
@@ -39,7 +65,11 @@ internal object HotspotRules {
                 data += "-A $DATA -i $iface -p $protocol --dport 53 -j RETURN"
                 dns += "-A $DNS -i $iface -p $protocol --dport 53 -j REDIRECT --to-ports ${RootRuntimeConfig.DNS_PORT}"
             }
-            data += "-A $DATA -i $iface -m addrtype --dst-type LOCAL -j RETURN"
+            // Some Android builds omit the addrtype userspace extension.
+            // Explicit local addresses preserve access to the phone without it.
+            for (address in localAddresses.sorted()) {
+                data += "-A $DATA -i $iface -d $address/32 -j RETURN"
+            }
             for (subnet in listOf("224.0.0.0/4", "255.255.255.255/32")) {
                 data += "-A $DATA -i $iface -d $subnet -j RETURN"
             }
