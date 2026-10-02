@@ -25,5 +25,4 @@ flutter:
   assets:
     - assets/default-config.yaml
     - assets/dashboard/
-    - assets/dashboard/_fonts/
-    - assets/dashboard/_nuxt/
+    - assets/dashboard/assets/

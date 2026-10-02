@@ -293,10 +293,9 @@ Mclash 自身源代码依据 [GNU General Public License v3.0](LICENSE) 开源�
 
 ## 本地 Mihomo 网页面板
 
-Android、Root 和 Windows 随应用内置 MetaCubeXD 网页资源。启动 Mihomo 后，
+Android、Root 和 Windows 随应用内置 zashboard 网页资源。启动 Mihomo 后，
 在同一设备的浏览器访问 `http://127.0.0.1:9090/ui/`，面板默认连接本机内核。
 无需在线下载网页，也不增加应用界面入口；停止内核后面板服务随之停止。
 控制器只监听本机回环地址，其他设备不能通过局域网访问。
 
-内置资源固定到 MetaCubeX/metacubexd 的 `28a9589f6239bbafc24e87bbf5e5b4997fe42e59`
-预构建版本，原始 MIT 许可证保存在面板资源目录的 `LICENSE` 文件中。
+内置资源固定到 Zephyruso/zashboard 的 `v3.29.1` 完整离线预构建版本，原始 MIT 许可证保存在面板资源目录的 `LICENSE` 文件中。

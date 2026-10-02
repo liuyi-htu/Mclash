@@ -21,8 +21,10 @@ class BundledDashboardTest {
             BundledDashboard.install(home, manifest) { "restored".toByteArray() }
             assertEquals("restored", File(home, "dashboard/_nuxt/app.js").readText())
             BundledDashboard.install(home, manifest) { error("must reuse installed resources") }
-            BundledDashboard.install(home, manifest.replace("one", "two")) { "updated".toByteArray() }
+            BundledDashboard.install(home, manifest.replace("one", "two").replace("_nuxt/app.js", "assets/app.js")) { "updated".toByteArray() }
             assertEquals("updated", File(home, "dashboard/index.html").readText())
+            assertFalse(File(home, "dashboard/_nuxt/app.js").exists())
+            assertEquals("updated", File(home, "dashboard/assets/app.js").readText())
         } finally { home.deleteRecursively() }
     }
 
