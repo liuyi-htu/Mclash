@@ -7,8 +7,6 @@ import '../shared/node_link.dart';
 import '../shared/add_node_dialog.dart';
 import '../shared/subscription_host.dart';
 import '../shared/subscription_host_dialog.dart';
-import '../shared/subscription_filter.dart';
-import '../shared/subscription_filter_dialog.dart';
 
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
@@ -479,35 +477,6 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
-  Future<void> _editSubscriptionFilter(
-      ConfigProfile profile, String groupName) async {
-    if (!_ensureStopped()) return;
-    try {
-      setState(() => _working = true);
-      final content = await _service.getConfigContent(profile.id);
-      final filter = readSubscriptionFilter(content, groupName);
-      if (!mounted) return;
-      setState(() => _working = false);
-      final saved = await showSubscriptionFilterDialog(
-        context: context,
-        groupName: groupName,
-        initialFilter: filter,
-        onSave: (value) async {
-          final latest = await _service.getConfigContent(profile.id);
-          await _service.saveConfigContent(
-            id: profile.id,
-            content: editSubscriptionFilter(latest, groupName, value),
-          );
-        },
-      );
-      if (saved && mounted) await _load();
-    } catch (error) {
-      if (mounted) _showError(error);
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
-  }
-
   Future<void> _editSubscriptionHost(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
@@ -662,22 +631,6 @@ class _ConfigPageState extends State<ConfigPage> {
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('host'),
                   ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.filter_alt_outlined),
-                    title: const Text('国内正则表达式'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () =>
-                        Navigator.of(sheetContext).pop('domesticFilter'),
-                  ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.filter_alt_outlined),
-                    title: const Text('国外正则表达式'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () =>
-                        Navigator.of(sheetContext).pop('foreignFilter'),
-                  ),
                 for (final entry in {
                   'rules': ('规则管理', Icons.rule),
                   'groups': ('代理组管理', Icons.account_tree_outlined),
@@ -776,14 +729,6 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
       case 'host':
         await _editSubscriptionHost(profile);
-        await _returnToActions(profile);
-        return;
-      case 'domesticFilter':
-        await _editSubscriptionFilter(profile, domesticGroup);
-        await _returnToActions(profile);
-        return;
-      case 'foreignFilter':
-        await _editSubscriptionFilter(profile, foreignGroup);
         await _returnToActions(profile);
         return;
       case 'select':
