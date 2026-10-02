@@ -804,7 +804,7 @@ class _ProxyGroupButton extends StatelessWidget {
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.normal,
                       ),
                     ),
                   ),
@@ -860,7 +860,7 @@ class _NodeButton extends StatelessWidget {
                   style: TextStyle(
                     color: foreground,
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.normal,
                     height: 1.15,
                   ),
                 ),
