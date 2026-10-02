@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'subscription_config.dart';
 import 'subscription_filter.dart';
+import 'config_management.dart' show orderRuntimeMetadata;
 import 'subscription_links.dart';
 
 import 'package:yaml/yaml.dart';
@@ -591,10 +592,11 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         line.startsWith(groupFilterPrefix) ||
         line.startsWith('# Mclash 国内正则: ') ||
         line.startsWith('# Mclash 国外正则: '));
-    final secured = hasFilters
+    final normalized = hasFilters
         ? writeSubscriptionFilters(
             withoutGlobal, readSubscriptionFilters(withoutGlobal))
         : withoutGlobal;
+    final secured = orderRuntimeMetadata(normalized, profileContent: content);
     final document = loadYaml(secured);
     if (document is! YamlMap) {
       throw const FormatException('mihomo configuration must be a YAML map.');

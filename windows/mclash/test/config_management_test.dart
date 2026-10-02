@@ -14,6 +14,47 @@ rules: ['DOMAIN-SUFFIX,example.org,自选', 'MATCH,DIRECT']
 ''';
 
 void main() {
+  test(
+      'runtime metadata follows menu order and groups numbered chains by direction',
+      () {
+    const settings =
+        '# Mclash 链路设置: {"1":{"back":["A"]},"2":{"front":["B"]},"3":{"back":["C"]}}';
+    const headers = [
+      '# Mclash 代理组正则: {"测速":"^JP"}',
+      '# Mclash 节点链路 3: {"C":"JP"}',
+      '# Mclash 节点链路 1: {"A":"JP"}',
+      '# Mclash 链路代理组: {"Chain":["JP"]}',
+      '# Mclash HTTP/WS Host: "gw.alicdn.com"',
+      '# Mclash 节点链路 2: {"JP":"B"}',
+      '# Mclash 手动节点: ["A"]',
+    ];
+    final nodeHeaders = [
+      headers[6],
+      headers[4],
+      headers[5],
+      headers[2],
+      headers[1]
+    ];
+    final groupHeaders = [headers[3], headers[0]];
+    for (final groupsFirst in [false, true]) {
+      final sections = groupsFirst
+          ? 'proxy-groups: []\nproxies: []\nrules: []\n'
+          : 'proxies: []\nproxy-groups: []\nrules: []\n';
+      final runtime =
+          '${headers.join('\n')}\n${sections}description: |\n  # Mclash HTTP/WS Host: literal text\n';
+      final profile = '$settings\n$runtime';
+      final result = orderRuntimeMetadata(runtime, profileContent: profile);
+      expect(
+          result.split('\n').where((line) => line.startsWith('# Mclash ')),
+          groupsFirst
+              ? [...groupHeaders, ...nodeHeaders]
+              : [...nodeHeaders, ...groupHeaders]);
+      expect(loadYaml(result), loadYaml(runtime));
+      expect(orderRuntimeMetadata(result, profileContent: profile), result);
+      expect(orderRuntimeMetadata(result), result);
+    }
+  });
+
   test('rules retain order and support complex rule policies', () {
     final rules = [
       'AND,((NETWORK,TCP),(DST-PORT,443)),自选',
