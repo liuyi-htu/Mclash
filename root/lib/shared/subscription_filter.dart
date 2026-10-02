@@ -6,6 +6,7 @@ const domesticGroup = '🚀 国内';
 const foreignGroup = '🌍 国外';
 const defaultSubscriptionFilters = {domesticGroup: '', foreignGroup: ''};
 const groupFilterPrefix = '# Mclash 代理组正则: ';
+const customGroupFilterPrefix = '# Mclash 代理组「';
 const _prefixes = {
   domesticGroup: '# Mclash 国内正则: ',
   foreignGroup: '# Mclash 国外正则: '
@@ -69,14 +70,11 @@ String writeSubscriptionFilters(String content, Map<String, String> filters) {
       .split('\n')
       .where((line) =>
           !line.startsWith(groupFilterPrefix) &&
+          !line.startsWith(customGroupFilterPrefix) &&
           !_prefixes.values.any(line.startsWith) &&
           line != '# Mclash 默认机场订阅')
       .join('\n');
-  return '$groupFilterPrefix${jsonEncode(filters)}\n${[
-    for (final entry in filters.entries)
-      if (_prefixes.containsKey(entry.key))
-        '${_prefixes[entry.key]}${jsonEncode(entry.value)}\n'
-  ].join()}$body';
+  return '$groupFilterPrefix${jsonEncode(filters)}\n$body';
 }
 
 RegExp _compile(String filter) {

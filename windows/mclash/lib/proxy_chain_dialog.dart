@@ -67,6 +67,7 @@ Future<bool> showProxyChainDialog({
   required BuildContext context,
   required List<String> nodes,
   required bool prepend,
+  String? chainLabel,
   List<String> initialNodes = const [],
   List<String> initialTargets = const [],
   List<String> excludedTargets = const [],
@@ -74,8 +75,13 @@ Future<bool> showProxyChainDialog({
       onSave,
 }) async {
   var other = initialNodes.where(nodes.contains).toSet().toList();
-  var current = initialTargets.where((name) => nodes.contains(name) &&
-      !other.contains(name) && !excludedTargets.contains(name)).toSet().toList();
+  var current = initialTargets
+      .where((name) =>
+          nodes.contains(name) &&
+          !other.contains(name) &&
+          !excludedTargets.contains(name))
+      .toSet()
+      .toList();
   String? error;
   var saving = false;
   return await showDialog<bool>(
@@ -91,6 +97,11 @@ Future<bool> showProxyChainDialog({
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (chainLabel != null) ...[
+                      Text(chainLabel,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 12),
+                    ],
                     OutlinedButton(
                       onPressed: saving
                           ? null
@@ -144,18 +155,23 @@ Future<bool> showProxyChainDialog({
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: saving ? null : () async {
-                        final eligible = nodes.where((name) =>
-                            !other.contains(name) && !excludedTargets.contains(name)).toList();
-                        final values = await _selectNodes(context, '选择作用节点',
-                            eligible, current);
-                        if (values != null && context.mounted) {
-                          setDialogState(() {
-                            current = values;
-                            error = null;
-                          });
-                        }
-                      },
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              final eligible = nodes
+                                  .where((name) =>
+                                      !other.contains(name) &&
+                                      !excludedTargets.contains(name))
+                                  .toList();
+                              final values = await _selectNodes(
+                                  context, '选择作用节点', eligible, current);
+                              if (values != null && context.mounted) {
+                                setDialogState(() {
+                                  current = values;
+                                  error = null;
+                                });
+                              }
+                            },
                       child: Text('选择作用节点（已选 ${current.length} 个）'),
                     ),
                     if (error != null) ...[
@@ -182,9 +198,7 @@ Future<bool> showProxyChainDialog({
                                 error = null;
                               });
                               try {
-                                await onSave(
-                                    current,
-                                    other);
+                                await onSave(current, other);
                                 if (context.mounted) {
                                   Navigator.of(context).pop(true);
                                 }

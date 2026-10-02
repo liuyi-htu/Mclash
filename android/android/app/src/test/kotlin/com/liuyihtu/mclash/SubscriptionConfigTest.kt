@@ -35,6 +35,51 @@ class SubscriptionConfigTest {
         }
     }
 
+    @Test fun multipleChainSetsRefreshIndependentlyIncludingManualBackNodes() {
+        val previous = """
+            # Mclash 链路设置: {"1":{"front":["wap"],"frontTargets":["上海"]},"2":{"front":["front2"],"frontTargets":["KR"]},"3":{"back":["back1"],"backTargets":["US"]}}
+            # Mclash 手动节点: ["back1"]
+            proxies: [{name: back1, type: http}]
+        """.trimIndent()
+        val source = "proxies: [{name: 上海, type: http}, {name: KR, type: http}, {name: US, type: http}, {name: wap, type: http}, {name: front2, type: http}]"
+        val result = SubscriptionConfig.build(template, source, previous)
+        val nodes = (Yaml().load<Map<String, Any>>(result)["proxies"] as List<*>).associateBy { (it as Map<*, *>)["name"] }
+        assertEquals("wap", (nodes["上海"] as Map<*, *>)["dialer-proxy"])
+        assertEquals("front2", (nodes["KR"] as Map<*, *>)["dialer-proxy"])
+        assertEquals("US", (nodes["back1"] as Map<*, *>)["dialer-proxy"])
+        assertTrue(result.contains("# Mclash 节点链路 1: {\"上海\":\"wap\"}"))
+        assertTrue(result.contains("# Mclash 节点链路 2: {\"KR\":\"front2\"}"))
+        assertTrue(result.contains("# Mclash 节点链路 3: {\"back1\":\"US\"}"))
+        val runtime = SubscriptionConfig.runtimeMetadata(result)
+        assertFalse(runtime.contains("# Mclash 节点链路: "))
+        assertFalse(runtime.contains("# Mclash 链路设置: "))
+        assertTrue(runtime.contains("# Mclash 节点链路 3: "))
+        val removed = SubscriptionConfig.build(template, source.replace("{name: KR, type: http}, ", ""), result)
+        assertTrue(removed.contains("# Mclash 节点链路 2: {}"))
+        val bad = previous.replace("\"frontTargets\":[\"KR\"]", "\"frontTargets\":[\"上海\"]")
+        assertTrue(runCatching { SubscriptionConfig.build(template, source, bad) }.isFailure)
+    }
+
+    @Test fun runtimeMetadataConsolidatesFiltersAndKeepsEffectiveNodeChains() {
+        val source = """
+            # Mclash 全局链路: {"front":["wap"]}
+            # Mclash 节点链路: {"JP":"wap"}
+            # Mclash 国内正则: "北京"
+            # Mclash 国外正则: "JP"
+            # Mclash 代理组正则: {"🚀 国内":"old","🌍 国外":"old","测速":"^JP"}
+            proxies: [{name: wap, type: http}, {name: JP, type: http, dialer-proxy: wap}]
+            proxy-groups: [{name: 测速, type: select, proxies: [JP]}]
+        """.trimIndent()
+        val result = SubscriptionConfig.runtimeMetadata("\uFEFF" + source.replace("\n", "\r\n"))
+        assertTrue(result.startsWith("# Mclash 代理组正则: {\"🚀 国内\":\"北京\",\"🌍 国外\":\"JP\",\"测速\":\"^JP\"}\n"))
+        assertFalse(result.contains("# Mclash 全局链路:"))
+        assertFalse(result.contains("# Mclash 国内正则:"))
+        assertFalse(result.contains("# Mclash 国外正则:"))
+        assertTrue(result.contains("# Mclash 节点链路: {\"JP\":\"wap\"}"))
+        assertEquals(Yaml().load<Any>(source), Yaml().load<Any>(result))
+        assertEquals(result, SubscriptionConfig.runtimeMetadata(result))
+    }
+
     @Test fun refreshRetainsCustomRulesGroupsAndArbitraryFilters() {
         val previous = """
             # Mclash 代理组正则: {"测速":"^JP"}
@@ -60,6 +105,8 @@ class SubscriptionConfigTest {
         assertEquals(30, groups[2]["tolerance"])
         assertEquals(listOf("手选", "测速"), groups[3]["proxies"])
         assertTrue(text.contains("# Mclash 代理组正则: {\"测速\":\"^JP\"}"))
+        assertFalse(text.contains("# Mclash 代理组「测速」正则:"))
+        assertTrue(text.indexOf("# Mclash 代理组正则:") < text.indexOf("proxies:"))
     }
 
     @Test fun emptyFilterMapKeepsRegionalManualSelection() {
@@ -164,8 +211,9 @@ class SubscriptionConfigTest {
             .joinToString("\n")
         val source = "proxies: [{name: 广州, type: http}, {name: 美国, type: http}]"
         val text = SubscriptionConfig.build(bareTemplate, source)
-        assertTrue(text.contains("# Mclash 国内正则: \"\""))
-        assertTrue(text.contains("# Mclash 国外正则: \"\""))
+        assertTrue(text.contains("# Mclash 代理组正则: {\"🚀 国内\":\"\",\"🌍 国外\":\"\"}"))
+        assertFalse(text.contains("# Mclash 国内正则:"))
+        assertFalse(text.contains("# Mclash 国外正则:"))
         val groups = Yaml().load<Map<String, Any>>(text)["proxy-groups"] as List<*>
         assertEquals(listOf("DIRECT", "广州", "美国"), (groups[0] as Map<*, *>)["proxies"])
         assertEquals(listOf("广州", "美国"), (groups[1] as Map<*, *>)["proxies"])
@@ -175,15 +223,15 @@ class SubscriptionConfigTest {
         val source = "proxies: [{name: KR, type: ss}, {name: 广州, type: ss}]"
         val previous = SubscriptionConfig.build(
             template.replace("# Mclash 国外正则: \"\"", "# Mclash 国外正则: \"KR\""), source)
-            .replace("# Mclash 国内正则: \"\"", "# Mclash 国内正则: \"广州\"")
-            .replace("# Mclash 国外正则: \"KR\"", "# Mclash 国外正则: \"\"")
+            .replace("\"🚀 国内\":\"\"", "\"🚀 国内\":\"广州\"")
+            .replace("\"🌍 国外\":\"KR\"", "\"🌍 国外\":\"\"")
         val text = SubscriptionConfig.build(template, source, previous)
         val result = Yaml().load<Map<String, Any>>(text)
         val groups = result["proxy-groups"] as List<*>
         assertEquals(listOf("DIRECT", "广州"), (groups[0] as Map<*, *>)["proxies"])
         assertEquals(listOf("KR", "广州"), (groups[1] as Map<*, *>)["proxies"])
         assertFalse((groups[1] as Map<*, *>).containsKey("filter"))
-        assertTrue(text.contains("# Mclash 国内正则: \"广州\""))
+        assertTrue(text.contains("\"🚀 国内\":\"广州\""))
     }
 
 

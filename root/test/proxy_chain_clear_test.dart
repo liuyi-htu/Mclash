@@ -35,7 +35,8 @@ void main() {
     final side = prepend ? '前置' : '后置';
     testWidgets('clear $side proxy saves zero nodes and removes the chain',
         (tester) async {
-      var saved = setGlobalProxyChain(source, ['B'], prepend: prepend, targets: ['A', 'C']);
+      var saved = setGlobalProxyChain(source, ['B'],
+          prepend: prepend, targets: ['A', 'C']);
       var saves = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
@@ -49,13 +50,15 @@ void main() {
         }
         throw StateError('Unexpected call: ${call.method}');
       });
-      await tester.pumpWidget(const MaterialApp(
-          home: ConfigPage(proxyRunning: false)));
+      await tester
+          .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
       await tester.pumpAndSettle();
       await tester.longPress(find.text('Airport'));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('添加$side代理'));
       await tester.tap(find.text('添加$side代理'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('节点链路 1'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('选择$side节点（已选 1 个）'));
       await tester.pumpAndSettle();
@@ -64,13 +67,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('选择$side节点（已选 0 个）'), findsOneWidget);
       expect(saves, 0);
-      expect(tester.widget<FilledButton>(
-          find.widgetWithText(FilledButton, '保存')).onPressed, isNotNull);
+      expect(
+          tester
+              .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
+              .onPressed,
+          isNotNull);
       await tester.tap(find.text('保存'));
       await tester.pumpAndSettle();
       expect(saves, 1);
       expect(loadYaml(saved), loadYaml(source));
-      expect(readGlobalProxyChains(saved)[prepend ? 'front' : 'back'], isEmpty);
+      expect(readProxyChainSets(saved), isEmpty);
       expect(find.text('订阅管理'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

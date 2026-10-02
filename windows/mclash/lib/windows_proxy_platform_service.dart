@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'subscription_config.dart';
+import 'subscription_filter.dart';
 import 'subscription_links.dart';
 
 import 'package:yaml/yaml.dart';
@@ -576,7 +577,24 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     bool ipv6Enabled = false,
     bool bypassLanEnabled = true,
   }) {
-    final secured = content;
+    final numbered =
+        content.split('\n').any((line) => line.startsWith('# Mclash 节点链路 '));
+    final withoutGlobal = content
+        .replaceFirst(RegExp(r'^\uFEFF'), '')
+        .split('\n')
+        .where((line) =>
+            !line.startsWith('# Mclash 全局链路: ') &&
+            !line.startsWith('# Mclash 链路设置: ') &&
+            !(numbered && line.startsWith('# Mclash 节点链路: ')))
+        .join('\n');
+    final hasFilters = withoutGlobal.split('\n').any((line) =>
+        line.startsWith(groupFilterPrefix) ||
+        line.startsWith('# Mclash 国内正则: ') ||
+        line.startsWith('# Mclash 国外正则: '));
+    final secured = hasFilters
+        ? writeSubscriptionFilters(
+            withoutGlobal, readSubscriptionFilters(withoutGlobal))
+        : withoutGlobal;
     final document = loadYaml(secured);
     if (document is! YamlMap) {
       throw const FormatException('mihomo configuration must be a YAML map.');
@@ -630,6 +648,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       return _runtimeConfigWithExpandedAliases(
         document,
         mode,
+        content: secured,
         ipv6Enabled: ipv6Enabled,
         bypassLanEnabled: bypassLanEnabled,
       );
@@ -639,6 +658,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   String _runtimeConfigWithExpandedAliases(
     YamlMap document,
     NetworkMode mode, {
+    required String content,
     required bool ipv6Enabled,
     required bool bypassLanEnabled,
   }) {
@@ -677,7 +697,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     final editor = YamlEditor('{}');
     editor.update(const <Object>[], runtime);
-    return '${editor.toString().trimRight()}\n';
+    final metadata = content
+        .split('\n')
+        .where((line) => line.startsWith('# Mclash '))
+        .map((line) => '${line.trimRight()}\n')
+        .join();
+    return '$metadata${editor.toString().trimRight()}\n';
   }
 
   Future<String> _runtimeConfigForCurrentMode(String content) async {
