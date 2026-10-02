@@ -41,7 +41,7 @@ android {
     )
 
     androidResources {
-        // AAPT's default <dir>_* rule drops MetaCubeXD's _nuxt and _fonts.
+        // Keep underscore-prefixed directories in bundled dashboard resources.
         ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
     }
 

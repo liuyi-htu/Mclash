@@ -44,5 +44,22 @@ Future<void> installBundledDashboard(
     if (await target.exists()) await target.delete();
     await temporary.rename(target.path);
   }
+  if (await marker.exists()) {
+    final previous =
+        jsonDecode(await marker.readAsString()) as Map<String, dynamic>;
+    for (final path in previous['files'] as List<dynamic>) {
+      if (path is! String || (document['files'] as List).contains(path)) {
+        continue;
+      }
+      if (path.startsWith('/') ||
+          path.contains('\\') ||
+          path.contains(':') ||
+          path.split('/').any((part) => part == '..' || part.isEmpty)) {
+        continue;
+      }
+      final obsolete = File('${directory.path}${Platform.pathSeparator}$path');
+      if (await obsolete.exists()) await obsolete.delete();
+    }
+  }
   await marker.writeAsString(manifest, flush: true);
 }

@@ -37,7 +37,10 @@ void main() {
       if (path.endsWith('bundle.json')) {
         return ByteData.sublistView(Uint8List.fromList(utf8.encode(jsonEncode({
           'revision': revision,
-          'files': ['index.html', '_nuxt/app.js'],
+          'files': [
+            'index.html',
+            revision == 'one' ? '_nuxt/app.js' : 'assets/app.js'
+          ],
         }))));
       }
       if (interrupted && path.endsWith('app.js')) {
@@ -55,7 +58,8 @@ void main() {
       revision = 'two';
       await installBundledDashboard(directory, load: read);
       expect(
-          await File('${directory.path}/_nuxt/app.js').readAsString(), 'two');
+          await File('${directory.path}/assets/app.js').readAsString(), 'two');
+      expect(await File('${directory.path}/_nuxt/app.js').exists(), isFalse);
     } finally {
       await directory.delete(recursive: true);
     }
