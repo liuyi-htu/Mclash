@@ -58,7 +58,7 @@ void main() {
       await tester.ensureVisible(find.text('添加$side代理'));
       await tester.tap(find.text('添加$side代理'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('节点链路 1'));
+      await tester.tap(find.text('$side链路 1'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('选择$side节点（已选 1 个）'));
       await tester.pumpAndSettle();

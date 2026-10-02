@@ -11,42 +11,66 @@ internal object SubscriptionConfig {
         val generic = "# Mclash 代理组正则: "
         val regions = linkedMapOf("🚀 国内" to "# Mclash 国内正则: ", "🌍 国外" to "# Mclash 国外正则: ")
         val lines = source.removePrefix("\uFEFF").lineSequence().toList()
+        val loader = Yaml(SafeConstructor(LoaderOptions().apply { codePointLimit = 8 * 1024 * 1024 }))
         val saved = lines.firstOrNull { it.startsWith(generic) }
         val legacy = regions.filterValues { prefix -> lines.any { it.startsWith(prefix) } }
         val hasFilters = saved != null || legacy.isNotEmpty()
         val filters = linkedMapOf<String, String>()
-        if (hasFilters) {
-            val loader = Yaml(SafeConstructor(LoaderOptions()))
-            if (saved != null) filters.putAll(loader.load<Map<String, String>>(saved.removePrefix(generic)))
-            for ((name, prefix) in legacy) {
-                if (saved == null || filters.containsKey(name)) {
-                    filters[name] = loader.load<String>(lines.first { it.startsWith(prefix) }.removePrefix(prefix))
-                }
+        if (saved != null) filters.putAll(loader.load<Map<String, String>>(saved.removePrefix(generic)))
+        for ((name, prefix) in legacy) {
+            if (saved == null || filters.containsKey(name)) {
+                filters[name] = loader.load<String>(lines.first { it.startsWith(prefix) }.removePrefix(prefix))
             }
         }
-        val numbered = lines.any { it.startsWith("# Mclash 节点链路 ") }
-        val body = lines.filterNot { line ->
-            line.startsWith("# Mclash 链路设置: ") || (numbered && line.startsWith("# Mclash 节点链路: ")) ||
-            line.startsWith("# Mclash 全局链路: ") || line.startsWith(generic) ||
-                regions.values.any { line.startsWith(it) } || line.startsWith("# Mclash 代理组「")
-        }.joinToString("\n")
-        val header = if (hasFilters) generic + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n" else ""
-        val normalized = header + body
-        val loader = Yaml(SafeConstructor(LoaderOptions().apply { codePointLimit = 8 * 1024 * 1024 }))
-        val config = loader.load<Map<String, Any?>>(source.removePrefix("\uFEFF"))
-        val sections = (config.keys.filter { it in listOf("proxies", "proxy-groups", "rules") } +
-            listOf("proxies", "proxy-groups", "rules")).distinct()
         val setsPrefix = "# Mclash 链路设置: "
         val setsLine = lines.firstOrNull { it.startsWith(setsPrefix) }
         val sets = setsLine?.let { loader.load<Map<String, Map<String, List<String>>>>(it.removePrefix(setsPrefix)) }.orEmpty()
+        val globalPrefix = "# Mclash 全局链路: "
+        val global = lines.firstOrNull { it.startsWith(globalPrefix) }
+            ?.let { loader.load<Map<String, List<String>>>(it.removePrefix(globalPrefix)) }.orEmpty()
+        val frontPrefix = "# Mclash 前置链路 "
+        val backPrefix = "# Mclash 后置链路 "
+        val numberedPrefix = "# Mclash 节点链路 "
+        val aggregatePrefix = "# Mclash 节点链路: "
+        fun chainPrefix(line: String) = listOf(frontPrefix, backPrefix, numberedPrefix).firstOrNull { line.startsWith(it) }
+        val chains = lines.mapNotNull { line ->
+            val prefix = chainPrefix(line) ?: return@mapNotNull null
+            if (prefix != numberedPrefix) line else {
+                val id = line.removePrefix(prefix).substringBefore(":")
+                (if (sets[id]?.containsKey("back") == true) backPrefix else frontPrefix) + line.removePrefix(prefix)
+            }
+        }.toMutableList()
+        if (chains.isEmpty()) {
+            val aggregate = lines.firstOrNull { it.startsWith(aggregatePrefix) }
+                ?.let { loader.load<Map<String, String>>(it.removePrefix(aggregatePrefix)) }
+            if (aggregate != null) {
+                fun comment(prefix: String, id: Int, edges: Map<String, String>) = prefix + "$id: {" +
+                    edges.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}"
+                val back = global["back"].orEmpty().toSet()
+                val front = global["front"].orEmpty()
+                if (back.isEmpty()) chains += comment(frontPrefix, 1, aggregate)
+                else if (front.isEmpty()) chains += comment(backPrefix, 1, aggregate)
+                else {
+                    chains += comment(frontPrefix, 1, aggregate.filterKeys { it !in back })
+                    chains += comment(backPrefix, 2, aggregate.filterKeys { it in back })
+                }
+            }
+        }
+        val body = lines.filterNot { line ->
+            line.startsWith(setsPrefix) || line.startsWith(aggregatePrefix) || chainPrefix(line) != null ||
+                line.startsWith(globalPrefix) || line.startsWith(generic) ||
+                regions.values.any { line.startsWith(it) } || line.startsWith("# Mclash 代理组「")
+        }.joinToString("\n")
+        val header = if (hasFilters) generic + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n" else ""
+        val normalized = header + chains.joinToString("") { "$it\n" } + body
+        val config = loader.load<Map<String, Any?>>(source.removePrefix("\uFEFF"))
+        val sections = (config.keys.filter { it in listOf("proxies", "proxy-groups", "rules") } +
+            listOf("proxies", "proxy-groups", "rules")).distinct()
         fun action(line: String): Pair<String, Int>? = when {
             line.startsWith("# Mclash 手动节点: ") -> "proxies" to 0
             line.startsWith("# Mclash HTTP/WS Host: ") -> "proxies" to 1
-            line.startsWith("# Mclash 节点链路 ") -> {
-                val id = line.removePrefix("# Mclash 节点链路 ").substringBefore(":")
-                "proxies" to if (sets[id]?.containsKey("back") == true) 3 else 2
-            }
-            line.startsWith("# Mclash 节点链路: ") -> "proxies" to 2
+            line.startsWith(frontPrefix) -> "proxies" to 2
+            line.startsWith(backPrefix) -> "proxies" to 3
             line.startsWith("# Mclash 链路代理组: ") -> "proxy-groups" to 0
             line.startsWith(generic) -> "proxy-groups" to 1
             else -> null
@@ -54,10 +78,7 @@ internal object SubscriptionConfig {
         val metadata = normalized.lineSequence().filter { it.startsWith("# Mclash ") }.toList()
             .sortedWith(compareBy<String> { line ->
                 action(line)?.let { (section, index) -> sections.indexOf(section) * 10 + index } ?: 1000
-            }.thenBy { line ->
-                val id = if (line.startsWith("# Mclash 节点链路 ")) line.removePrefix("# Mclash 节点链路 ").substringBefore(":") else ""
-                if (sets.containsKey(id)) id.toIntOrNull() ?: 0 else 0
-            })
+            }.thenBy { line -> chainPrefix(line)?.let { line.removePrefix(it).substringBefore(":").toIntOrNull() } ?: 0 })
         val yaml = normalized.lineSequence().filterNot { it.startsWith("# Mclash ") }.joinToString("\n")
         return metadata.joinToString("") { "$it\n" } + yaml
     }
@@ -302,7 +323,7 @@ internal object SubscriptionConfig {
         val setMetadata = if (roleSets == null) "" else setsPrefix + "{" + roleSets.entries.joinToString(",") { (id, roles) ->
             quote(id) + ":{" + roles.entries.joinToString(",") { (role, members) -> quote(role) + ":[" + members.joinToString(",", transform = ::quote) + "]" } + "}"
         } + "}\n" + numberedChains.entries.joinToString("") { (id, chains) ->
-            "# Mclash 节点链路 $id: {" + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
+            (if (roleSets[id]?.containsKey("back") == true) "# Mclash 后置链路 $id: {" else "# Mclash 前置链路 $id: {") + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
         }
         val header = setMetadata + (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +

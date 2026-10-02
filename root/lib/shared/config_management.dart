@@ -254,10 +254,13 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
   final source = profileContent ?? content;
   final actions = configActionOrder(source);
   final sets = readProxyChainSets(source);
-  final lines = content.replaceFirst(RegExp(r'^\uFEFF'), '').split('\n');
+  final lines =
+      runtimeProxyChainComments(content, profileContent: source).split('\n');
   String? action(String line) {
     if (line.startsWith('# Mclash 手动节点: ')) return 'addNode';
     if (line.startsWith('# Mclash HTTP/WS Host: ')) return 'host';
+    if (line.startsWith(frontChainPrefix)) return 'prependProxy';
+    if (line.startsWith(backChainPrefix)) return 'appendProxy';
     if (line.startsWith(numberedChainPrefix)) {
       final id = line.substring(numberedChainPrefix.length).split(':').first;
       return sets[id]?.containsKey('back') == true
@@ -281,9 +284,10 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
   }
 
   int chainId(String line) {
-    if (!line.startsWith(numberedChainPrefix)) return 0;
-    final id = line.substring(numberedChainPrefix.length).split(':').first;
-    return sets.containsKey(id) ? int.tryParse(id) ?? 0 : 0;
+    final prefix = proxyChainCommentPrefix(line);
+    if (prefix == null) return 0;
+    final id = line.substring(prefix.length).split(':').first;
+    return int.tryParse(id) ?? 0;
   }
 
   metadata.sort((a, b) {

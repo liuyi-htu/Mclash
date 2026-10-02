@@ -420,7 +420,7 @@ String _applyProxyChainSets(String content, String previous,
           !line.startsWith(_chainPrefix) &&
           !line.startsWith(_groupPrefix) &&
           !line.startsWith(chainSetsPrefix) &&
-          !line.startsWith(numberedChainPrefix))
+          proxyChainCommentPrefix(line) == null)
       .join('\n');
   final active = <String, Map<String, List<String>>>{};
   for (final entry in sets.entries) {
@@ -465,6 +465,71 @@ String _applyProxyChainSets(String content, String previous,
       applySavedProxyChains(base, _writeMetadata('', chains, groups));
   return '$chainSetsPrefix${jsonEncode(active)}\n${[
     for (final entry in numbered.entries)
-      '$numberedChainPrefix${entry.key}: ${jsonEncode(entry.value)}\n'
+      '${active[entry.key]!.containsKey('back') ? backChainPrefix : frontChainPrefix}${entry.key}: ${jsonEncode(entry.value)}\n'
   ].join()}$result';
+}
+
+const frontChainPrefix = '# Mclash 前置链路 ';
+const backChainPrefix = '# Mclash 后置链路 ';
+
+String? proxyChainCommentPrefix(String line) {
+  for (final prefix in [
+    frontChainPrefix,
+    backChainPrefix,
+    numberedChainPrefix
+  ]) {
+    if (line.startsWith(prefix)) return prefix;
+  }
+  return null;
+}
+
+String runtimeProxyChainComments(String content, {String? profileContent}) {
+  final source =
+      (profileContent ?? content).replaceFirst(RegExp(r'^\uFEFF'), '');
+  final sets = readProxyChainSets(source);
+  final roles = readGlobalProxyChains(source);
+  final lines = content.replaceFirst(RegExp(r'^\uFEFF'), '').split('\n');
+  final visible = <String>[];
+  for (final line in lines) {
+    final prefix = proxyChainCommentPrefix(line);
+    if (prefix == null) continue;
+    if (prefix == numberedChainPrefix) {
+      final id = line.substring(prefix.length).split(':').first;
+      final direction = sets[id]?.containsKey('back') == true
+          ? backChainPrefix
+          : frontChainPrefix;
+      visible.add('$direction${line.substring(prefix.length).trimRight()}');
+    } else {
+      visible.add(line.trimRight());
+    }
+  }
+  if (visible.isEmpty) {
+    final saved = lines.where((line) => line.startsWith(_chainPrefix));
+    if (saved.isNotEmpty) {
+      final chains = Map<String, String>.from(
+          jsonDecode(saved.first.substring(_chainPrefix.length)) as Map);
+      final back = (roles['back'] ?? []).toSet();
+      final front = roles['front'] ?? [];
+      if (back.isEmpty) {
+        visible.add('${frontChainPrefix}1: ${jsonEncode(chains)}');
+      } else if (front.isEmpty) {
+        visible.add('${backChainPrefix}1: ${jsonEncode(chains)}');
+      } else {
+        visible.add('${frontChainPrefix}1: ${jsonEncode({
+          ...chains
+        }..removeWhere((name, _) => back.contains(name)))}');
+        visible.add('${backChainPrefix}2: ${jsonEncode({
+          ...chains
+        }..removeWhere((name, _) => !back.contains(name)))}');
+      }
+    }
+  }
+  final body = lines
+      .where((line) =>
+          !line.startsWith(_globalPrefix) &&
+          !line.startsWith(chainSetsPrefix) &&
+          !line.startsWith(_chainPrefix) &&
+          proxyChainCommentPrefix(line) == null)
+      .join('\n');
+  return '${visible.map((line) => '$line\n').join()}$body';
 }

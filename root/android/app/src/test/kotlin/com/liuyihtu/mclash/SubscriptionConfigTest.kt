@@ -47,15 +47,15 @@ class SubscriptionConfigTest {
         assertEquals("wap", (nodes["上海"] as Map<*, *>)["dialer-proxy"])
         assertEquals("front2", (nodes["KR"] as Map<*, *>)["dialer-proxy"])
         assertEquals("US", (nodes["back1"] as Map<*, *>)["dialer-proxy"])
-        assertTrue(result.contains("# Mclash 节点链路 1: {\"上海\":\"wap\"}"))
-        assertTrue(result.contains("# Mclash 节点链路 2: {\"KR\":\"front2\"}"))
-        assertTrue(result.contains("# Mclash 节点链路 3: {\"back1\":\"US\"}"))
+        assertTrue(result.contains("# Mclash 前置链路 1: {\"上海\":\"wap\"}"))
+        assertTrue(result.contains("# Mclash 前置链路 2: {\"KR\":\"front2\"}"))
+        assertTrue(result.contains("# Mclash 后置链路 3: {\"back1\":\"US\"}"))
         val runtime = SubscriptionConfig.runtimeMetadata(result)
         assertFalse(runtime.contains("# Mclash 节点链路: "))
         assertFalse(runtime.contains("# Mclash 链路设置: "))
-        assertTrue(runtime.contains("# Mclash 节点链路 3: "))
+        assertTrue(runtime.contains("# Mclash 后置链路 3: "))
         val removed = SubscriptionConfig.build(template, source.replace("{name: KR, type: http}, ", ""), result)
-        assertTrue(removed.contains("# Mclash 节点链路 2: {}"))
+        assertTrue(removed.contains("# Mclash 前置链路 2: {}"))
         val bad = previous.replace("\"frontTargets\":[\"KR\"]", "\"frontTargets\":[\"上海\"]")
         assertTrue(runCatching { SubscriptionConfig.build(template, source, bad) }.isFailure)
     }
@@ -71,7 +71,10 @@ class SubscriptionConfigTest {
             # Mclash 节点链路 2: {"JP":"B"}
             # Mclash 手动节点: ["A"]
         """.trimIndent()
-        val nodes = listOf(metadata.lines()[7], metadata.lines()[5], metadata.lines()[6], metadata.lines()[3], metadata.lines()[2])
+        val nodes = listOf(metadata.lines()[7], metadata.lines()[5],
+            metadata.lines()[6].replace("节点链路", "前置链路"),
+            metadata.lines()[3].replace("节点链路", "后置链路"),
+            metadata.lines()[2].replace("节点链路", "后置链路"))
         val groups = listOf(metadata.lines()[4], metadata.lines()[0])
         for (groupsFirst in listOf(false, true)) {
             val body = if (groupsFirst) "proxy-groups: []\nproxies: []\nrules: []\n" else "proxies: []\nproxy-groups: []\nrules: []\n"
@@ -95,11 +98,11 @@ class SubscriptionConfigTest {
         """.trimIndent()
         val result = SubscriptionConfig.runtimeMetadata("\uFEFF" + source.replace("\n", "\r\n"))
         assertTrue(result.contains("# Mclash 代理组正则: {\"🚀 国内\":\"北京\",\"🌍 国外\":\"JP\",\"测速\":\"^JP\"}\n"))
-        assertTrue(result.startsWith("# Mclash 节点链路: "))
+        assertTrue(result.startsWith("# Mclash 前置链路 1: "))
         assertFalse(result.contains("# Mclash 全局链路:"))
         assertFalse(result.contains("# Mclash 国内正则:"))
         assertFalse(result.contains("# Mclash 国外正则:"))
-        assertTrue(result.contains("# Mclash 节点链路: {\"JP\":\"wap\"}"))
+        assertTrue(result.contains("# Mclash 前置链路 1: {\"JP\":\"wap\"}"))
         assertEquals(Yaml().load<Any>(source), Yaml().load<Any>(result))
         assertEquals(result, SubscriptionConfig.runtimeMetadata(result))
     }

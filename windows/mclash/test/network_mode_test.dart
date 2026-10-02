@@ -141,7 +141,7 @@ rules:
     expect(runtimeContent, startsWith('# Mclash 代理组正则: {"测速":"^JP"}\n'));
     expect(runtimeContent, isNot(contains('# Mclash 全局链路: ')));
     expect(runtimeContent, isNot(contains('# Mclash 国内正则: ')));
-    expect(runtimeContent, contains('# Mclash 节点链路: {"JP":"wap"}'));
+    expect(runtimeContent, contains('# Mclash 前置链路 1: {"JP":"wap"}'));
     final runtime = loadYaml(runtimeContent) as YamlMap;
     expect(runtime['dns']['nameserver-policy']['geosite:cn'], <String>[
       'https://doh.pub/dns-query',
