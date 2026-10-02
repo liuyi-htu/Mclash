@@ -135,7 +135,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                 child: Text(switch (mode) {
                   ConfigManagementMode.rules => '规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。',
                   ConfigManagementMode.groups =>
-                    '选择节点或其他代理组作为成员。手动选择会取消此组的正则匹配。',
+                    '这里只显示当前成员，请通过正则设置调整。',
                   ConfigManagementMode.filters =>
                     '选择任意代理组设置正则。留空匹配全部节点；更新订阅时自动重新匹配。',
                 })),
@@ -192,7 +192,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                               ? (filters[name]!.isEmpty
                                                   ? '匹配全部节点'
                                                   : filters[name]!)
-                                              : '手动选择成员'
+                                              : '当前成员，尚未设置正则'
                                           : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
                                   enabled: !locked,
                                   onTap: () async {
@@ -210,13 +210,19 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                   },
                                   trailing: mode ==
                                               ConfigManagementMode.groups &&
-                                          !locked
+                                          !locked &&
+                                          !isProtectedConfigGroup(name)
                                       ? IconButton(
                                           tooltip: '删除代理组',
                                           icon:
                                               const Icon(Icons.delete_outline),
                                           onPressed: () => _deleteGroup(name))
-                                      : const Icon(Icons.chevron_right));
+                                      : mode == ConfigManagementMode.groups &&
+                                              isProtectedConfigGroup(name)
+                                          ? const Tooltip(
+                                              message: '固定代理组，不可删除或改名',
+                                              child: Icon(Icons.lock_outline))
+                                          : const Icon(Icons.chevron_right));
                             }))),
           ]),
         ));
@@ -384,11 +390,10 @@ Future<Map<String, dynamic>?> _groupDialog(
     'load-balance',
     if (initial != null) type
   };
-  final selected = List<String>.from(initial?['proxies'] as List? ?? []);
-  final members = configPolicies(content)
-      .where((item) => item != initial?['name'])
-      .toList();
-  var search = '';
+  final selected = initial == null
+      ? savedProxyNodeNames(content)
+      : List<String>.from(initial['proxies'] as List? ?? []);
+  if (selected.isEmpty) selected.add('DIRECT');
   String? error;
   try {
     return await showDialog<Map<String, dynamic>>(
@@ -403,6 +408,8 @@ Future<Map<String, dynamic>?> _groupDialog(
                               Column(mainAxisSize: MainAxisSize.min, children: [
                         TextField(
                             controller: name,
+                            enabled: !isProtectedConfigGroup(
+                                initial?['name'] as String?),
                             decoration: const InputDecoration(labelText: '名称')),
                         DropdownButtonFormField<String>(
                             value: type,
@@ -423,10 +430,10 @@ Future<Map<String, dynamic>?> _groupDialog(
                               decoration:
                                   const InputDecoration(labelText: '检测间隔（秒）')),
                         ],
-                        TextField(
-                            decoration: InputDecoration(
-                                labelText: '搜索成员（已选 ${selected.length}）'),
-                            onChanged: (value) => update(() => search = value)),
+                        Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text('当前成员（${selected.length}）：通过正则设置修改')),
+                        if (initial == null) const Text('新建组默认使用空正则，匹配全部节点。'),
                         if (error != null)
                           Text(error!,
                               style: TextStyle(
@@ -434,20 +441,8 @@ Future<Map<String, dynamic>?> _groupDialog(
                         SizedBox(
                             height: 240,
                             child: ListView(children: [
-                              for (final member in members.where((item) => item
-                                  .toLowerCase()
-                                  .contains(search.toLowerCase())))
-                                CheckboxListTile(
-                                    dense: true,
-                                    title: Text(member),
-                                    value: selected.contains(member),
-                                    onChanged: (value) => update(() {
-                                          if (value == true) {
-                                            selected.add(member);
-                                          } else {
-                                            selected.remove(member);
-                                          }
-                                        }))
+                              for (final member in selected)
+                                ListTile(dense: true, title: Text(member)),
                             ])),
                       ]))),
                   actions: [
@@ -457,8 +452,8 @@ Future<Map<String, dynamic>?> _groupDialog(
                     FilledButton(
                         onPressed: () {
                           final seconds = int.tryParse(interval.text);
-                          if (name.text.trim().isEmpty || selected.isEmpty) {
-                            update(() => error = '请填写名称并选择至少一个成员');
+                          if (name.text.trim().isEmpty) {
+                            update(() => error = '请填写名称');
                             return;
                           }
                           if (type != 'select' &&

@@ -11,6 +11,9 @@ const builtinPolicies = [
   'COMPATIBLE'
 ];
 
+bool isProtectedConfigGroup(String? name) =>
+    name == domesticGroup || name == foreignGroup;
+
 const _configActionSections = {
   'addNode': 'proxies',
   'host': 'proxies',
@@ -135,6 +138,9 @@ void _validateGraph(String content) {
 String updateConfigGroup(String content, Map<String, dynamic> group,
     {String? oldName}) {
   final name = (group['name'] as String).trim();
+  if (isProtectedConfigGroup(oldName) && name != oldName) {
+    throw const FormatException('国内和国外代理组的名称不可修改');
+  }
   if (name.isEmpty || name.contains(',') || name.contains('\n')) {
     throw const FormatException('代理组名称不能为空，也不能包含逗号或换行');
   }
@@ -145,16 +151,28 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
   if (policies.contains(name) || name == 'GLOBAL') {
     throw const FormatException('名称与已有节点或代理组冲突');
   }
-  final members = List<String>.from(group['proxies'] as List? ?? []);
-  if (members.isEmpty) throw const FormatException('请选择至少一个成员');
+  final groups = configGroups(content);
+  final index = groups.indexWhere((item) => item['name'] == oldName);
+  final members = index >= 0
+      ? List<String>.from(groups[index]['proxies'] as List? ?? [])
+      : savedProxyNodeNames(content);
+  if (members.isEmpty) members.add('DIRECT');
+  if (group['proxies'] is List) {
+    final requested = List<String>.from(group['proxies'] as List);
+    if (requested.length != members.length ||
+        requested
+            .asMap()
+            .entries
+            .any((entry) => entry.value != members[entry.key])) {
+      throw const FormatException('代理组成员只能通过正则设置修改');
+    }
+  }
   if (members.contains(name) ||
       members.contains(oldName) ||
       members.any((member) => !configPolicies(content).contains(member))) {
     throw const FormatException('代理组成员无效');
   }
-  final groups = configGroups(content);
-  final index = groups.indexWhere((item) => item['name'] == oldName);
-  final updated = {...group, 'name': name};
+  final updated = {...group, 'name': name, 'proxies': members};
   if (index < 0) {
     groups.add(updated);
   } else {
@@ -194,16 +212,20 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
     }
   }
   editor.update(['proxy-groups'], groups);
-  // Choosing members switches this group from regex matching to manual selection.
-  final filters = readSubscriptionFilters(content)
-    ..remove(oldName)
-    ..remove(name);
+  final filters = readSubscriptionFilters(content);
+  if (oldName != null && oldName != name && filters.containsKey(oldName)) {
+    filters[name] = filters.remove(oldName)!;
+  }
+  if (index < 0) filters[name] = '';
   final result = writeSubscriptionFilters(editor.toString(), filters);
   _validateGraph(result);
   return result;
 }
 
 String deleteConfigGroup(String content, String name) {
+  if (isProtectedConfigGroup(name)) {
+    throw const FormatException('国内和国外代理组不可删除');
+  }
   if (readProxyChainGroups(content).containsKey(name)) {
     throw const FormatException('链路代理组由前置/后置代理管理');
   }

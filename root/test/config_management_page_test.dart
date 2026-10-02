@@ -7,7 +7,32 @@ import 'package:yaml/yaml.dart';
 import 'config_management_test.dart' show source;
 
 void main() {
-  testWidgets('new group selects members and automatically saves',
+  testWidgets('regional groups hide delete actions and lock only their names',
+      (tester) async {
+    final content = source
+        .replaceAll('name: 自选', 'name: 🌍 国外')
+        .replaceAll('example.org,自选', 'example.org,🌍 国外');
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: content,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {})));
+    expect(find.byTooltip('删除代理组'), findsNothing);
+    expect(find.byIcon(Icons.lock_outline), findsNWidgets(2));
+    for (final name in ['🚀 国内', '🌍 国外']) {
+      await tester.tap(find.text(name));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byType(TextField).first).enabled,
+          false);
+      expect(find.text('保存'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new group uses an empty regex and automatically saves',
       (tester) async {
     String? saved;
     await tester.pumpWidget(MaterialApp(
@@ -20,15 +45,33 @@ void main() {
     await tester.tap(find.byTooltip('新增代理组'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '新建');
-    await tester.enterText(find.byType(TextField).last, 'JP');
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('JP').last);
+    expect(find.byType(CheckboxListTile), findsNothing);
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
-    expect(configGroups(saved!).last['proxies'], ['JP']);
+    expect(configGroups(saved!).last['proxies'], ['北京', 'JP']);
+    expect(readSubscriptionFilters(saved!)['新建'], '');
     expect(find.text('新建'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+      'editing a group shows only current members without selection controls',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {})));
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CheckboxListTile), findsNothing);
+    expect(find.text('JP'), findsOneWidget);
+    expect(find.text('北京'), findsNothing);
+    expect(find.textContaining('通过正则设置修改'), findsWidgets);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('rule add and drag ordering persist correctly', (tester) async {
     String? saved;
     await tester.pumpWidget(MaterialApp(
