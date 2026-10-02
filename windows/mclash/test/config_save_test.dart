@@ -96,8 +96,8 @@ void main() {
   test('controller override preserves nested secret and YAML comments',
       () async {
     final config = File('${dir.path}\\config.yaml');
-    await config
-        .writeAsString('# Keep me\ncustom:\n  secret: nested\nsecret: old\nexternal-ui-url: https://example.com/ui.zip\nexternal-ui-name: remote\n');
+    await config.writeAsString(
+        '# Keep me\ncustom:\n  secret: nested\nsecret: old\nexternal-ui-url: https://example.com/ui.zip\nexternal-ui-name: remote\n');
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
         serviceProcessRunner: (_, args) async =>

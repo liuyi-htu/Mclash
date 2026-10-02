@@ -37,7 +37,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FLUTTER_VERSION: 3.32.8
+  FLUTTER_VERSION: 3.44.9
+  JAVA_VERSION: 17.0.20+8
+  GO_VERSION: 1.24.0
+  ANDROID_PLATFORM_VERSION: "36"
+  ANDROID_BUILD_TOOLS_VERSION: 34.0.0
+  NDK_VERSION: 27.2.12479018
   HEV_VERSION: 2.17.1
   HEV_COMMIT: 9a06bc6e7989da54e3d32ff701ef7a7ce4995d3a
 
@@ -172,13 +177,24 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: ${{ env.JAVA_VERSION }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Install matching Android SDK and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          [[ -n "$android_sdk" ]] || { echo "Android SDK is unset" >&2; exit 1; }
+          sdkmanager_bin="$android_sdk/cmdline-tools/latest/bin/sdkmanager"
+          [[ -x "$sdkmanager_bin" ]] || { echo "sdkmanager was not found" >&2; exit 1; }
+          "$sdkmanager_bin" "platforms;android-$ANDROID_PLATFORM_VERSION" \
+            "build-tools;$ANDROID_BUILD_TOOLS_VERSION" "ndk;$NDK_VERSION" >/dev/null
 
       - name: Set selected version
         shell: bash
@@ -245,7 +261,6 @@ jobs:
             echo "sdkmanager was not found under $android_sdk/cmdline-tools" >&2
             exit 1
           }
-          "$sdkmanager_bin" "ndk;27.2.12479018" >/dev/null
           hev_source="$RUNNER_TEMP/hev-socks5-tunnel"
           git clone --depth 1 --branch "$HEV_VERSION" --recurse-submodules \
             https://github.com/heiher/hev-socks5-tunnel.git "$hev_source"
@@ -255,7 +270,7 @@ jobs:
             exit 1
           }
           ln -s . "$hev_source/jni"
-          "$android_sdk/ndk/27.2.12479018/ndk-build" \
+          "$android_sdk/ndk/$NDK_VERSION/ndk-build" \
             -C "$hev_source" \
             APP_ABI=arm64-v8a \
             APP_MODULES=hev-socks5-tunnel \
@@ -394,7 +409,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: windows/windows-service/go.mod
+          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: windows/windows-service/go.sum
 
       - name: Install Inno Setup

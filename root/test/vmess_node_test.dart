@@ -35,7 +35,8 @@ void main() {
         editSubscriptionFilter(edited, domesticGroup, '__no_match__');
     expect(loadYaml(filtered)['proxy-groups'][0]['proxies'], ['DIRECT']);
     final withFront = addNodeLink(filtered, 'http://10.0.0.200/#front');
-    final chained = setGlobalProxyChain(withFront, ['front'], prepend: true, targets: ['上海手动']);
+    final chained = setGlobalProxyChain(withFront, ['front'],
+        prepend: true, targets: ['上海手动']);
     expect(loadYaml(chained)['proxies'][0]['dialer-proxy'], 'front');
     expect(savedManualNodeNames(chained), ['上海手动', 'front']);
   });

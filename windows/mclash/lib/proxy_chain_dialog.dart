@@ -126,10 +126,9 @@ Future<bool> showProxyChainDialog({
                       child: ReorderableListView(
                         primary: false,
                         buildDefaultDragHandles: false,
-                        onReorder: (oldIndex, newIndex) {
+                        onReorderItem: (oldIndex, newIndex) {
                           if (saving) return;
                           setDialogState(() {
-                            if (newIndex > oldIndex) newIndex--;
                             final name = other.removeAt(oldIndex);
                             other.insert(newIndex, name);
                           });

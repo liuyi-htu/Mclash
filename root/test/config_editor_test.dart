@@ -48,7 +48,9 @@ void main() {
     var running = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'getProxyStatus') return running ? 'running' : 'stopped';
+      if (call.method == 'getProxyStatus') {
+        return running ? 'running' : 'stopped';
+      }
       if (call.method == 'isRunning') return running;
       if (call.method == 'getRuntimeConfigContent') return 'mixed-port: 7890\n';
       if (call.method == 'getConfigContent') return 'rules: []\n';

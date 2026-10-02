@@ -64,11 +64,11 @@ Android App 的 `lib/` 目录按职责划分：
 
 | 组件 | 版本或要求 |
 | --- | --- |
-| Flutter | CI 使用 3.32.8；当前本地工具链使用 3.44.9 |
-| Dart | Flutter 自带；项目要求 `>=3.6.0 <4.0.0` |
-| Java | OpenJDK 17 |
-| Android SDK Platform | 由 Flutter 的 `compileSdkVersion` 决定；CI 基线为 Android 35 |
-| Android SDK Build Tools | CI 基线为 35.0.0；本地需安装当前 SDK/AGP 所需版本 |
+| Flutter | CI 与本地均使用 3.44.9 |
+| Dart | Flutter 自带 3.12.2；项目要求 `>=3.6.0 <4.0.0` |
+| Java | Temurin 17.0.20+8 |
+| Android SDK Platform | Android 36，与 Flutter 的 `compileSdkVersion` 一致 |
+| Android SDK Build Tools | 34.0.0，与当前 Gradle 实际选用版本一致 |
 | Android NDK | 27.2.12479018 |
 | Gradle | 8.10.2 |
 | Android Gradle Plugin | 8.7.3 |
@@ -209,7 +209,7 @@ Root 客户端版本参与发布后的自动同步。
 
 ## Windows 构建
 
-Windows 10 或更高版本需安装 Flutter（启用 Windows 桌面支持）、Go、
+Windows 10 或更高版本需安装 Flutter 3.44.9（启用 Windows 桌面支持）、Go 1.24.0、
 Visual Studio C++ 构建工具和 Inno Setup 6。请在 PowerShell 中从仓库根目录执行：
 
 ```powershell
