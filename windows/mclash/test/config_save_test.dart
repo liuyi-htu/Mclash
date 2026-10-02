@@ -97,7 +97,7 @@ void main() {
       () async {
     final config = File('${dir.path}\\config.yaml');
     await config
-        .writeAsString('# Keep me\ncustom:\n  secret: nested\nsecret: old\n');
+        .writeAsString('# Keep me\ncustom:\n  secret: nested\nsecret: old\nexternal-ui-url: https://example.com/ui.zip\nexternal-ui-name: remote\n');
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
         serviceProcessRunner: (_, args) async =>
@@ -108,6 +108,9 @@ void main() {
     expect(yaml['custom']['secret'], 'nested');
     expect(yaml['secret'], '');
     expect(yaml['external-controller'], '127.0.0.1:9090');
+    expect(yaml['external-ui'], '${dir.path}\\dashboard');
+    expect(yaml.containsKey('external-ui-url'), isFalse);
+    expect(yaml.containsKey('external-ui-name'), isFalse);
     expect(content, contains('# Keep me'));
   });
 }

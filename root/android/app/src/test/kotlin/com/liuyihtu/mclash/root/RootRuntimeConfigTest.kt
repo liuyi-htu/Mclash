@@ -36,6 +36,8 @@ class RootRuntimeConfigTest {
         assertEquals(RootRuntimeConfig.TPROXY_PORT, runtime["tproxy-port"])
         assertEquals("127.0.0.1", runtime["bind-address"])
         assertEquals("", runtime["secret"])
+        assertEquals("dashboard", runtime["external-ui"])
+        assertEquals("127.0.0.1:9090", runtime["external-controller"])
         assertEquals(listOf("MATCH", "a"), runtime["rules"])
         val dns = runtime["dns"] as Map<*, *>
         assertEquals(listOf("https://dns.example/dns-query"), dns["nameserver"])

@@ -38,6 +38,7 @@ internal object MihomoProcess {
 
         val home = File(context.filesDir, "mihomo").apply { mkdirs() }
         installBundledGeodata(context, home)
+        BundledDashboard.install(context, home)
         val preferences = AppPreferences(context)
         val debugLoggingEnabled = preferences.debugLoggingEnabled
         // Keep the selected profile unchanged. Create a shared runtime copy.
@@ -133,6 +134,7 @@ internal object MihomoProcess {
     fun validateConfig(context: Context, source: File) {
         val home = File(context.filesDir, "mihomo").apply { mkdirs() }
         installBundledGeodata(context, home)
+        BundledDashboard.install(context, home)
         val candidate = File.createTempFile("validate-", ".yaml", home)
         val diagnostics = File.createTempFile("validate-", ".log", home)
         var validator: Process? = null
@@ -252,6 +254,7 @@ internal object MihomoProcess {
                     log-level: ${if (debugLoggingEnabled) "debug" else "error"}
                     external-controller: "$LOCAL_CONTROLLER_HOST:$LOCAL_CONTROLLER_PORT"
                     secret: ""
+                    external-ui: dashboard
                     external-controller-cors:
                       allow-origins:
                         - '*'

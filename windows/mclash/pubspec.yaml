@@ -24,3 +24,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/default-config.yaml
+    - assets/dashboard/
+    - assets/dashboard/_fonts/
+    - assets/dashboard/_nuxt/

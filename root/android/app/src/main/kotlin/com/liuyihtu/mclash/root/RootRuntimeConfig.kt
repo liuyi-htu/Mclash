@@ -51,6 +51,7 @@ internal object RootRuntimeConfig {
             "log-level" to if (debug) "debug" else "error",
             "external-controller" to "127.0.0.1:$CONTROLLER_PORT",
             "secret" to "",
+            "external-ui" to "dashboard",
         )
         injected["external-controller-cors"] = mapOf(
             "allow-origins" to listOf("*"), "allow-private-network" to true,
