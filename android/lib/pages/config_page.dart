@@ -1,3 +1,4 @@
+import '../shared/config_management.dart' show configActionOrder;
 import '../shared/config_management_page.dart';
 import '../shared/subscription_usage.dart';
 import 'package:flutter/material.dart';
@@ -583,6 +584,27 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
+    if (_working) return;
+    var orderedActions = configActionOrder('');
+    setState(() => _working = true);
+    try {
+      final content = await _service.getConfigContent(profile.id);
+      orderedActions = configActionOrder(content);
+    } catch (_) {
+      // Keep management available when a profile file is missing or unreadable.
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+    if (!mounted) return;
+    const editingActions = {
+      'addNode': ('添加节点', Icons.add_link),
+      'host': ('修改 Host', Icons.dns_outlined),
+      'prependProxy': ('添加前置代理', Icons.first_page),
+      'appendProxy': ('添加后置代理', Icons.last_page),
+      'groups': ('代理组管理', Icons.account_tree_outlined),
+      'filters': ('正则设置', Icons.filter_alt_outlined),
+      'rules': ('规则管理', Icons.rule),
+    };
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -618,41 +640,14 @@ class _ConfigPageState extends State<ConfigPage> {
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('rename'),
                   ),
-                ListTile(
-                  leading: const Icon(Icons.add_link),
-                  title: const Text('添加节点'),
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('addNode'),
-                ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.dns_outlined),
-                    title: const Text('修改 Host'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('host'),
-                  ),
-                for (final entry in {
-                  'rules': ('规则管理', Icons.rule),
-                  'groups': ('代理组管理', Icons.account_tree_outlined),
-                  'filters': ('正则设置', Icons.filter_alt_outlined),
-                }.entries)
-                  ListTile(
-                      leading: Icon(entry.value.$2),
-                      title: Text(entry.value.$1),
+                for (final action in orderedActions)
+                  if (action != 'host' || profile.isSubscription)
+                    ListTile(
+                      leading: Icon(editingActions[action]!.$2),
+                      title: Text(editingActions[action]!.$1),
                       enabled: !widget.proxyRunning,
-                      onTap: () => Navigator.of(sheetContext).pop(entry.key)),
-                ListTile(
-                  leading: const Icon(Icons.first_page),
-                  title: const Text('添加前置代理'),
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('prependProxy'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.last_page),
-                  title: const Text('添加后置代理'),
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('appendProxy'),
-                ),
+                      onTap: () => Navigator.of(sheetContext).pop(action),
+                    ),
                 const Divider(height: 1),
                 if (profile.isSubscription)
                   ListTile(

@@ -33,6 +33,53 @@ rules: ["MATCH,DIRECT"]
   });
 
   testWidgets(
+      'configuration menu follows YAML section order and handles unreadable files',
+      (tester) async {
+    const defaults = [
+      '添加节点',
+      '修改 Host',
+      '添加前置代理',
+      '添加后置代理',
+      '代理组管理',
+      '正则设置',
+      '规则管理'
+    ];
+    final cases = <String?>[
+      content,
+      '# proxies: comment only\nrules: ["MATCH,DIRECT"]\nproxy-groups: []\nproxies: []\n',
+      null,
+    ];
+    for (var index = 0; index < cases.length; index++) {
+      final current = cases[index];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'getConfigs') return [profile];
+        if (call.method == 'getConfigContent') {
+          expect(call.arguments['id'], 'airport');
+          if (current == null) throw PlatformException(code: 'missing_profile');
+          return current;
+        }
+        throw StateError('Unexpected mutation: ${call.method}');
+      });
+      await tester.pumpWidget(MaterialApp(
+          key: ValueKey(index), home: const ConfigPage(proxyRunning: false)));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('Airport'));
+      await tester.pumpAndSettle();
+      final expected = index == 1
+          ? ['规则管理', '代理组管理', '正则设置', '添加节点', '修改 Host', '添加前置代理', '添加后置代理']
+          : defaults;
+      for (var position = 1; position < expected.length; position++) {
+        expect(
+            tester.getTopLeft(find.text(expected[position])).dy,
+            greaterThan(
+                tester.getTopLeft(find.text(expected[position - 1])).dy));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
       'airport menu opens rule management and saves the selected profile',
       (tester) async {
     String? saved;
