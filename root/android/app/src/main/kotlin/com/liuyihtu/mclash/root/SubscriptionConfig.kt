@@ -6,6 +6,57 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
 
 internal object SubscriptionConfig {
+    fun links(value: String): List<String> {
+        val urls = value.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.distinct().toList()
+        require(urls.isNotEmpty()) { "请输入订阅链接" }
+        urls.forEachIndexed { index, link ->
+            val uri = runCatching { java.net.URI(link) }.getOrNull()
+            require(uri != null && !uri.host.isNullOrEmpty() && uri.scheme in listOf("http", "https")) {
+                "第 ${index + 1} 个订阅链接无效，请输入 HTTP 或 HTTPS 链接"
+            }
+        }
+        return urls
+    }
+
+    // Number subscriptions in input order and prefix their node names.
+    fun mergeSources(sources: List<String>): String {
+        require(sources.isNotEmpty()) { "请输入订阅链接" }
+        if (sources.size == 1) return sources.single()
+        val loader = Yaml(SafeConstructor(LoaderOptions().apply {
+            codePointLimit = 8 * 1024 * 1024
+            isAllowDuplicateKeys = false
+        }))
+        val batches = sources.mapIndexed { index, content ->
+            val source = loader.load<Any>(content.removePrefix("\uFEFF")) as? Map<*, *>
+                ?: error("第 ${index + 1} 个订阅内容必须是 mihomo YAML 配置")
+            val nodes = source["proxies"] as? List<*>
+            require(!nodes.isNullOrEmpty()) { "第 ${index + 1} 个订阅没有可内置的 proxies 节点" }
+            val batch = nodes.map { node ->
+                require(node is Map<*, *>) { "第 ${index + 1} 个订阅节点格式无效" }
+                require(node["name"] is String && (node["name"] as String).isNotBlank() && node["type"] is String) {
+                    "第 ${index + 1} 个订阅节点缺少名称或类型"
+                }
+                node.entries.associate { it.key as String to it.value }.toMutableMap()
+            }
+            require(batch.map { it["name"] }.distinct().size == batch.size) {
+                "第 ${index + 1} 个订阅节点名称重复"
+            }
+            batch
+        }
+        val merged = batches.flatMapIndexed { index, batch ->
+            val renamed = batch.associate { (it["name"] as String) to "${index + 1}-${it["name"]}" }
+            for (node in batch) {
+                node["name"] = renamed[node["name"]]
+                val upstream = node["dialer-proxy"] as? String
+                if (upstream in renamed) node["dialer-proxy"] = renamed[upstream]
+            }
+            batch
+        }
+        return Yaml(DumperOptions().apply {
+            defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
+        }).dump(mapOf("proxies" to merged))
+    }
+
     fun build(template: String, subscription: String, previousConfig: String? = null): String {
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {
             codePointLimit = 8 * 1024 * 1024

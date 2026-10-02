@@ -132,15 +132,13 @@ internal class ConfigStore(private val context: Context) {
             id = UUID.randomUUID().toString(),
             name = name,
             type = TYPE_SUBSCRIPTION,
-            url = rawUrl,
+            url = SubscriptionConfig.links(rawUrl).joinToString("\n"),
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
         )
-        writeAtomically(profileFile(profile.id), bytes)
-
         val profiles = readProfiles()
         profiles += profile
-        writeProfiles(profiles)
+        writeConfigAndProfiles(profile.id, bytes, profiles, download.sources)
         if (preferences.activeConfigId == null) select(profile.id)
         return profile
     }
@@ -162,12 +160,12 @@ internal class ConfigStore(private val context: Context) {
         val bytes = download.bytes
         val updated = profiles[index].copy(
             name = name,
-            url = rawUrl,
+            url = SubscriptionConfig.links(rawUrl).joinToString("\n"),
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
         )
         profiles[index] = updated
-        writeConfigAndProfiles(id, bytes, profiles)
+        writeConfigAndProfiles(id, bytes, profiles, download.sources)
 
         if (preferences.activeConfigId == id) {
             preferences.configFileName = updated.name
@@ -176,15 +174,26 @@ internal class ConfigStore(private val context: Context) {
         return updated
     }
 
-    fun refreshSubscription(id: String): ConfigProfile {
-        val profile = readProfiles().firstOrNull { it.id == id }
-            ?: error("找不到订阅配置")
+    fun refreshSubscription(id: String, url: String? = null): ConfigProfile {
+        val profiles = readProfiles()
+        val index = profiles.indexOfFirst { it.id == id }
+        require(index >= 0) { "找不到订阅配置" }
+        val profile = profiles[index]
         require(profile.type == TYPE_SUBSCRIPTION) { "这不是订阅配置" }
-        return updateSubscription(
-            id = profile.id,
-            name = profile.name,
-            rawUrl = profile.url ?: error("订阅链接不存在"),
+        val cache = subscriptionCacheFile(id)
+        val cachedSources = if (url != null && cache.isFile) {
+            val json = JSONObject(cache.readText(Charsets.UTF_8))
+            json.keys().asSequence().associateWith { json.getString(it) }
+        } else emptyMap()
+        val download = downloadSubscription(
+            profile.url ?: error("订阅链接不存在"),
+            profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8),
+            url, cachedSources,
         )
+        val updated = profile.copy(updatedAt = System.currentTimeMillis(), subscriptionUserInfo = download.userInfo)
+        profiles[index] = updated
+        writeConfigAndProfiles(id, download.bytes, profiles, download.sources)
+        return updated
     }
 
     fun getContent(id: String): String {
@@ -219,7 +228,18 @@ internal class ConfigStore(private val context: Context) {
     fun testSubscriptionUrl(id: String): Map<String, Any?> {
         val profile = readProfiles().firstOrNull { it.id == id } ?: error("找不到订阅配置")
         require(profile.type == TYPE_SUBSCRIPTION) { "这不是订阅配置" }
-        val parsed = URL(profile.url ?: error("订阅链接不存在"))
+        val urls = SubscriptionConfig.links(profile.url ?: error("订阅链接不存在"))
+        if (urls.size > 1) {
+            val startedAt = System.nanoTime()
+            val result = runCatching { downloadSubscription(urls.joinToString("\n")) }
+            return mapOf(
+                "success" to result.isSuccess,
+                "responseTimeMs" to ((System.nanoTime() - startedAt) / 1_000_000).toInt(),
+                "contentLength" to result.getOrNull()?.bytes?.size,
+                "message" to (result.exceptionOrNull()?.message ?: "${urls.size} 个订阅链接有效，节点可合并"),
+            )
+        }
+        val parsed = URL(urls.single())
         require(parsed.protocol == "http" || parsed.protocol == "https") { "订阅链接只支持 HTTP 或 HTTPS" }
         val startedAt = System.nanoTime()
         val connection = parsed.openConnection() as HttpURLConnection
@@ -290,6 +310,7 @@ internal class ConfigStore(private val context: Context) {
         require(index >= 0) { "找不到配置" }
 
         profileFile(id).delete()
+        subscriptionCacheFile(id).delete()
         profiles.removeAt(index)
         writeProfiles(profiles)
 
@@ -301,9 +322,35 @@ internal class ConfigStore(private val context: Context) {
         QuickSettingsTileUpdater.request(context)
     }
 
-    private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?)
+    private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?, val sources: Map<String, String> = emptyMap())
 
-    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null): SubscriptionDownload {
+    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null, selectedUrl: String? = null, cachedSources: Map<String, String> = emptyMap()): SubscriptionDownload {
+        val urls = SubscriptionConfig.links(rawUrl)
+        require(selectedUrl == null || selectedUrl in urls) { "订阅链接不存在" }
+        var totalBytes = 0L
+        val sources = urls.mapIndexed { index, url ->
+            val source = if (selectedUrl != null && url != selectedUrl) {
+                val cached = cachedSources[url] ?: error("缺少其他订阅的缓存，请先更新全部订阅")
+                SubscriptionDownload(cached.toByteArray(Charsets.UTF_8), null)
+            } else try {
+                downloadSubscriptionSource(url)
+            } catch (error: Exception) {
+                if (urls.size == 1) throw error
+                error("第 ${index + 1} 个订阅下载失败：${error.message ?: "连接失败"}；原配置已保留")
+            }
+            totalBytes += source.bytes.size
+            require(totalBytes <= MAX_CONFIG_BYTES) { "订阅总内容超过 8 MB" }
+            source
+        }
+        val merged = SubscriptionConfig.mergeSources(sources.map { it.bytes.toString(Charsets.UTF_8) })
+        return SubscriptionDownload(
+            buildSubscriptionConfig(merged.toByteArray(Charsets.UTF_8), previousConfig),
+            sources.singleOrNull()?.userInfo,
+            urls.zip(sources.map { it.bytes.toString(Charsets.UTF_8) }).toMap(),
+        )
+    }
+
+    private fun downloadSubscriptionSource(rawUrl: String): SubscriptionDownload {
         val parsed = URL(rawUrl)
         require(parsed.protocol == "http" || parsed.protocol == "https") {
             "订阅链接只支持 http:// 或 https://"
@@ -342,7 +389,7 @@ internal class ConfigStore(private val context: Context) {
             val bytes = input.use(::readStreamWithLimit)
 
             return SubscriptionDownload(
-                bytes = buildSubscriptionConfig(bytes, previousConfig),
+                bytes = bytes,
                 userInfo = connection.getHeaderField("Subscription-Userinfo"),
             )
         } finally {
@@ -350,10 +397,12 @@ internal class ConfigStore(private val context: Context) {
         }
     }
 
-    private fun writeConfigAndProfiles(id: String, bytes: ByteArray, profiles: List<ConfigProfile>) {
+    private fun writeConfigAndProfiles(id: String, bytes: ByteArray, profiles: List<ConfigProfile>, sources: Map<String, String>? = null) {
         check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
         val target = profileFile(id)
         val oldBytes = target.takeIf(File::isFile)?.readBytes()
+        val cache = subscriptionCacheFile(id)
+        val oldCache = if (sources != null) cache.takeIf(File::isFile)?.readBytes() else null
         val runtime = File(mihomoDirectory, "runtime.yaml")
         val syncRuntime = preferences.activeConfigId == id
         val oldRuntime = if (syncRuntime) runtime.takeIf(File::isFile)?.readBytes() else null
@@ -363,8 +412,12 @@ internal class ConfigStore(private val context: Context) {
                 val generated = MihomoProcess.previewConfig(context, target).toByteArray(Charsets.UTF_8)
                 writeAtomically(runtime, generated)
             }
+            if (sources != null) writeAtomically(cache, JSONObject(sources).toString().toByteArray(Charsets.UTF_8))
             writeProfiles(profiles)
         } catch (error: Throwable) {
+            if (sources != null) {
+                if (oldCache == null) cache.delete() else writeAtomically(cache, oldCache)
+            }
             if (oldBytes == null) target.delete() else writeAtomically(target, oldBytes)
             if (syncRuntime) {
                 if (oldRuntime == null) runtime.delete() else writeAtomically(runtime, oldRuntime)
@@ -454,6 +507,8 @@ internal class ConfigStore(private val context: Context) {
         }
         backup.delete()
     }
+
+    private fun subscriptionCacheFile(id: String): File = File(configsDirectory, "$id.subscriptions.json")
 
     private fun profileFile(id: String): File =
         File(configsDirectory, "$id.yaml")

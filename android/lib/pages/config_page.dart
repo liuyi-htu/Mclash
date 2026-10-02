@@ -1,6 +1,6 @@
 import '../shared/config_management.dart' show configActionOrder;
 import '../shared/config_management_page.dart';
-import '../shared/subscription_usage.dart';
+import '../shared/subscription_links.dart';
 import 'package:flutter/material.dart';
 import '../shared/proxy_chain.dart';
 import '../shared/proxy_chain_dialog.dart';
@@ -112,7 +112,15 @@ class _ConfigPageState extends State<ConfigPage> {
     if (!_ensureStopped()) return;
 
     final nameController = TextEditingController(text: existing?.name ?? '');
-    final urlController = TextEditingController(text: existing?.url ?? '');
+    final urlControllers = (existing?.url ?? '')
+        .split(RegExp(r'\r?\n'))
+        .where((line) => line.trim().isNotEmpty)
+        .map((line) => TextEditingController(text: line.trim()))
+        .toList();
+    if (urlControllers.isEmpty) urlControllers.add(TextEditingController());
+    final removedControllers = <TextEditingController>[];
+    String enteredUrls() =>
+        urlControllers.map((controller) => controller.text).join('\n');
     String? validationMessage;
 
     final route = DialogRoute<bool>(
@@ -135,17 +143,77 @@ class _ConfigPageState extends State<ConfigPage> {
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: urlController,
-                  decoration: const InputDecoration(
-                    labelText: '订阅链接',
-                    hintText: 'https://...',
+                SizedBox(
+                  width: double.maxFinite,
+                  height: urlControllers.length * 84.0,
+                  child: ReorderableListView(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    buildDefaultDragHandles: false,
+                    onReorderStart: (_) =>
+                        FocusManager.instance.primaryFocus?.unfocus(),
+                    // ignore: deprecated_member_use
+                    onReorder: (oldIndex, newIndex) => setDialogState(() {
+                      if (newIndex > oldIndex) newIndex--;
+                      urlControllers.insert(
+                          newIndex, urlControllers.removeAt(oldIndex));
+                    }),
+                    children: [
+                      for (var i = 0; i < urlControllers.length; i++)
+                        Padding(
+                          key: ObjectKey(urlControllers[i]),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              ReorderableDragStartListener(
+                                index: i,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: Column(children: [
+                                    Text('${i + 1}'),
+                                    const Icon(Icons.drag_handle)
+                                  ]),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextField(
+                                  controller: urlControllers[i],
+                                  decoration: InputDecoration(
+                                      labelText: '机场 ${i + 1} 订阅链接',
+                                      hintText: 'https://...'),
+                                  keyboardType: TextInputType.url,
+                                  autocorrect: false,
+                                  enableSuggestions: false,
+                                  smartDashesType: SmartDashesType.disabled,
+                                  smartQuotesType: SmartQuotesType.disabled,
+                                ),
+                              ),
+                              if (urlControllers.length > 1)
+                                IconButton(
+                                  tooltip: '删除机场 ${i + 1}',
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () => setDialogState(() =>
+                                      removedControllers
+                                          .add(urlControllers.removeAt(i))),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setDialogState(
+                        () => urlControllers.add(TextEditingController())),
+                    icon: const Icon(Icons.add),
+                    label: const Text('添加订阅链接'),
+                  ),
+                ),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('拖动调整机场顺序；多个机场的节点按序号加前缀，如 1-香港'),
                 ),
                 if (validationMessage != null) ...[
                   const SizedBox(height: 12),
@@ -173,8 +241,21 @@ class _ConfigPageState extends State<ConfigPage> {
                   setDialogState(() => validationMessage = '请输入名称');
                   return;
                 }
-                if (urlController.text.isEmpty) {
-                  setDialogState(() => validationMessage = '请输入订阅链接');
+                for (var i = 0; i < urlControllers.length; i++) {
+                  if (urlControllers[i].text.trim().isEmpty) {
+                    setDialogState(
+                        () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
+                    return;
+                  }
+                }
+                try {
+                  final links = subscriptionLinks(enteredUrls());
+                  if (links.length != urlControllers.length) {
+                    setDialogState(() => validationMessage = '订阅链接重复，请删除重复项');
+                    return;
+                  }
+                } on FormatException catch (error) {
+                  setDialogState(() => validationMessage = error.message);
                   return;
                 }
                 Navigator.of(dialogContext).pop(true);
@@ -190,9 +271,12 @@ class _ConfigPageState extends State<ConfigPage> {
     await route.completed;
 
     final name = nameController.text;
-    final url = urlController.text;
+    final url =
+        save ? normalizeSubscriptionLinks(enteredUrls()) : enteredUrls();
     nameController.dispose();
-    urlController.dispose();
+    for (final controller in [...urlControllers, ...removedControllers]) {
+      controller.dispose();
+    }
     if (!save) return;
 
     try {
@@ -231,9 +315,46 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _refreshSubscription(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
+    final links = subscriptionLinks(profile.url ?? '');
+    String? selectedUrl;
+    if (links.length > 1) {
+      selectedUrl = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                const ListTile(title: Text('选择要更新的订阅')),
+                for (var i = 0; i < links.length; i++)
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: Text('机场 ${i + 1}'),
+                    subtitle: Text(links[i],
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    onTap: () => Navigator.of(sheetContext).pop(links[i]),
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.sync),
+                  title: const Text('更新全部订阅'),
+                  onTap: () => Navigator.of(sheetContext).pop('all'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (selectedUrl == null || !mounted) return;
+      if (selectedUrl == 'all') selectedUrl = null;
+    }
     try {
       setState(() => _working = true);
-      final profiles = await _service.refreshSubscription(profile.id);
+      final profiles =
+          await _service.refreshSubscription(profile.id, url: selectedUrl);
       if (!mounted) return;
       setState(() => _profiles = profiles);
       await _confirmConfigApplied('“${profile.name}”已更新');
@@ -583,6 +704,46 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  Future<void> _showSubscriptionActions(ConfigProfile profile) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('修改订阅'),
+              enabled: !widget.proxyRunning,
+              onTap: () => Navigator.of(sheetContext).pop('edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('更新订阅'),
+              enabled: !widget.proxyRunning,
+              onTap: () => Navigator.of(sheetContext).pop('refresh'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_outlined),
+              title: const Text('检测订阅链接'),
+              onTap: () => Navigator.of(sheetContext).pop('test'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (action) {
+      case 'edit':
+        await _showSubscriptionEditor(existing: profile);
+      case 'refresh':
+        await _refreshSubscription(profile);
+      case 'test':
+        await _testSubscriptionUrl(profile);
+    }
+  }
+
   Future<void> _showActions(ConfigProfile profile) async {
     if (_working) return;
     var orderedActions = configActionOrder('');
@@ -617,22 +778,14 @@ class _ConfigPageState extends State<ConfigPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                ListTile(
-                  leading: Icon(
-                    profile.isSubscription
-                        ? Icons.cloud_outlined
-                        : Icons.description_outlined,
+                if (!profile.isSubscription) ...[
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(profile.name),
+                    subtitle: const Text('本地 YAML 配置'),
                   ),
-                  title: Text(profile.name),
-                  subtitle: Text(
-                    profile.isSubscription
-                        ? subscriptionUsageSummary(profile.subscriptionUserInfo)
-                        : '本地 YAML 配置',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const Divider(height: 1),
+                  const Divider(height: 1),
+                ],
                 if (!profile.isSubscription)
                   ListTile(
                     leading: const Icon(Icons.drive_file_rename_outline),
@@ -651,23 +804,9 @@ class _ConfigPageState extends State<ConfigPage> {
                 const Divider(height: 1),
                 if (profile.isSubscription)
                   ListTile(
-                    leading: const Icon(Icons.edit_outlined),
-                    title: const Text('修改订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('edit'),
-                  ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.refresh),
-                    title: const Text('更新订阅'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('refresh'),
-                  ),
-                if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.link_outlined),
-                    title: const Text('检测订阅链接'),
-                    onTap: () => Navigator.of(sheetContext).pop('testUrl'),
+                    leading: const Icon(Icons.cloud_outlined),
+                    title: const Text('订阅管理'),
+                    onTap: () => Navigator.of(sheetContext).pop('subscription'),
                   ),
                 if (!profile.isSubscription)
                   ListTile(
@@ -697,6 +836,10 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
+      case 'subscription':
+        await _showSubscriptionActions(profile);
+        await _returnToActions(profile);
+        return;
       case 'rules':
       case 'groups':
       case 'filters':
@@ -729,14 +872,6 @@ class _ConfigPageState extends State<ConfigPage> {
       case 'select':
         await _select(profile);
         return;
-      case 'refresh':
-        await _refreshSubscription(profile);
-        await _returnToActions(profile);
-        return;
-      case 'testUrl':
-        await _testSubscriptionUrl(profile);
-        await _returnToActions(profile);
-        return;
       case 'runtime':
         await Navigator.of(context).push<void>(MaterialPageRoute(
           builder: (_) => ConfigEditorPage(
@@ -759,10 +894,6 @@ class _ConfigPageState extends State<ConfigPage> {
           ),
         );
         await _load();
-        await _returnToActions(profile);
-        return;
-      case 'edit':
-        await _showSubscriptionEditor(existing: profile);
         await _returnToActions(profile);
         return;
       case 'rename':

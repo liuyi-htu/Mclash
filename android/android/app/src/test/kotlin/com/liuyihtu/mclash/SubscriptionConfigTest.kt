@@ -8,6 +8,33 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun linksNormalizeAndValidateEveryUrl() {
+        assertEquals(listOf("https://example.org/a", "https://example.org/b"),
+            SubscriptionConfig.links(" https://example.org/a\r\n\r\nhttps://example.org/b\nhttps://example.org/a "))
+        assertThrows(IllegalArgumentException::class.java) { SubscriptionConfig.links("https://example.org/a\nfile:///tmp/a") }
+    }
+
+    @Test fun mergeSourcesPrefixesNamesAndRetainsNestedOptionsAndDialers() {
+        val content = SubscriptionConfig.mergeSources(listOf(
+            "proxies: [{name: Same, type: http}, {name: 'Same (订阅 2)', type: http}]",
+            "proxies: [{name: Same, type: vmess, ws-opts: {headers: {Host: example.org}}}, {name: Child, type: http, dialer-proxy: Same}]",
+        ))
+        val nodes = Yaml().load<Map<String, Any>>(content)["proxies"] as List<Map<String, Any>>
+        assertEquals(listOf("1-Same", "1-Same (订阅 2)", "2-Same", "2-Child"), nodes.map { it["name"] })
+        assertEquals("2-Same", nodes.last()["dialer-proxy"])
+        assertEquals(mapOf("headers" to mapOf("Host" to "example.org")), nodes[2]["ws-opts"])
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template, content))
+        assertEquals(nodes, result["proxies"])
+    }
+
+    @Test fun mergeRejectsInvalidOrEmptySubscriptionInsteadOfDroppingIt() {
+        for (invalid in listOf("proxies: []", "proxies: [{name: A}]", "proxies: [{name: A, type: http}, {name: A, type: http}]")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SubscriptionConfig.mergeSources(listOf("proxies: [{name: Good, type: http}]", invalid))
+            }
+        }
+    }
+
     @Test fun refreshRetainsCustomRulesGroupsAndArbitraryFilters() {
         val previous = """
             # Mclash 代理组正则: {"测速":"^JP"}

@@ -38,7 +38,7 @@ abstract interface class ProxyPlatformService {
     required String name,
     required String url,
   });
-  Future<List<ConfigProfile>> refreshSubscription(String id);
+  Future<List<ConfigProfile>> refreshSubscription(String id, {String? url});
   Future<SubscriptionUrlTestResult> testSubscriptionUrl(String id);
   Future<bool> getDebugLoggingEnabled();
   Future<void> setDebugLoggingEnabled(bool enabled);
