@@ -11,6 +11,32 @@ const builtinPolicies = [
   'COMPATIBLE'
 ];
 
+const _configActionSections = {
+  'addNode': 'proxies',
+  'host': 'proxies',
+  'prependProxy': 'proxies',
+  'appendProxy': 'proxies',
+  'groups': 'proxy-groups',
+  'filters': 'proxy-groups',
+  'rules': 'rules',
+};
+
+/// Follow the YAML section order; missing sections use the default order.
+List<String> configActionOrder(String content) {
+  final config = loadYaml(content);
+  final sections = <String>{
+    if (config is YamlMap)
+      for (final key in config.keys)
+        if (_configActionSections.containsValue(key)) key as String,
+    ..._configActionSections.values,
+  };
+  return [
+    for (final section in sections)
+      for (final entry in _configActionSections.entries)
+        if (entry.value == section) entry.key,
+  ];
+}
+
 List<String> configPolicies(String content) {
   final config = loadYaml(content) as YamlMap;
   return [
