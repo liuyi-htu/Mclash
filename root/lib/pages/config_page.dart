@@ -1,6 +1,7 @@
 import '../shared/config_management.dart' show configActionOrder;
 import '../shared/config_management_page.dart';
 import '../shared/subscription_links.dart';
+import '../shared/subscription_usage.dart';
 import 'package:flutter/material.dart';
 import '../shared/proxy_chain.dart';
 import '../shared/proxy_chain_dialog.dart';
@@ -31,7 +32,6 @@ class _ConfigPageState extends State<ConfigPage> {
   List<ConfigProfile> _profiles = const [];
   bool _loading = true;
   bool _working = false;
-  bool _testingSubscriptionUrl = false;
 
   @override
   void initState() {
@@ -118,6 +118,12 @@ class _ConfigPageState extends State<ConfigPage> {
         .map((line) => TextEditingController(text: line.trim()))
         .toList();
     if (urlControllers.isEmpty) urlControllers.add(TextEditingController());
+    final airportNameControllers = [
+      for (var i = 0; i < urlControllers.length; i++)
+        TextEditingController(
+            text:
+                existing?.subscriptionNameFor(urlControllers[i].text, i) ?? ''),
+    ];
     final removedControllers = <TextEditingController>[];
     String enteredUrls() =>
         urlControllers.map((controller) => controller.text).join('\n');
@@ -137,15 +143,15 @@ class _ConfigPageState extends State<ConfigPage> {
                   controller: nameController,
                   autofocus: true,
                   decoration: const InputDecoration(
-                    labelText: '名称',
-                    hintText: '例如：我的机场',
+                    labelText: '配置名称',
+                    hintText: '例如：我的代理配置',
                   ),
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.maxFinite,
-                  height: urlControllers.length * 84.0,
+                  height: urlControllers.length * 148.0,
                   child: ReorderableListView(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -157,6 +163,8 @@ class _ConfigPageState extends State<ConfigPage> {
                       if (newIndex > oldIndex) newIndex--;
                       urlControllers.insert(
                           newIndex, urlControllers.removeAt(oldIndex));
+                      airportNameControllers.insert(
+                          newIndex, airportNameControllers.removeAt(oldIndex));
                     }),
                     children: [
                       for (var i = 0; i < urlControllers.length; i++)
@@ -176,25 +184,41 @@ class _ConfigPageState extends State<ConfigPage> {
                                 ),
                               ),
                               Expanded(
-                                child: TextField(
-                                  controller: urlControllers[i],
-                                  decoration: InputDecoration(
-                                      labelText: '机场 ${i + 1} 订阅链接',
-                                      hintText: 'https://...'),
-                                  keyboardType: TextInputType.url,
-                                  autocorrect: false,
-                                  enableSuggestions: false,
-                                  smartDashesType: SmartDashesType.disabled,
-                                  smartQuotesType: SmartQuotesType.disabled,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    TextField(
+                                      controller: airportNameControllers[i],
+                                      decoration: InputDecoration(
+                                          labelText: '机场 ${i + 1} 名称',
+                                          hintText: '例如：我的机场'),
+                                      textInputAction: TextInputAction.next,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextField(
+                                      controller: urlControllers[i],
+                                      decoration: InputDecoration(
+                                          labelText: '机场 ${i + 1} 订阅链接',
+                                          hintText: 'https://...'),
+                                      keyboardType: TextInputType.url,
+                                      autocorrect: false,
+                                      enableSuggestions: false,
+                                      smartDashesType: SmartDashesType.disabled,
+                                      smartQuotesType: SmartQuotesType.disabled,
+                                    ),
+                                  ],
                                 ),
                               ),
                               if (urlControllers.length > 1)
                                 IconButton(
                                   tooltip: '删除机场 ${i + 1}',
                                   icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () => setDialogState(() =>
-                                      removedControllers
-                                          .add(urlControllers.removeAt(i))),
+                                  onPressed: () => setDialogState(() {
+                                    removedControllers
+                                        .add(urlControllers.removeAt(i));
+                                    removedControllers.add(
+                                        airportNameControllers.removeAt(i));
+                                  }),
                                 ),
                             ],
                           ),
@@ -205,8 +229,10 @@ class _ConfigPageState extends State<ConfigPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: () => setDialogState(
-                        () => urlControllers.add(TextEditingController())),
+                    onPressed: () => setDialogState(() {
+                      urlControllers.add(TextEditingController());
+                      airportNameControllers.add(TextEditingController());
+                    }),
                     icon: const Icon(Icons.add),
                     label: const Text('添加订阅链接'),
                   ),
@@ -242,6 +268,11 @@ class _ConfigPageState extends State<ConfigPage> {
                   return;
                 }
                 for (var i = 0; i < urlControllers.length; i++) {
+                  if (airportNameControllers[i].text.trim().isEmpty) {
+                    setDialogState(
+                        () => validationMessage = '请输入机场 ${i + 1} 的名称');
+                    return;
+                  }
                   if (urlControllers[i].text.trim().isEmpty) {
                     setDialogState(
                         () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
@@ -273,8 +304,16 @@ class _ConfigPageState extends State<ConfigPage> {
     final name = nameController.text;
     final url =
         save ? normalizeSubscriptionLinks(enteredUrls()) : enteredUrls();
+    final subscriptionNames = {
+      for (var i = 0; i < urlControllers.length; i++)
+        urlControllers[i].text.trim(): airportNameControllers[i].text.trim(),
+    };
     nameController.dispose();
-    for (final controller in [...urlControllers, ...removedControllers]) {
+    for (final controller in [
+      ...urlControllers,
+      ...airportNameControllers,
+      ...removedControllers
+    ]) {
       controller.dispose();
     }
     if (!save) return;
@@ -282,11 +321,13 @@ class _ConfigPageState extends State<ConfigPage> {
     try {
       setState(() => _working = true);
       final profiles = existing == null
-          ? await _service.addSubscription(name: name, url: url)
+          ? await _service.addSubscription(
+              name: name, url: url, subscriptionNames: subscriptionNames)
           : await _service.updateSubscription(
               id: existing.id,
               name: name,
               url: url,
+              subscriptionNames: subscriptionNames,
             );
       if (!mounted) return;
       setState(() => _profiles = profiles);
@@ -305,59 +346,6 @@ class _ConfigPageState extends State<ConfigPage> {
       setState(() => _working = true);
       await _service.selectConfig(profile.id);
       await _load();
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error);
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
-  }
-
-  Future<void> _refreshSubscription(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
-    final links = subscriptionLinks(profile.url ?? '');
-    String? selectedUrl;
-    if (links.length > 1) {
-      selectedUrl = await showModalBottomSheet<String>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.75),
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                const ListTile(title: Text('选择要更新的订阅')),
-                for (var i = 0; i < links.length; i++)
-                  ListTile(
-                    leading: const Icon(Icons.refresh),
-                    title: Text('机场 ${i + 1}'),
-                    subtitle: Text(links[i],
-                        maxLines: 2, overflow: TextOverflow.ellipsis),
-                    onTap: () => Navigator.of(sheetContext).pop(links[i]),
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.sync),
-                  title: const Text('更新全部订阅'),
-                  onTap: () => Navigator.of(sheetContext).pop('all'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      if (selectedUrl == null || !mounted) return;
-      if (selectedUrl == 'all') selectedUrl = null;
-    }
-    try {
-      setState(() => _working = true);
-      final profiles =
-          await _service.refreshSubscription(profile.id, url: selectedUrl);
-      if (!mounted) return;
-      setState(() => _profiles = profiles);
-      await _confirmConfigApplied('“${profile.name}”已更新');
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -704,43 +692,205 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
-  Future<void> _showSubscriptionActions(ConfigProfile profile) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('修改订阅'),
-              enabled: !widget.proxyRunning,
-              onTap: () => Navigator.of(sheetContext).pop('edit'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.refresh),
-              title: const Text('更新订阅'),
-              enabled: !widget.proxyRunning,
-              onTap: () => Navigator.of(sheetContext).pop('refresh'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link_outlined),
-              title: const Text('检测订阅链接'),
-              onTap: () => Navigator.of(sheetContext).pop('test'),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<void> _applyAirportChange(
+      Future<List<ConfigProfile>> Function() operation,
+      {String? message}) async {
+    if (!_ensureStopped()) return;
+    setState(() => _working = true);
+    try {
+      final profiles = await operation();
+      if (!mounted) return;
+      setState(() => _profiles = profiles);
+      if (message != null) await _confirmConfigApplied(message);
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _removeAirport(ConfigProfile profile, String link) async {
+    if (!_ensureStopped()) return;
+    final links = subscriptionLinks(profile.url ?? '');
+    final name = profile.subscriptionNameFor(link, links.indexOf(link));
+    final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+                  title: const Text('删除机场'),
+                  content: Text(
+                      '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: const Text('取消')),
+                    FilledButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        child: const Text('删除')),
+                  ],
+                )) ??
+        false;
+    if (!confirmed || !mounted) return;
+    await _applyAirportChange(() => links.length == 1
+        ? _service.deleteConfig(profile.id)
+        : _service.editSubscriptionAirport(profile.id, oldUrl: link));
+  }
+
+  Future<void> _showAirportDialog(ConfigProfile profile, {String? link}) async {
+    final links = subscriptionLinks(profile.url ?? '');
+    final index = link == null ? links.length : links.indexOf(link);
+    final nameController = TextEditingController(
+        text: link == null ? '' : profile.subscriptionNameFor(link, index));
+    final urlController = TextEditingController(text: link ?? '');
+    String? error;
+    final route = DialogRoute<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+              builder: (dialogContext, setDialogState) => AlertDialog(
+                title: Text(link == null
+                    ? '添加机场'
+                    : '${index + 1} · ${nameController.text}'),
+                content: SizedBox(
+                    width: double.maxFinite,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      TextField(
+                          controller: nameController,
+                          enabled: !widget.proxyRunning,
+                          decoration: const InputDecoration(labelText: '机场名称')),
+                      const SizedBox(height: 12),
+                      TextField(
+                          controller: urlController,
+                          enabled: !widget.proxyRunning,
+                          decoration: InputDecoration(
+                              labelText: '订阅链接',
+                              hintText: 'https://...',
+                              errorText: error),
+                          keyboardType: TextInputType.url,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled),
+                    ])),
+                actions: [
+                  TextButton(
+                      onPressed: widget.proxyRunning
+                          ? null
+                          : () => Navigator.of(dialogContext)
+                              .pop(link == null ? null : 'delete'),
+                      child: Text(link == null ? '取消' : '删除')),
+                  FilledButton(
+                      onPressed: widget.proxyRunning
+                          ? null
+                          : () {
+                              try {
+                                if (nameController.text.trim().isEmpty) {
+                                  throw const FormatException('请输入机场名称');
+                                }
+                                final entered =
+                                    subscriptionLinks(urlController.text);
+                                if (entered.length != 1) {
+                                  throw const FormatException('每个机场只能有一个订阅链接');
+                                }
+                                if (links.any((other) =>
+                                    other != link && other == entered.single)) {
+                                  throw const FormatException('订阅链接重复');
+                                }
+                                Navigator.of(dialogContext).pop('save');
+                              } on FormatException catch (failure) {
+                                setDialogState(() => error = failure.message);
+                              }
+                            },
+                      child: Text(link == null ? '添加' : '更新')),
+                ],
+              ),
+            ));
+    final action = await Navigator.of(context, rootNavigator: true).push(route);
+    await route.completed;
+    final name = nameController.text.trim();
+    final url = urlController.text.trim();
+    nameController.dispose();
+    urlController.dispose();
     if (!mounted) return;
-    switch (action) {
-      case 'edit':
-        await _showSubscriptionEditor(existing: profile);
-      case 'refresh':
-        await _refreshSubscription(profile);
-      case 'test':
-        await _testSubscriptionUrl(profile);
+    if (action == 'delete') {
+      await _removeAirport(profile, link!);
+    } else if (action == 'save') {
+      await _applyAirportChange(
+          () => _service.editSubscriptionAirport(profile.id,
+              oldUrl: link, name: name, url: url),
+          message: link == null ? '机场已添加' : '“$name”已更新');
+    }
+  }
+
+  Future<void> _showSubscriptionActions(ConfigProfile profile) async {
+    var current = profile;
+    while (mounted) {
+      final links = subscriptionLinks(current.url ?? '');
+      List<String>? reordered;
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+            child: ConstrainedBox(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
+          child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: double.maxFinite,
+              height: links.length * 88.0,
+              child: ReorderableListView(
+                shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                // ignore: deprecated_member_use
+                onReorder: (oldIndex, newIndex) {
+                  if (widget.proxyRunning) return;
+                  if (newIndex > oldIndex) newIndex--;
+                  if (newIndex == oldIndex) return;
+                  reordered = [...links];
+                  reordered!.insert(newIndex, reordered!.removeAt(oldIndex));
+                  Navigator.of(sheetContext).pop('reorder');
+                },
+                children: [
+                  for (var i = 0; i < links.length; i++)
+                    ListTile(
+                        key: ValueKey(links[i]),
+                        isThreeLine: true,
+                        leading: ReorderableDragStartListener(
+                            index: i,
+                            enabled: !widget.proxyRunning,
+                            child: const Icon(Icons.drag_handle)),
+                        title: Text(
+                            '${i + 1} · ${current.subscriptionNameFor(links[i], i)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                        subtitle: Text(subscriptionUsageSummary(
+                            current.subscriptionInfoFor(links[i]))),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => Navigator.of(sheetContext).pop(links[i])),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('添加机场'),
+                enabled: !widget.proxyRunning,
+                onTap: () => Navigator.of(sheetContext).pop('add')),
+          ])),
+        )),
+      );
+      if (choice == null || !mounted) return;
+      if (choice == 'reorder') {
+        await _applyAirportChange(() =>
+            _service.editSubscriptionAirport(current.id, order: reordered));
+      } else {
+        await _showAirportDialog(current,
+            link: choice == 'add' ? null : choice);
+      }
+      if (!mounted) return;
+      final updated = _profiles.where((entry) => entry.id == current.id);
+      if (updated.isEmpty) return;
+      current = updated.first;
     }
   }
 
@@ -904,47 +1054,6 @@ class _ConfigPageState extends State<ConfigPage> {
         await _delete(profile);
         await _returnToActions(profile);
         return;
-    }
-  }
-
-  Future<void> _testSubscriptionUrl(ConfigProfile profile) async {
-    if (_testingSubscriptionUrl) return;
-    setState(() => _testingSubscriptionUrl = true);
-    try {
-      final test = await _service.testSubscriptionUrl(profile.id);
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('订阅链接检测'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '订阅服务器响应时间：${test.responseTimeMs == null ? '—' : '${test.responseTimeMs} ms'}',
-              ),
-              Text('HTTP 状态码：${test.statusCode ?? '—'}'),
-              Text(
-                '内容大小：${test.contentLength == null ? '—' : '${test.contentLength} 字节'}',
-              ),
-              Text('内容类型：${test.contentType ?? '—'}'),
-              const SizedBox(height: 10),
-              Text('检测结果：${test.message}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('关闭'),
-            ),
-          ],
-        ),
-      );
-    } catch (error) {
-      if (mounted) _showError(error);
-    } finally {
-      if (mounted) setState(() => _testingSubscriptionUrl = false);
     }
   }
 

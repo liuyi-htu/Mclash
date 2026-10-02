@@ -78,6 +78,7 @@ class MainActivity : FlutterActivity() {
                 "importConfigs" -> importConfigs(result)
                 "addSubscription" -> addSubscription(call, result)
                 "updateSubscription" -> updateSubscription(call, result)
+                "editSubscriptionAirport" -> editSubscriptionAirport(call, result)
                 "refreshSubscription" -> refreshSubscription(call, result)
                 "getRuntimeConfigContent" -> runAsync(result, "mclash-runtime-config") {
                     val runtime = File(filesDir, "mihomo/runtime.yaml")
@@ -202,7 +203,7 @@ class MainActivity : FlutterActivity() {
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
         runAsync(result, "mclash-add-subscription") {
-            configStore.addSubscription(name, url)
+            configStore.addSubscription(name, url, call.argument<Map<String, String>>("subscriptionNames"))
             configStore.listMaps()
         }
     }
@@ -213,7 +214,17 @@ class MainActivity : FlutterActivity() {
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
         runAsync(result, "mclash-update-subscription") {
-            configStore.updateSubscription(id, name, url)
+            configStore.updateSubscription(id, name, url, call.argument<Map<String, String>>("subscriptionNames"))
+            configStore.listMaps()
+        }
+    }
+
+    private fun editSubscriptionAirport(call: MethodCall, result: MethodChannel.Result) {
+        requireProxyStopped()
+        val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
+        runAsync(result, "mclash-edit-airport") {
+            configStore.editSubscriptionAirport(id, call.argument<String>("oldUrl"), call.argument<String>("name"),
+                call.argument<String>("url"), call.argument<List<String>>("order"))
             configStore.listMaps()
         }
     }
@@ -681,12 +692,12 @@ class MainActivity : FlutterActivity() {
     companion object {
         private val MUTATING_METHODS = setOf(
             "saveAppFilter", "saveVpnTunnelSettings", "setDebugLoggingEnabled",
-            "importConfigs", "addSubscription", "updateSubscription", "refreshSubscription",
+            "importConfigs", "addSubscription", "updateSubscription", "editSubscriptionAirport", "refreshSubscription",
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
         )
         private val CONFIG_WRITE_WORKERS = setOf(
             "mclash-import-configs", "mclash-add-subscription", "mclash-update-subscription",
-            "mclash-refresh-subscription", "mclash-save-config-content",
+            "mclash-refresh-subscription", "mclash-edit-airport", "mclash-save-config-content",
         )
         const val EXTRA_START_FROM_TILE = "start_from_quick_settings_tile"
 

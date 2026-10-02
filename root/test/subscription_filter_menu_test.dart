@@ -456,121 +456,190 @@ rules: ["MATCH,DIRECT"]
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('subscription edit save and cancel return to updated menu',
+  Future<void> openAirports(WidgetTester tester) async {
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('订阅管理'));
+    await tester.tap(find.text('订阅管理'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> confirmAirportUpdate(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+  }
+
+  final multiProfile = {
+    ...profile,
+    'url': 'https://example.org/a\nhttps://example.org/b',
+    'subscriptionNames': {
+      'https://example.org/a': '第一机场',
+      'https://example.org/b': '第二机场'
+    },
+    'subscriptionInfos': {
+      'https://example.org/a': 'upload=0;download=0;total=1073741824;expire=0',
+      'https://example.org/b': 'upload=0;download=0;total=2147483648;expire=0'
+    },
+  };
+
+  testWidgets(
+      'airport info opens two fields; editing name and URL updates only that airport',
       (tester) async {
     var current = Map<String, Object>.from(profile);
     var updates = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'getConfigs') return [current];
-      if (call.method == 'updateSubscription') {
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'editSubscriptionAirport') {
         updates++;
+        expect(call.arguments['oldUrl'], 'https://example.org/sub');
+        expect(call.arguments['name'], '新机场');
+        expect(call.arguments['url'], 'https://example.org/new');
         current = {
           ...current,
-          'name': call.arguments['name'] as String,
-          'url': call.arguments['url'] as String
+          'url': call.arguments['url'] as String,
+          'subscriptionNames': {'https://example.org/new': '新机场'}
         };
         return [current];
       }
       throw StateError('Unexpected call: ${call.method}');
     });
-    await tester
-        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await openAirports(tester);
+    expect(find.text('修改订阅'), findsNothing);
+    expect(find.text('更新订阅'), findsNothing);
+    expect(find.text('检测订阅链接'), findsNothing);
+    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    await tester.tap(find.text('1 · Airport'));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport'));
+    expect(find.byType(TextField), findsNWidgets(2));
+    await tester.tapAt(const Offset(5, 5)); // Dismiss without saving.
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('订阅管理'));
-    await tester.tap(find.text('订阅管理'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('修改订阅'));
-    await tester.tap(find.text('修改订阅'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
     expect(updates, 0);
-    await tester.ensureVisible(find.text('订阅管理'));
-    await tester.tap(find.text('订阅管理'));
+    await tester.tap(find.text('1 · Airport'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('修改订阅'));
-    await tester.tap(find.text('修改订阅'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, 'New Airport');
+    await tester.enterText(find.widgetWithText(TextField, '机场名称'), '新机场');
     await tester.enterText(
-        find.byType(TextField).last, ' https://example.org/a ');
-    await tester.tap(find.text('添加订阅链接'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-        find.byType(TextField).last, 'https://example.org/b');
-    final subscriptionHandle = find.byType(ReorderableDragStartListener).last;
-    final subscriptionGesture =
-        await tester.startGesture(tester.getCenter(subscriptionHandle));
-    await tester.pump();
-    await subscriptionGesture.moveBy(const Offset(0, -5));
-    await tester.pump();
-    await subscriptionGesture.moveBy(const Offset(0, -40));
-    await tester.pump();
-    await subscriptionGesture.moveBy(const Offset(0, -65));
-    await tester.pump(const Duration(milliseconds: 500));
-    await subscriptionGesture.up();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('保存并更新'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text('确定'));
-    await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
-    expect(find.text('New Airport'), findsOneWidget);
+        find.widgetWithText(TextField, '订阅链接'), 'https://example.org/new');
+    await tester.tap(find.text('更新'));
+    await confirmAirportUpdate(tester);
+    expect(find.text('1 · 新机场'), findsOneWidget);
     expect(updates, 1);
-    expect(current['url'], 'https://example.org/b\nhttps://example.org/a');
-    await tester.ensureVisible(find.text('删除'));
-    await tester.tap(find.text('删除'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
-    await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('single refresh sends only the selected subscription URL',
+  testWidgets(
+      'all airport names and usage are shown; update sends the clicked link only',
       (tester) async {
-    final current = {
-      ...profile,
-      'url': 'https://example.org/a\nhttps://example.org/b'
-    };
-    String? updatedUrl;
+    Map<Object?, Object?>? args;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [multiProfile];
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'editSubscriptionAirport') {
+        args = Map<Object?, Object?>.from(call.arguments as Map);
+        return [multiProfile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await openAirports(tester);
+    expect(find.text('1 · 第一机场'), findsOneWidget);
+    expect(find.text('2 · 第二机场'), findsOneWidget);
+    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：2.00 GB\n到期时间：不限时'), findsOneWidget);
+    await tester.tap(find.text('2 · 第二机场'));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, '订阅链接'))
+            .controller!
+            .text,
+        'https://example.org/b');
+    await tester.tap(find.text('更新'));
+    await confirmAirportUpdate(tester);
+    expect(args, {
+      'id': 'airport',
+      'oldUrl': 'https://example.org/b',
+      'name': '第二机场',
+      'url': 'https://example.org/b'
+    });
+    expect(find.text('2 · 第二机场'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'airport deletion removes the clicked link and retains the other airport',
+      (tester) async {
+    var current = Map<String, Object>.from(multiProfile);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'getConfigs') return [current];
-      if (call.method == 'getConfigContent') throw StateError('Unavailable');
-      if (call.method == 'refreshSubscription') {
-        updatedUrl = call.arguments['url'] as String?;
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'editSubscriptionAirport') {
+        expect(call.arguments,
+            {'id': 'airport', 'oldUrl': 'https://example.org/b'});
+        current = {
+          ...current,
+          'url': 'https://example.org/a',
+          'subscriptionNames': {'https://example.org/a': '第一机场'},
+          'subscriptionInfos': {
+            'https://example.org/a': 'upload=0;download=0;total=1073741824;expire=0'
+          }
+        };
         return [current];
       }
       throw StateError('Unexpected call: ${call.method}');
     });
-    await tester
-        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await openAirports(tester);
+    await tester.tap(find.text('2 · 第二机场'));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport'));
+    await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();
-    expect(find.text('修改订阅'), findsNothing);
-    expect(find.text('更新订阅'), findsNothing);
-    expect(find.text('检测订阅链接'), findsNothing);
-    await tester.ensureVisible(find.text('订阅管理'));
-    await tester.tap(find.text('订阅管理'));
+    await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('更新订阅'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('机场 2'));
+    expect(find.text('1 · 第一机场'), findsOneWidget);
+    expect(find.text('2 · 第二机场'), findsNothing);
+    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'airport info can be dragged and names follow the reordered links',
+      (tester) async {
+    var current = Map<String, Object>.from(multiProfile);
+    List<String>? savedOrder;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [current];
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'editSubscriptionAirport') {
+        savedOrder = List<String>.from(call.arguments['order'] as List);
+        current = {...current, 'url': savedOrder!.join('\n')};
+        return [current];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await openAirports(tester);
+    final handle = find.byType(ReorderableDragStartListener).last;
+    final gesture = await tester.startGesture(tester.getCenter(handle));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(updatedUrl, 'https://example.org/b');
-    await tester.tap(find.text('确定'));
+    await gesture.moveBy(const Offset(0, -5));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -40));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -65));
+    await tester.pump(const Duration(milliseconds: 500));
+    await gesture.up();
     await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(savedOrder, ['https://example.org/b', 'https://example.org/a']);
+    expect(find.text('1 · 第二机场'), findsOneWidget);
+    expect(find.text('2 · 第一机场'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

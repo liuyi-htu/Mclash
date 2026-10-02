@@ -19,6 +19,8 @@ internal data class ConfigProfile(
     val url: String?,
     val updatedAt: Long,
     val subscriptionUserInfo: String? = null,
+    val subscriptionNames: Map<String, String> = emptyMap(),
+    val subscriptionInfos: Map<String, String> = emptyMap(),
 )
 
 internal class ConfigStore(private val context: Context) {
@@ -74,6 +76,8 @@ internal class ConfigStore(private val context: Context) {
                 "url" to profile.url,
                 "updatedAt" to profile.updatedAt,
                 "subscriptionUserInfo" to profile.subscriptionUserInfo,
+                "subscriptionNames" to profile.subscriptionNames,
+                "subscriptionInfos" to profile.subscriptionInfos,
                 "active" to (profile.id == activeId),
                 "exists" to profileFile(profile.id).isFile,
             )
@@ -122,7 +126,7 @@ internal class ConfigStore(private val context: Context) {
         return added
     }
 
-    fun addSubscription(name: String, rawUrl: String): ConfigProfile {
+    fun addSubscription(name: String, rawUrl: String, subscriptionNames: Map<String, String>? = null): ConfigProfile {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
 
@@ -135,6 +139,8 @@ internal class ConfigStore(private val context: Context) {
             url = SubscriptionConfig.links(rawUrl).joinToString("\n"),
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
+            subscriptionInfos = download.userInfos,
+            subscriptionNames = subscriptionNames.orEmpty().filterKeys { it in SubscriptionConfig.links(rawUrl) }.mapValues { it.value.trim() },
         )
         val profiles = readProfiles()
         profiles += profile
@@ -147,6 +153,7 @@ internal class ConfigStore(private val context: Context) {
         id: String,
         name: String,
         rawUrl: String,
+        subscriptionNames: Map<String, String>? = null,
     ): ConfigProfile {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
@@ -163,6 +170,8 @@ internal class ConfigStore(private val context: Context) {
             url = SubscriptionConfig.links(rawUrl).joinToString("\n"),
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
+            subscriptionInfos = download.userInfos,
+            subscriptionNames = (subscriptionNames ?: profiles[index].subscriptionNames).filterKeys { it in SubscriptionConfig.links(rawUrl) }.mapValues { it.value.trim() },
         )
         profiles[index] = updated
         writeConfigAndProfiles(id, bytes, profiles, download.sources)
@@ -171,6 +180,51 @@ internal class ConfigStore(private val context: Context) {
             preferences.configFileName = updated.name
             QuickSettingsTileUpdater.request(context)
         }
+        return updated
+    }
+
+    fun editSubscriptionAirport(id: String, oldUrl: String? = null, name: String? = null, url: String? = null, order: List<String>? = null): ConfigProfile {
+        val profiles = readProfiles()
+        val index = profiles.indexOfFirst { it.id == id }
+        require(index >= 0) { "找不到订阅配置" }
+        val profile = profiles[index]
+        require(profile.type == TYPE_SUBSCRIPTION) { "这不是订阅配置" }
+        val links = SubscriptionConfig.links(profile.url ?: error("订阅链接不存在"))
+        val next = links.toMutableList()
+        val names = profile.subscriptionNames.toMutableMap()
+        val newUrl = url?.let { SubscriptionConfig.links(it).singleOrNull() ?: error("每个机场只能有一个订阅链接") }
+        if (order != null) {
+            require(order.size == links.size && order.toSet() == links.toSet()) { "机场排序无效" }
+            next.clear()
+            next.addAll(order)
+        } else {
+            if (oldUrl != null) require(oldUrl in links) { "找不到机场" }
+            require(oldUrl != null || newUrl != null) { "订阅链接不能为空" }
+            if (newUrl != null) {
+                require(!name.isNullOrBlank()) { "机场名称不能为空" }
+                require(newUrl == oldUrl || newUrl !in links) { "订阅链接重复" }
+            }
+            if (oldUrl == null) next.add(newUrl!!) else {
+                val airportIndex = next.indexOf(oldUrl)
+                if (newUrl == null) next.removeAt(airportIndex) else next[airportIndex] = newUrl
+                names.remove(oldUrl)
+            }
+            if (newUrl != null) names[newUrl] = name!!.trim()
+        }
+        require(next.isNotEmpty()) { "删除最后一个机场时请删除配置" }
+        val cache = subscriptionCacheFile(id)
+        val cachedSources = if (cache.isFile) {
+            val json = JSONObject(cache.readText(Charsets.UTF_8))
+            json.keys().asSequence().associateWith { json.getString(it) }
+        } else emptyMap()
+        val download = downloadSubscription(
+            next.joinToString("\n"), profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8),
+            newUrl, cachedSources, profile.subscriptionInfos, downloadAll = false,
+        )
+        val updated = profile.copy(url = next.joinToString("\n"), updatedAt = System.currentTimeMillis(),
+            subscriptionNames = names, subscriptionUserInfo = download.userInfo, subscriptionInfos = download.userInfos)
+        profiles[index] = updated
+        writeConfigAndProfiles(id, download.bytes, profiles, download.sources)
         return updated
     }
 
@@ -188,9 +242,9 @@ internal class ConfigStore(private val context: Context) {
         val download = downloadSubscription(
             profile.url ?: error("订阅链接不存在"),
             profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8),
-            url, cachedSources,
+            url, cachedSources, profile.subscriptionInfos,
         )
-        val updated = profile.copy(updatedAt = System.currentTimeMillis(), subscriptionUserInfo = download.userInfo)
+        val updated = profile.copy(updatedAt = System.currentTimeMillis(), subscriptionUserInfo = download.userInfo, subscriptionInfos = download.userInfos)
         profiles[index] = updated
         writeConfigAndProfiles(id, download.bytes, profiles, download.sources)
         return updated
@@ -322,16 +376,16 @@ internal class ConfigStore(private val context: Context) {
         QuickSettingsTileUpdater.request(context)
     }
 
-    private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?, val sources: Map<String, String> = emptyMap())
+    private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?, val sources: Map<String, String> = emptyMap(), val userInfos: Map<String, String> = emptyMap())
 
-    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null, selectedUrl: String? = null, cachedSources: Map<String, String> = emptyMap()): SubscriptionDownload {
+    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null, selectedUrl: String? = null, cachedSources: Map<String, String> = emptyMap(), cachedUserInfos: Map<String, String> = emptyMap(), downloadAll: Boolean = true): SubscriptionDownload {
         val urls = SubscriptionConfig.links(rawUrl)
         require(selectedUrl == null || selectedUrl in urls) { "订阅链接不存在" }
         var totalBytes = 0L
         val sources = urls.mapIndexed { index, url ->
-            val source = if (selectedUrl != null && url != selectedUrl) {
-                val cached = cachedSources[url] ?: error("缺少其他订阅的缓存，请先更新全部订阅")
-                SubscriptionDownload(cached.toByteArray(Charsets.UTF_8), null)
+            val source = if ((!downloadAll && selectedUrl == null) || (selectedUrl != null && url != selectedUrl)) {
+                val cached = cachedSources[url] ?: error("缺少机场节点缓存，请先更新该机场")
+                SubscriptionDownload(cached.toByteArray(Charsets.UTF_8), cachedUserInfos[url])
             } else try {
                 downloadSubscriptionSource(url)
             } catch (error: Exception) {
@@ -347,6 +401,7 @@ internal class ConfigStore(private val context: Context) {
             buildSubscriptionConfig(merged.toByteArray(Charsets.UTF_8), previousConfig),
             sources.singleOrNull()?.userInfo,
             urls.zip(sources.map { it.bytes.toString(Charsets.UTF_8) }).toMap(),
+            urls.zip(sources).mapNotNull { (url, source) -> source.userInfo?.let { url to it } }.toMap(),
         )
     }
 
@@ -539,6 +594,12 @@ internal class ConfigStore(private val context: Context) {
                 updatedAt = item.optLong("updatedAt", 0L),
                 subscriptionUserInfo = if (item.isNull("subscriptionUserInfo")) null
                     else item.optString("subscriptionUserInfo"),
+                subscriptionNames = item.optJSONObject("subscriptionNames")?.let { names ->
+                    names.keys().asSequence().associateWith { names.getString(it) }
+                }.orEmpty(),
+                subscriptionInfos = item.optJSONObject("subscriptionInfos")?.let { infos ->
+                    infos.keys().asSequence().associateWith { infos.getString(it) }
+                }.orEmpty(),
             )
         }
         return profiles
@@ -554,7 +615,9 @@ internal class ConfigStore(private val context: Context) {
                     .put("type", profile.type)
                     .put("url", profile.url ?: JSONObject.NULL)
                     .put("updatedAt", profile.updatedAt)
-                    .put("subscriptionUserInfo", profile.subscriptionUserInfo ?: JSONObject.NULL),
+                    .put("subscriptionUserInfo", profile.subscriptionUserInfo ?: JSONObject.NULL)
+                    .put("subscriptionNames", JSONObject(profile.subscriptionNames))
+                    .put("subscriptionInfos", JSONObject(profile.subscriptionInfos)),
             )
         }
         preferences.configProfilesJson = array.toString()
