@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +9,6 @@ void main() {
   var running = false;
   String? proxyStatus;
   var rejectLegacyStatus = false;
-  Completer<String>? pendingStatus;
   var developerModeEnabled = false;
   var registrationReads = 0;
   var registrationExports = 0;
@@ -20,7 +17,6 @@ void main() {
     running = false;
     proxyStatus = null;
     rejectLegacyStatus = false;
-    pendingStatus = null;
     developerModeEnabled = false;
     registrationReads = 0;
     registrationExports = 0;
@@ -33,9 +29,6 @@ void main() {
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'getProxyStatus' && pendingStatus != null) {
-        return pendingStatus!.future;
-      }
       if (call.method == 'isRunning' && rejectLegacyStatus) {
         throw StateError('Status snapshots must not wait for restoration');
       }
@@ -88,42 +81,24 @@ void main() {
     expect(find.text('代理规则'), findsOneWidget);
   });
 
-  testWidgets('restoration status appears immediately and updates in background',
+  testWidgets('detects restoration state without showing a loading dialog',
       (tester) async {
     proxyStatus = 'starting';
     rejectLegacyStatus = true;
     await tester.pumpWidget(const MclashApp());
     await tester.pump();
     await tester.pump();
-    expect(find.text('正在启动'), findsOneWidget);
-    expect(find.text('未启动'), findsNothing);
+    expect(find.text('检测状态'), findsOneWidget);
+    expect(find.text('正在启动'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('检测状态'), findsOneWidget);
     proxyStatus = 'stopped';
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
     expect(find.text('未启动'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('status loading dialog blocks navigation until detection completes',
-      (tester) async {
-    pendingStatus = Completer<String>();
-    await tester.pumpWidget(const MclashApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(find.text('正在检测运行状态…'), findsOneWidget);
-    await tester.tap(find.text('设置'), warnIfMissed: false);
-    await tester.pump();
-    expect(find.text('分应用代理'), findsNothing);
-    await tester.binding.handlePopRoute();
-    await tester.pump();
-    expect(find.text('正在检测运行状态…'), findsOneWidget);
-    pendingStatus!.complete('stopped');
-    await tester.pumpAndSettle();
-    expect(find.text('正在检测运行状态…'), findsNothing);
-    await tester.tap(find.text('设置'));
-    await tester.pumpAndSettle();
-    expect(find.text('分应用代理'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

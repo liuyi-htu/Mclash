@@ -25,7 +25,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _service = NativeProxyService.instance;
 
-  ProxyStatus _status = ProxyStatus.stopped;
+  ProxyStatus _status = ProxyStatus.starting;
   bool _toggling = false;
   int _transitionGeneration = 0;
   bool _refreshInProgress = false;
@@ -94,7 +94,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       if (!_toggling &&
           (_status == ProxyStatus.starting || _status == ProxyStatus.stopping)) {
-        await _refresh(showLoading: false);
+        await _refresh();
       }
       final stats = await _service.getTrafficStats();
       final now = DateTime.now();
@@ -269,34 +269,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _refresh({bool showLoading = true}) async {
+  Future<void> _refresh() async {
     if (!mounted || _refreshInProgress) return;
     _refreshInProgress = true;
     final generation = _transitionGeneration;
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final loading = showLoading
-        ? DialogRoute<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => const PopScope(
-              canPop: false,
-              child: AlertDialog(
-                content: Row(
-                  children: [
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 16),
-                    Expanded(child: Text('正在检测运行状态…')),
-                  ],
-                ),
-              ),
-            ),
-          )
-        : null;
-    if (loading != null) unawaited(navigator.push(loading));
     try {
       final values = await Future.wait<Object>([
         _service.getConfigInfo(),
@@ -319,9 +295,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       _showError(error);
     } finally {
-      if (loading != null && navigator.mounted && loading.isActive) {
-        navigator.removeRoute(loading);
-      }
       _refreshInProgress = false;
     }
   }
@@ -970,7 +943,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String get _statusText => switch (_status) {
         ProxyStatus.stopped => '未启动',
-        ProxyStatus.starting => '正在启动',
+        ProxyStatus.starting => '检测状态',
         ProxyStatus.running => '运行中',
         ProxyStatus.stopping => '正在停止',
       };
