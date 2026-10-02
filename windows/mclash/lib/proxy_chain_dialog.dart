@@ -10,29 +10,47 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
               title: Text(title),
               content: SizedBox(
                 width: double.maxFinite,
-                height: MediaQuery.sizeOf(context).height * 0.4,
-                child: ListView.builder(
-                  itemCount: nodes.length,
-                  itemBuilder: (context, index) => CheckboxListTile(
-                    title: Text(nodes[index]),
-                    value: selected.contains(nodes[index]),
-                    onChanged: (checked) => setState(() {
-                      if (checked == true) {
-                        selected.add(nodes[index]);
-                      } else {
-                        selected.remove(nodes[index]);
-                      }
-                    }),
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => selected.addAll(nodes)),
+                          child: const Text('全选'),
+                        ),
+                        TextButton(
+                          onPressed: () => setState(selected.clear),
+                          child: const Text('清空'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: MediaQuery.sizeOf(context).height * 0.4,
+                      child: ListView.builder(
+                        itemCount: nodes.length,
+                        itemBuilder: (context, index) => CheckboxListTile(
+                          title: Text(nodes[index]),
+                          value: selected.contains(nodes[index]),
+                          onChanged: (checked) => setState(() {
+                            if (checked == true) {
+                              selected.add(nodes[index]);
+                            } else {
+                              selected.remove(nodes[index]);
+                            }
+                          }),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               actions: [
-                TextButton(
-                    onPressed: () => setState(() => selected.addAll(nodes)),
-                    child: const Text('全选')),
-                TextButton(
-                    onPressed: () => setState(selected.clear),
-                    child: const Text('清空')),
                 TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('取消')),
