@@ -322,6 +322,11 @@ rules: [MATCH,DIRECT]
     await tester.pumpAndSettle();
     expect(find.textContaining('选择当前节点'), findsNothing);
     expect(find.textContaining('本机 →'), findsNothing);
+    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('上海'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
@@ -404,7 +409,7 @@ rules: [MATCH,DIRECT]
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('batch proxies default to every remaining saved node',
+  testWidgets('batch proxies require manually selected targets',
       (tester) async {
     List<String>? targets;
     List<String>? proxies;
@@ -446,9 +451,18 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('D'));
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '保存')).onPressed, isNull);
+    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CheckboxListTile), findsNWidgets(2));
+    expect(tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+        .every((tile) => tile.value == false), isTrue);
+    await tester.tap(find.text('A'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
-    expect(targets, ['A', 'B']);
+    expect(targets, ['A']);
     expect(proxies, ['C', 'D']);
     expect(tester.takeException(), isNull);
   });
@@ -464,6 +478,7 @@ rules: [MATCH,DIRECT]
                       context: context,
                       nodes: ['A', 'B', 'C', 'D'],
                       initialNodes: ['D', 'C'],
+                      initialTargets: ['A'],
                       prepend: prepend,
                       onSave: (current, other) async => savedOrder = other),
                   child: const Text('打开')))));
@@ -474,7 +489,7 @@ rules: [MATCH,DIRECT]
               .widgetList<ListTile>(find.byType(ListTile))
               .map((tile) => (tile.title as Text).data),
           ['D', 'C']);
-      await tester.tap(find.textContaining('节点（已选'));
+      await tester.tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();
@@ -509,6 +524,7 @@ rules: [MATCH,DIRECT]
                   onPressed: () => showProxyChainDialog(
                     context: context,
                     nodes: ['A', 'B'],
+                    initialTargets: ['A'],
                     prepend: false,
                     onSave: (_, __) async =>
                         throw const FormatException('代理链路形成循环'),

@@ -36,7 +36,7 @@ void main() {
         editSubscriptionFilter(edited, domesticGroup, '__no_match__');
     expect(loadYaml(filtered)['proxy-groups'][0]['proxies'], ['DIRECT']);
     final withFront = addNodeLink(filtered, 'http://10.0.0.200/#front');
-    final chained = setGlobalProxyChain(withFront, ['front'], prepend: true);
+    final chained = setGlobalProxyChain(withFront, ['front'], prepend: true, targets: ['上海手动']);
     expect(loadYaml(chained)['proxies'][0]['dialer-proxy'], 'front');
     expect(savedManualNodeNames(chained), ['上海手动', 'front']);
   });
@@ -154,8 +154,8 @@ void main() {
     expect(added['server'], '10.0.0.200');
     expect(added['http-opts'], isNull);
     final config = loadYaml(addNodeLink(template, 'http://10.0.0.200/#wap'));
-    expect(config['proxy-groups'][0]['proxies'], ['DIRECT']);
-    expect(config['proxy-groups'][1]['proxies'], ['DIRECT']);
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', 'wap']);
+    expect(config['proxy-groups'][1]['proxies'], ['wap']);
     expect(config['proxies'][0]['name'], 'wap');
     for (final url in [
       'http://example.org/path',
