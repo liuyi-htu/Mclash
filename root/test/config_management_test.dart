@@ -65,6 +65,42 @@ void main() {
     expect(config['proxies'][0]['dialer-proxy'], '新组');
     expect(config['rules'][0], 'DOMAIN-SUFFIX,example.org,新组');
   });
+  test('regional groups stay locked and allow regex and type edits', () {
+    final content = source
+        .replaceAll('name: 自选', 'name: 🌍 国外')
+        .replaceAll('example.org,自选', 'example.org,🌍 国外');
+    for (final name in ['🚀 国内', '🌍 国外']) {
+      expect(
+          () => deleteConfigGroup(content, name),
+          throwsA(isA<FormatException>()
+              .having((error) => error.message, 'message', contains('不可删除'))));
+      expect(
+          () => updateConfigGroup(
+              content,
+              {
+                'name': '更名',
+                'type': 'select',
+                'proxies': ['JP']
+              },
+              oldName: name),
+          throwsFormatException);
+      final filtered = editSubscriptionFilter(content, name, '^JP');
+      final edited = updateConfigGroup(
+          filtered,
+          {
+            'name': name,
+            'type': 'url-test',
+            'proxies': configGroups(filtered)
+                .firstWhere((group) => group['name'] == name)['proxies']
+          },
+          oldName: name);
+      expect(readSubscriptionFilters(edited)[name], '^JP');
+      expect(
+          configGroups(edited)
+              .firstWhere((group) => group['name'] == name)['type'],
+          'url-test');
+    }
+  });
   test('group deletion rejects references and succeeds after removing them',
       () {
     expect(() => deleteConfigGroup(source, '自选'), throwsFormatException);
@@ -80,14 +116,13 @@ void main() {
               'proxies': ['DIRECT']
             }),
         throwsFormatException);
-    final updated = updateConfigGroup(source, {
-      'name': '另一组',
-      'type': 'select',
-      'proxies': ['自选']
-    });
+    final cyclic = source
+        .replaceAll('proxies: [JP]', 'proxies: [另一组]')
+        .replaceAll(
+            'rules:', '  - {name: 另一组, type: select, proxies: [自选]}\nrules:');
     expect(
         () => updateConfigGroup(
-            updated,
+            cyclic,
             {
               'name': '自选',
               'type': 'select',
@@ -96,36 +131,42 @@ void main() {
             oldName: '自选'),
         throwsFormatException);
   });
-  test('any group can use regex and manual selection cancels it', () {
+  test('members can only change through regex and group edits preserve filters',
+      () {
     final filtered = editSubscriptionFilter(source, '自选', '^北');
     expect(loadYaml(filtered)['proxy-groups'][1]['proxies'], ['北京']);
-    expect(readSubscriptionFilters(filtered)['自选'], '^北');
-    final manual = updateConfigGroup(
+    expect(
+        () => updateConfigGroup(
+            filtered,
+            {
+              'name': '自选',
+              'type': 'select',
+              'proxies': ['JP']
+            },
+            oldName: '自选'),
+        throwsFormatException);
+    final edited = updateConfigGroup(
         filtered,
         {
-          'name': '🚀 国内',
+          'name': '更名',
           'type': 'select',
-          'proxies': ['JP']
+          'proxies': ['北京']
         },
-        oldName: '🚀 国内');
-    expect(readSubscriptionFilters(manual).containsKey('🚀 国内'), false);
-    final reapplied =
-        applySubscriptionFilters(manual, readSubscriptionFilters(manual));
-    expect(loadYaml(reapplied)['proxy-groups'][0]['proxies'], ['JP']);
+        oldName: '自选');
+    expect(readSubscriptionFilters(edited)['更名'], '^北');
+    expect(loadYaml(edited)['proxy-groups'][1]['proxies'], ['北京']);
+    final created = updateConfigGroup(source, {'name': '新建', 'type': 'select'});
+    expect(configGroups(created).last['proxies'], ['北京', 'JP']);
+    expect(readSubscriptionFilters(created)['新建'], '');
     expect(
         () => editSubscriptionFilter(source, '自选', '['), throwsFormatException);
   });
+
   test(
       'adding a node reapplies arbitrary filters without expanding manual groups',
       () {
-    final manual = updateConfigGroup(
-        source,
-        {
-          'name': '🚀 国内',
-          'type': 'select',
-          'proxies': ['JP']
-        },
-        oldName: '🚀 国内');
+    final manual =
+        writeSubscriptionFilters(source.replaceAll('[DIRECT, 北京]', '[JP]'), {});
     final filtered = editSubscriptionFilter(manual, '自选', '');
     final result = addNodeLink(filtered, 'http://example.org:80#New');
     expect(loadYaml(result)['proxy-groups'][0]['proxies'], ['JP']);
