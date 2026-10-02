@@ -55,6 +55,11 @@ android {
         rootProject.projectDir.parentFile.parentFile.resolve("assets"),
     )
 
+    androidResources {
+        // AAPT's default <dir>_* rule drops MetaCubeXD's _nuxt and _fonts.
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
