@@ -60,12 +60,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('链式节点 1'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('选择$side节点（已选 1 个）'));
+      await tester.tap(find.text('选择前置节点（已选 1 个）'));
       await tester.pumpAndSettle();
       expect(find.text('清空'), findsNothing);
       await tester.tap(find.text('清除链式节点'));
       await tester.pumpAndSettle();
-      expect(find.text('选择$side节点（已选 0 个）'), findsOneWidget);
+      expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
       expect(saves, 0);
       expect(
           tester

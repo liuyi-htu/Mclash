@@ -37,8 +37,8 @@ void main() {
     final withFront = addNodeLink(filtered, 'http://10.0.0.200/#front');
     final chained = setGlobalProxyChain(withFront, ['front'],
         prepend: true, targets: ['上海手动']);
-    expect(loadYaml(chained)['proxies'][0]['dialer-proxy'], 'front');
-    expect(savedManualNodeNames(chained), ['上海手动', 'front']);
+    expect(loadYaml(chained)['proxies'][1]['dialer-proxy'], 'front');
+    expect(savedManualNodeNames(chained), ['front', '上海手动']);
   });
   test('deleting manual nodes removes references and rejects airport nodes',
       () {
@@ -80,21 +80,21 @@ void main() {
         configured, linkFor({'net': 'ws', 'tls': 'tls', 'sni': 'tls.example'}));
     final config = loadYaml(result);
     expect(config['proxies'].length, 2);
-    expect(config['proxies'][0]['http-opts']['headers']['Host'],
+    expect(config['proxies'][1]['http-opts']['headers']['Host'],
         ['preset.example']);
     expect(
-        config['proxies'][1]['ws-opts']['headers']['Host'], 'preset.example');
-    expect(config['proxies'][1]['servername'], 'tls.example');
-    expect(config['proxies'][1]['name'], '上海手动 (2)');
+        config['proxies'][0]['ws-opts']['headers']['Host'], 'preset.example');
+    expect(config['proxies'][0]['servername'], 'tls.example');
+    expect(config['proxies'][0]['name'], '上海手动 (2)');
     expect(
-        config['proxy-groups'][0]['proxies'], ['DIRECT', '上海手动', '上海手动 (2)']);
+        config['proxy-groups'][0]['proxies'], ['DIRECT', '上海手动 (2)', '上海手动']);
     expect(config['proxy-groups'][0]['filter'], isNull);
     expect(config['rules'], loadYaml(template)['rules']);
-    expect(readManualNodeNames(result), ['上海手动', '上海手动 (2)']);
+    expect(readManualNodeNames(result), ['上海手动 (2)', '上海手动']);
     expect(loadYaml(first)['proxies'][0]['http-opts']['headers']['Host'],
         ['link.example']);
     final tcp = loadYaml(addNodeLink(
-        configured, linkFor({'net': 'tcp', 'type': 'none'})))['proxies'][1];
+        configured, linkFor({'net': 'tcp', 'type': 'none'})))['proxies'][0];
     expect(tcp['http-opts'], isNull);
     expect(tcp['ws-opts'], isNull);
   });
@@ -102,7 +102,7 @@ void main() {
     const local =
         'proxies: []\nproxy-groups: [{name: custom, type: select, proxies: [DIRECT]}]\nrules: [MATCH,custom]\n';
     final result = loadYaml(addNodeLink(local, linkFor({'ps': 'DIRECT'})));
-    expect(result['proxy-groups'][0]['proxies'], ['DIRECT', 'DIRECT (2)']);
+    expect(result['proxy-groups'][0]['proxies'], ['DIRECT (2)', 'DIRECT']);
     expect(result['rules'], loadYaml(local)['rules']);
   });
   test('invalid links and unsupported transports are rejected', () {
@@ -138,7 +138,7 @@ void main() {
         addNodeLink(template, linkFor({})), 'preset.example');
     final added =
         loadYaml(addNodeLink(configured, 'http://10.0.0.200/#wap'))['proxies']
-            [1];
+            [0];
     expect(added['type'], 'http');
     expect(added['server'], '10.0.0.200');
     expect(added['http-opts'], isNull);

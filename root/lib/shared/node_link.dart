@@ -26,8 +26,8 @@ List<dynamic> mergeManualNodes(List<dynamic> downloaded, String? previous) {
       oldNodes.where((node) => names.contains(node['name'])).toList();
   final retained = manual.map((node) => node['name']).toSet();
   return [
-    ...downloaded.where((node) => !retained.contains(node['name'])),
-    ...manual
+    ...manual,
+    ...downloaded.where((node) => !retained.contains(node['name']))
   ];
 }
 
@@ -211,7 +211,7 @@ String addNodeLink(String content, String link) {
     suffix++;
   }
   node['name'] = name;
-  final editor = YamlEditor(content)..update(['proxies'], [...nodes, node]);
+  final editor = YamlEditor(content)..update(['proxies'], [node, ...nodes]);
   var result = editor.toString();
   final filters = readSubscriptionFilters(content);
   if (filters.isNotEmpty) {
@@ -227,14 +227,14 @@ String addNodeLink(String content, String link) {
           group['proxies'] is List &&
           !readProxyChainGroups(content).containsKey(group['name'])) {
         editor.update(
-            ['proxy-groups', i, 'proxies'], [...group['proxies'], name]);
+            ['proxy-groups', i, 'proxies'], [name, ...group['proxies']]);
       }
     }
     result = editor.toString();
   }
 
   return applySavedProxyChains(
-      writeManualNodeNames(result, [...readManualNodeNames(content), name]),
+      writeManualNodeNames(result, [name, ...readManualNodeNames(content)]),
       content);
 }
 

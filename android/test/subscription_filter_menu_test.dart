@@ -404,8 +404,8 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     final config = loadYaml(saved!);
     expect(
-        config['proxies'][2]['ws-opts']['headers']['Host'], 'preset.example');
-    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海', '上海手动']);
+        config['proxies'][0]['ws-opts']['headers']['Host'], 'preset.example');
+    expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海手动', '上海']);
     expect(find.text('订阅管理'), findsOneWidget);
     expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -440,7 +440,7 @@ rules: ["MATCH,DIRECT"]
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNull);
-    await tester.tap(find.textContaining('选择链式节点（已选'));
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KR').last);
     await tester.tap(find.text('确定'));
@@ -462,9 +462,9 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.text('链式节点 1'));
     await tester.pumpAndSettle();
-    expect(find.text('选择链式节点（已选 1 个）'), findsOneWidget);
+    expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
-    await tester.tap(find.textContaining('选择链式节点（已选'));
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     expect(
         tester
@@ -514,7 +514,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('新增链式节点'));
     await tester.pumpAndSettle();
     expect(find.text('链式节点 2'), findsOneWidget);
-    await tester.tap(find.textContaining('选择链式节点（已选'));
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('front2'));
     await tester.tap(find.text('确定'));
@@ -748,7 +748,7 @@ rules: ["MATCH,DIRECT"]
                 child: const Text('打开')))));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择链式节点（已选'));
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
@@ -759,8 +759,8 @@ rules: ["MATCH,DIRECT"]
         isTrue);
     await tester.tap(find.text('清除链式节点'));
     await tester.pumpAndSettle();
-    expect(find.text('选择链式节点（已选 0 个）'), findsOneWidget);
-    await tester.tap(find.textContaining('选择链式节点（已选'));
+    expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNWidgets(4));
     expect(
@@ -818,7 +818,7 @@ rules: ["MATCH,DIRECT"]
               .map((tile) => (tile.title as Text).data),
           ['D', 'C']);
       await tester
-          .tap(find.textContaining(prepend ? '选择链式节点（已选' : '选择后置节点（已选'));
+          .tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();
