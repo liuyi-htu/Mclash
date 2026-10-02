@@ -70,11 +70,11 @@ class ProxyTProxyService : Service() {
             val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids, preferences.rootBypassLan)
             check(!stopping) { "启动已取消" }
             MihomoProcess.start(this, store.configFile, rules) { stopping }
-            var hotspotInterfaces = HotspotRules.interfaces(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
-            RootShell.run(HotspotRules.update(hotspotInterfaces, preferences.rootBypassLan))
+            var hotspotSnapshot = HotspotRules.snapshot(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
+            RootShell.run(HotspotRules.update(hotspotSnapshot.interfaces, preferences.rootBypassLan, hotspotSnapshot.localAddresses))
             running = true
             starting = false
-            StartupLog.append(this, "IPv4 TProxy 接管完成；热点默认接管：${hotspotInterfaces.joinToString().ifBlank { "等待热点开启" }}；IPv6 按应用及热点阻断")
+            StartupLog.append(this, "IPv4 TProxy 接管完成；热点默认接管：${hotspotSnapshot.interfaces.joinToString().ifBlank { "等待热点开启" }}；IPv6 按应用及热点阻断")
             getSystemService(NotificationManager::class.java).notify(2,
                 notification("TProxy · ${store.activeProfile()?.name ?: "当前配置"}"))
             QuickSettingsTileUpdater.request(this)
@@ -83,11 +83,11 @@ class ProxyTProxyService : Service() {
                     Thread.sleep(2000)
                     if (!running || stopping || !MihomoProcess.isRunning()) break
                     try {
-                        val current = HotspotRules.interfaces(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
-                        if (current != hotspotInterfaces && running && !stopping) {
-                            RootShell.run(HotspotRules.update(current, preferences.rootBypassLan))
-                            hotspotInterfaces = current
-                            StartupLog.append(this, "热点接管接口：${current.joinToString().ifBlank { "热点已关闭" }}")
+                        val current = HotspotRules.snapshot(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
+                        if (current != hotspotSnapshot && running && !stopping) {
+                            RootShell.run(HotspotRules.update(current.interfaces, preferences.rootBypassLan, current.localAddresses))
+                            hotspotSnapshot = current
+                            StartupLog.append(this, "热点接管接口：${current.interfaces.joinToString().ifBlank { "热点已关闭" }}")
                         }
                     } catch (error: Throwable) {
                         if (running && !stopping) {
