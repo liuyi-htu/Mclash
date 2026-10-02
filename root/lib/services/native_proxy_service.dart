@@ -242,6 +242,17 @@ class NativeProxyService {
 
   Future<void> restart() => _channel.invokeMethod<void>('restart');
 
+  Future<ProxyStatus> getProxyStatus() async {
+    final status = await _channel.invokeMethod<String>('getProxyStatus');
+    return switch (status) {
+      'starting' => ProxyStatus.starting,
+      'running' => ProxyStatus.running,
+      'stopping' => ProxyStatus.stopping,
+      'stopped' => ProxyStatus.stopped,
+      _ => await isRunning() ? ProxyStatus.running : ProxyStatus.stopped,
+    };
+  }
+
   Future<bool> isRunning() async {
     return await _channel.invokeMethod<bool>('isRunning') ?? false;
   }

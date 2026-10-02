@@ -26,6 +26,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _service = NativeProxyService.instance;
 
   ProxyStatus _status = ProxyStatus.stopped;
+  bool _toggling = false;
+  int _transitionGeneration = 0;
+  bool _refreshInProgress = false;
   ConfigInfo _config = const ConfigInfo(exists: false);
   bool _debugLoggingEnabled = false;
   bool _developerModeEnabled = false;
@@ -89,6 +92,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _updateTrafficSpeed() async {
     try {
+      if (!_toggling &&
+          (_status == ProxyStatus.starting || _status == ProxyStatus.stopping)) {
+        await _refresh(showLoading: false);
+      }
       final stats = await _service.getTrafficStats();
       final now = DateTime.now();
       final rx = stats['rxBytes'] ?? 0;
@@ -262,21 +269,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _refresh() async {
+  Future<void> _refresh({bool showLoading = true}) async {
+    if (!mounted || _refreshInProgress) return;
+    _refreshInProgress = true;
+    final generation = _transitionGeneration;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final loading = showLoading
+        ? DialogRoute<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => const PopScope(
+              canPop: false,
+              child: AlertDialog(
+                content: Row(
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(child: Text('正在检测运行状态…')),
+                  ],
+                ),
+              ),
+            ),
+          )
+        : null;
+    if (loading != null) unawaited(navigator.push(loading));
     try {
-      final config = await _service.getConfigInfo();
-      final running = await _service.isRunning();
-      final debugLoggingEnabled = await _service.getDebugLoggingEnabled();
+      final values = await Future.wait<Object>([
+        _service.getConfigInfo(),
+        _service.getProxyStatus(),
+        _service.getDebugLoggingEnabled(),
+      ]);
+      final config = values[0] as ConfigInfo;
+      final status = values[1] as ProxyStatus;
+      final debugLoggingEnabled = values[2] as bool;
       if (!mounted) return;
       setState(() {
         _config = config;
-        _status = running ? ProxyStatus.running : ProxyStatus.stopped;
+        if (!_toggling && generation == _transitionGeneration) {
+          _status = status;
+        }
         _debugLoggingEnabled = debugLoggingEnabled;
       });
-      if (running) await _loadProxyMode();
+      if (status == ProxyStatus.running) unawaited(_loadProxyMode());
     } catch (error) {
       if (!mounted) return;
       _showError(error);
+    } finally {
+      if (loading != null && navigator.mounted && loading.isActive) {
+        navigator.removeRoute(loading);
+      }
+      _refreshInProgress = false;
     }
   }
 
@@ -720,10 +766,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _toggle() async {
-    if (_status == ProxyStatus.starting || _status == ProxyStatus.stopping) {
+    if (_toggling ||
+        _status == ProxyStatus.starting ||
+        _status == ProxyStatus.stopping) {
       return;
     }
 
+    _toggling = true;
+    _transitionGeneration++;
     try {
       if (_status == ProxyStatus.running) {
         setState(() => _status = ProxyStatus.stopping);
@@ -753,6 +803,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _status = ProxyStatus.stopped);
       _showError(error);
+    } finally {
+      _toggling = false;
     }
   }
 

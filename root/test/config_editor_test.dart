@@ -24,6 +24,7 @@ void main() {
         updatedAt: 0);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return 'stopped';
       if (call.method == 'isRunning') return false;
       if (call.method == 'getConfigContent') return 'rules: []\n';
       throw StateError('Unexpected write or runtime read: ${call.method}');
@@ -47,6 +48,7 @@ void main() {
     var running = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return running ? 'running' : 'stopped';
       if (call.method == 'isRunning') return running;
       if (call.method == 'getRuntimeConfigContent') return 'mixed-port: 7890\n';
       if (call.method == 'getConfigContent') return 'rules: []\n';
