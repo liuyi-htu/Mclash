@@ -18,8 +18,8 @@ void main() {
     final role = prepend ? 'front' : 'back';
     final opposite = prepend ? 'back' : 'front';
     test('clearing the last $role proxy removes managed chains across refresh', () {
-      final chained = setGlobalProxyChain(source, ['wap'], prepend: prepend);
-      final cleared = setGlobalProxyChain(chained, [], prepend: prepend);
+      final chained = setGlobalProxyChain(source, ['wap'], prepend: prepend, targets: ['上海', 'KR']);
+      final cleared = setGlobalProxyChain(chained, [], prepend: prepend, targets: []);
       expect(readGlobalProxyChains(cleared)[role], isEmpty);
       expect(readProxyChains(cleared), isEmpty);
       expect(readProxyChainGroups(cleared), isEmpty);
@@ -27,10 +27,10 @@ void main() {
       expect(loadYaml(applySavedProxyChains(source, cleared)), loadYaml(source));
     });
     test('clearing $role preserves and rebuilds the $opposite chain', () {
-      final first = setGlobalProxyChain(source, ['wap'], prepend: prepend);
-      final both = setGlobalProxyChain(first, ['KR'], prepend: !prepend);
-      final cleared = setGlobalProxyChain(both, [], prepend: prepend);
-      final expected = setGlobalProxyChain(source, ['KR'], prepend: !prepend);
+      final first = setGlobalProxyChain(source, ['wap'], prepend: prepend, targets: ['上海', 'KR']);
+      final both = setGlobalProxyChain(first, ['KR'], prepend: !prepend, targets: ['上海']);
+      final cleared = setGlobalProxyChain(both, [], prepend: prepend, targets: []);
+      final expected = setGlobalProxyChain(source, ['KR'], prepend: !prepend, targets: ['上海']);
       expect(readGlobalProxyChains(cleared)[role], isEmpty);
       expect(readGlobalProxyChains(cleared)[opposite], ['KR']);
       expect(loadYaml(cleared), loadYaml(expected));
@@ -38,8 +38,37 @@ void main() {
     });
   }
 
+  for (final prepend in [true, false]) {
+    test('selected targets stay limited after refresh, edits and deletion ($prepend)', () {
+      final saved = setGlobalProxyChain(source, ['wap'],
+          prepend: prepend, targets: ['上海']);
+      expect(readProxyChainTargets(saved, prepend: prepend), ['上海']);
+      final refreshed = source.replaceFirst('  - {name: wap',
+          '  - {name: New, type: http}\n  - {name: wap');
+      final restored = loadYaml(applySavedProxyChains(refreshed, saved));
+      expect(restored['proxies'][1]['dialer-proxy'], isNull);
+      expect(restored['proxies'][2]['dialer-proxy'], isNull);
+      if (prepend) {
+        expect(restored['proxies'][0]['dialer-proxy'], 'wap');
+      } else {
+        expect(restored['proxies'][3]['dialer-proxy'], '上海');
+      }
+      final edited = setGlobalProxyChain(saved, ['wap'],
+          prepend: prepend, targets: ['KR']);
+      expect(readProxyChainTargets(edited, prepend: prepend), ['KR']);
+      if (prepend) expect(loadYaml(edited)['proxies'][0]['dialer-proxy'], isNull);
+      final deleted = removeProxyChainNode(saved, '上海');
+      expect(readProxyChainTargets(deleted, prepend: prepend), isEmpty);
+      expect(readGlobalProxyChains(deleted)[prepend ? 'frontTargets' : 'backTargets'], isEmpty);
+      final cleared = loadYaml(applySavedProxyChains(refreshed, deleted));
+      expect(cleared['proxies'].every((node) => node['dialer-proxy'] == null), isTrue);
+      expect(() => setGlobalProxyChain(source, ['wap'],
+          prepend: prepend, targets: []), throwsFormatException);
+    });
+  }
+
   test('global front proxies follow saved order serially across refresh', () {
-    final chained = setGlobalProxyChain(source, ['wap', 'KR'], prepend: true);
+    final chained = setGlobalProxyChain(source, ['wap', 'KR'], prepend: true, targets: ['上海']);
     final yaml = loadYaml(chained);
     expect(yaml['proxies'][0]['dialer-proxy'], 'KR');
     expect(yaml['proxies'][1]['dialer-proxy'], 'wap');
@@ -49,7 +78,7 @@ void main() {
     expect(refreshed['proxies'][0]['dialer-proxy'], 'KR');
     expect(refreshed['proxies'][1]['dialer-proxy'], 'wap');
     final reordered =
-        setGlobalProxyChain(chained, ['KR', 'wap'], prepend: true);
+        setGlobalProxyChain(chained, ['KR', 'wap'], prepend: true, targets: ['上海']);
     final changed = loadYaml(reordered);
     expect(changed['proxies'][0]['dialer-proxy'], 'wap');
     expect(changed['proxies'][2]['dialer-proxy'], 'KR');
@@ -58,12 +87,12 @@ void main() {
   });
 
   test(
-      'global front and back cover all normal nodes, including refreshed nodes',
+      'front and back apply only to explicitly selected targets across refresh',
       () {
-    final front = setGlobalProxyChain(source, ['wap'], prepend: true);
+    final front = setGlobalProxyChain(source, ['wap'], prepend: true, targets: ['上海', 'KR']);
     expect(loadYaml(front)['proxies'][0]['dialer-proxy'], 'wap');
     expect(loadYaml(front)['proxies'][1]['dialer-proxy'], 'wap');
-    final both = setGlobalProxyChain(front, ['KR'], prepend: false);
+    final both = setGlobalProxyChain(front, ['KR'], prepend: false, targets: ['上海']);
     final yaml = loadYaml(both);
     expect(yaml['proxies'][0]['dialer-proxy'], 'wap');
     expect(yaml['proxies'][1]['dialer-proxy'], '上海');
@@ -71,11 +100,9 @@ void main() {
     final refreshed = source.replaceFirst('  - {name: wap',
         '  - {name: New, type: http, server: new.example, port: 80}\n  - {name: wap');
     final restored = loadYaml(applySavedProxyChains(refreshed, both));
-    expect(restored['proxies'][2]['dialer-proxy'], 'wap');
-    final groupName = restored['proxies'][1]['dialer-proxy'];
-    expect(restored['proxy-groups'].last['name'], groupName);
-    expect(restored['proxy-groups'].last['proxies'], ['上海', 'New']);
-    expect(() => setGlobalProxyChain(both, ['wap'], prepend: false),
+    expect(restored['proxies'][2]['dialer-proxy'], isNull);
+    expect(restored['proxies'][1]['dialer-proxy'], '上海');
+    expect(() => setGlobalProxyChain(both, ['wap'], prepend: false, targets: ['上海']),
         throwsFormatException);
   });
 

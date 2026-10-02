@@ -4,6 +4,8 @@ import 'package:mclash/proxy_chain.dart';
 import 'package:mclash/subscription_config.dart';
 
 const source = '''
+# Mclash 国内正则: "上海"
+# Mclash 国外正则: "KR"
 proxies:
   - {name: 上海, type: vmess, server: first.example, uuid: 00000000-0000-4000-8000-000000000001}
   - {name: KR, type: http, server: second.example, port: 80}
@@ -15,8 +17,37 @@ rules: [MATCH,DIRECT]
 ''';
 
 void main() {
+  for (final prepend in [true, false]) {
+    test('selected targets stay limited after refresh, edits and deletion ($prepend)', () {
+      final saved = setGlobalProxyChain(source, ['wap'],
+          prepend: prepend, targets: ['上海']);
+      expect(readProxyChainTargets(saved, prepend: prepend), ['上海']);
+      final refreshed = source.replaceFirst('  - {name: wap',
+          '  - {name: New, type: http}\n  - {name: wap');
+      final restored = loadYaml(applySavedProxyChains(refreshed, saved));
+      expect(restored['proxies'][1]['dialer-proxy'], isNull);
+      expect(restored['proxies'][2]['dialer-proxy'], isNull);
+      if (prepend) {
+        expect(restored['proxies'][0]['dialer-proxy'], 'wap');
+      } else {
+        expect(restored['proxies'][3]['dialer-proxy'], '上海');
+      }
+      final edited = setGlobalProxyChain(saved, ['wap'],
+          prepend: prepend, targets: ['KR']);
+      expect(readProxyChainTargets(edited, prepend: prepend), ['KR']);
+      if (prepend) expect(loadYaml(edited)['proxies'][0]['dialer-proxy'], isNull);
+      final deleted = removeProxyChainNode(saved, '上海');
+      expect(readProxyChainTargets(deleted, prepend: prepend), isEmpty);
+      expect(readGlobalProxyChains(deleted)[prepend ? 'frontTargets' : 'backTargets'], isEmpty);
+      final cleared = loadYaml(applySavedProxyChains(refreshed, deleted));
+      expect(cleared['proxies'].every((node) => node['dialer-proxy'] == null), isTrue);
+      expect(() => setGlobalProxyChain(source, ['wap'],
+          prepend: prepend, targets: []), throwsFormatException);
+    });
+  }
+
   test('global front proxies follow saved order serially across refresh', () {
-    final chained = setGlobalProxyChain(source, ['wap', 'KR'], prepend: true);
+    final chained = setGlobalProxyChain(source, ['wap', 'KR'], prepend: true, targets: ['上海']);
     final yaml = loadYaml(chained);
     expect(yaml['proxies'][0]['dialer-proxy'], 'KR');
     expect(yaml['proxies'][1]['dialer-proxy'], 'wap');
@@ -26,7 +57,7 @@ void main() {
     expect(refreshed['proxies'][0]['dialer-proxy'], 'KR');
     expect(refreshed['proxies'][1]['dialer-proxy'], 'wap');
     final reordered =
-        setGlobalProxyChain(chained, ['KR', 'wap'], prepend: true);
+        setGlobalProxyChain(chained, ['KR', 'wap'], prepend: true, targets: ['上海']);
     final changed = loadYaml(reordered);
     expect(changed['proxies'][0]['dialer-proxy'], 'wap');
     expect(changed['proxies'][2]['dialer-proxy'], 'KR');
@@ -35,12 +66,12 @@ void main() {
   });
 
   test(
-      'global front and back cover all normal nodes, including refreshed nodes',
+      'front and back apply only to explicitly selected targets across refresh',
       () {
-    final front = setGlobalProxyChain(source, ['wap'], prepend: true);
+    final front = setGlobalProxyChain(source, ['wap'], prepend: true, targets: ['上海', 'KR']);
     expect(loadYaml(front)['proxies'][0]['dialer-proxy'], 'wap');
     expect(loadYaml(front)['proxies'][1]['dialer-proxy'], 'wap');
-    final both = setGlobalProxyChain(front, ['KR'], prepend: false);
+    final both = setGlobalProxyChain(front, ['KR'], prepend: false, targets: ['上海']);
     final yaml = loadYaml(both);
     expect(yaml['proxies'][0]['dialer-proxy'], 'wap');
     expect(yaml['proxies'][1]['dialer-proxy'], '上海');
@@ -48,11 +79,9 @@ void main() {
     final refreshed = source.replaceFirst('  - {name: wap',
         '  - {name: New, type: http, server: new.example, port: 80}\n  - {name: wap');
     final restored = loadYaml(applySavedProxyChains(refreshed, both));
-    expect(restored['proxies'][2]['dialer-proxy'], 'wap');
-    final groupName = restored['proxies'][1]['dialer-proxy'];
-    expect(restored['proxy-groups'].last['name'], groupName);
-    expect(restored['proxy-groups'].last['proxies'], ['上海', 'New']);
-    expect(() => setGlobalProxyChain(both, ['wap'], prepend: false),
+    expect(restored['proxies'][2]['dialer-proxy'], isNull);
+    expect(restored['proxies'][1]['dialer-proxy'], '上海');
+    expect(() => setGlobalProxyChain(both, ['wap'], prepend: false, targets: ['上海']),
         throwsFormatException);
   });
 

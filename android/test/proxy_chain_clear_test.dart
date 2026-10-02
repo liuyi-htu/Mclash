@@ -35,7 +35,7 @@ void main() {
     final side = prepend ? '前置' : '后置';
     testWidgets('clear $side proxy saves zero nodes and removes the chain',
         (tester) async {
-      var saved = setGlobalProxyChain(source, ['B'], prepend: prepend);
+      var saved = setGlobalProxyChain(source, ['B'], prepend: prepend, targets: ['A', 'C']);
       var saves = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {

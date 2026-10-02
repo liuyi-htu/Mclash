@@ -64,8 +64,8 @@ internal object SubscriptionConfig {
                 for (target in targets) chainOverrides[target] = upstream
             }
             for (index in 1 until front.size) chainOverrides[front[index]] = front[index - 1]
-            if (front.isNotEmpty()) connect(normal, listOf(front.last()), "🔗 前置代理")
-            connect(back, normal, "🔗 后置入口")
+            if (front.isNotEmpty()) connect((globalRoles["frontTargets"] ?: normal).filter { it in normal }, listOf(front.last()), "🔗 前置代理")
+            connect(back, (globalRoles["backTargets"] ?: normal).filter { it in normal }, "🔗 后置入口")
         }
         val groups = baseGroups + chainGroups.map { (name, members) ->
             mapOf("name" to name, "type" to "select", "proxies" to members.filter { it in names }.ifEmpty { listOf("DIRECT") })

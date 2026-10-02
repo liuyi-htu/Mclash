@@ -69,10 +69,14 @@ Future<bool> showProxyChainDialog({
   required List<String> nodes,
   required bool prepend,
   List<String> initialNodes = const [],
+  List<String> initialTargets = const [],
+  List<String> excludedTargets = const [],
   required Future<void> Function(List<String> current, List<String> other)
       onSave,
 }) async {
   var other = initialNodes.where(nodes.contains).toSet().toList();
+  var current = initialTargets.where((name) => nodes.contains(name) &&
+      !other.contains(name) && !excludedTargets.contains(name)).toSet().toList();
   String? error;
   var saving = false;
   return await showDialog<bool>(
@@ -98,6 +102,7 @@ Future<bool> showProxyChainDialog({
                               if (values != null && context.mounted) {
                                 setDialogState(() {
                                   other = values;
+                                  current.removeWhere(other.contains);
                                   error = null;
                                 });
                               }
@@ -139,6 +144,22 @@ Future<bool> showProxyChainDialog({
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: saving ? null : () async {
+                        final eligible = nodes.where((name) =>
+                            !other.contains(name) && !excludedTargets.contains(name)).toList();
+                        final values = await _selectNodes(context, '选择作用节点',
+                            eligible, current, '清空选择');
+                        if (values != null && context.mounted) {
+                          setDialogState(() {
+                            current = values;
+                            error = null;
+                          });
+                        }
+                      },
+                      child: Text('选择作用节点（已选 ${current.length} 个）'),
+                    ),
                     if (error != null) ...[
                       const SizedBox(height: 12),
                       Text(error!,
@@ -157,6 +178,7 @@ Future<bool> showProxyChainDialog({
                   onPressed:
                       saving ||
                               (other.isEmpty && initialNodes.isEmpty) ||
+                              (other.isNotEmpty && current.isEmpty) ||
                               other.length == nodes.length
                           ? null
                           : () async {
@@ -166,9 +188,7 @@ Future<bool> showProxyChainDialog({
                               });
                               try {
                                 await onSave(
-                                    nodes
-                                        .where((name) => !other.contains(name))
-                                        .toList(),
+                                    current,
                                     other);
                                 if (context.mounted) {
                                   Navigator.of(context).pop(true);

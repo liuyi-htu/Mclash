@@ -48,6 +48,22 @@ class SubscriptionConfigTest {
         assertEquals(listOf("上海", "KR"), group["proxies"])
     }
 
+    @Test fun explicitChainTargetsDoNotExpandWhenSubscriptionRefreshes() {
+        val previous = "# Mclash 全局链路: {\"front\":[\"wap\"],\"back\":[\"exit\"],\"frontTargets\":[\"A\"],\"backTargets\":[\"A\"]}\nproxies: []"
+        val source = "proxies: [{name: A, type: http}, {name: B, type: http}, {name: New, type: http}, {name: wap, type: http}, {name: exit, type: http}]"
+        val nodes = (Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template, source, previous))["proxies"] as List<*>)
+            .filterIsInstance<Map<*, *>>().associateBy { it["name"] }
+        assertEquals("wap", nodes["A"]!!["dialer-proxy"])
+        assertEquals("A", nodes["exit"]!!["dialer-proxy"])
+        assertNull(nodes["B"]!!["dialer-proxy"])
+        assertNull(nodes["New"]!!["dialer-proxy"])
+        val missing = SubscriptionConfig.build(template,
+            "proxies: [{name: B, type: http}, {name: wap, type: http}, {name: exit, type: http}]", previous)
+        val remaining = (Yaml().load<Map<String, Any>>(missing)["proxies"] as List<*>)
+            .filterIsInstance<Map<*, *>>()
+        assertTrue(remaining.all { it["dialer-proxy"] == null })
+    }
+
     @Test fun embedsNodesWithDefaultPolicy() {
         val subscription = """
             proxies:

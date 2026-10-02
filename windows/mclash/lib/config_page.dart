@@ -548,11 +548,13 @@ class _ConfigPageState extends State<ConfigPage> {
         initialNodes:
             readGlobalProxyChains(content)[prepend ? 'front' : 'back'] ??
                 const [],
+        initialTargets: readProxyChainTargets(content, prepend: prepend),
+        excludedTargets: readGlobalProxyChains(content)[prepend ? 'back' : 'front'] ?? const [],
         onSave: (current, other) async {
           final latest = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
             id: profile.id,
-            content: setGlobalProxyChain(latest, other, prepend: prepend),
+            content: setGlobalProxyChain(latest, other, prepend: prepend, targets: current),
           );
         },
       );

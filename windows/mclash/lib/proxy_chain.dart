@@ -47,10 +47,21 @@ Map<String, List<String>> readGlobalProxyChains(String content) {
   return {};
 }
 
+List<String> readProxyChainTargets(String content, {required bool prepend}) {
+  final roles = readGlobalProxyChains(content);
+  final saved = roles[prepend ? 'frontTargets' : 'backTargets'];
+  final eligible = savedProxyNodeNames(content).where((name) =>
+      !(roles['front'] ?? []).contains(name) &&
+      !(roles['back'] ?? []).contains(name));
+  if (saved != null) return saved.where(eligible.contains).toList();
+  // Older profiles applied the chain to every node available at that time.
+  return (roles[prepend ? 'front' : 'back'] ?? []).isEmpty
+      ? [] : eligible.toList();
+}
+
 String setGlobalProxyChain(String content, List<String> selected,
-    {required bool prepend}) {
-  if (selected.isEmpty ||
-      !selected.every(savedProxyNodeNames(content).contains)) {
+    {required bool prepend, required List<String> targets}) {
+  if (!selected.every(savedProxyNodeNames(content).contains)) {
     throw const FormatException('请重新选择已保存的代理节点');
   }
   final roles = readGlobalProxyChains(content);
@@ -59,7 +70,18 @@ String setGlobalProxyChain(String content, List<String> selected,
   if (selected.any(opposite.contains)) {
     throw const FormatException('前置和后置不能选择同一个节点');
   }
+  if (selected.isNotEmpty && targets.isEmpty) {
+    throw const FormatException('请至少选择一个作用节点');
+  }
+  if (!targets.every(savedProxyNodeNames(content).contains) ||
+      targets.any((name) => selected.contains(name) || opposite.contains(name))) {
+    throw const FormatException('作用节点不能包含前置或后置节点');
+  }
+  final oppositeKey = prepend ? 'back' : 'front';
+  roles['${oppositeKey}Targets'] = readProxyChainTargets(content, prepend: !prepend)
+      .where((name) => !selected.contains(name)).toList();
   roles[key] = selected;
+  roles['${key}Targets'] = selected.isEmpty ? [] : targets.toSet().toList();
   return _applyGlobalProxyChains(content, content, roles);
 }
 
@@ -106,10 +128,16 @@ String _applyGlobalProxyChains(
       result =
           setProxyChain(result, front[index], front[index - 1], prepend: true);
     }
-    result = setProxyChains(result, normal, [front.last], prepend: true);
+    final targets = (roles['frontTargets'] ?? normal).where(normal.contains).toList();
+    if (targets.isNotEmpty) {
+      result = setProxyChains(result, targets, [front.last], prepend: true);
+    }
   }
   if (back.isNotEmpty) {
-    result = setProxyChains(result, normal, back, prepend: false);
+    final targets = (roles['backTargets'] ?? normal).where(normal.contains).toList();
+    if (targets.isNotEmpty) {
+      result = setProxyChains(result, targets, back, prepend: false);
+    }
   }
   return '$_globalPrefix${jsonEncode(roles)}\n$result';
 }
@@ -256,10 +284,10 @@ String removeProxyChainNode(String content, String name) {
   for (final members in roles.values) {
     members.removeWhere((member) => member == name);
   }
-  roles.removeWhere((_, members) => members.isEmpty);
+  roles.removeWhere((key, members) => !key.endsWith('Targets') && members.isEmpty);
   final names = savedProxyNodeNames(content);
   if (!names
-      .any((node) => !roles.values.any((members) => members.contains(node)))) {
+      .any((node) => !(roles['front'] ?? []).contains(node) && !(roles['back'] ?? []).contains(node))) {
     roles.clear();
   }
   final body = content
