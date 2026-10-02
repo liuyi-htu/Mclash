@@ -154,10 +154,19 @@ void main() {
         },
         oldName: '自选');
     expect(readSubscriptionFilters(edited)['更名'], '^北');
+    expect(edited, startsWith('# Mclash 代理组正则: '));
+    expect(edited, isNot(contains('# Mclash 国内正则: ')));
+    expect(edited, isNot(contains('# Mclash 代理组「自选」正则: ')));
+    final deleted = deleteConfigGroup(
+        edited.replaceAll('example.org,更名', 'example.org,DIRECT'), '更名');
+    expect(deleted, isNot(contains('# Mclash 代理组「更名」正则: ')));
     expect(loadYaml(edited)['proxy-groups'][1]['proxies'], ['北京']);
     final created = updateConfigGroup(source, {'name': '新建', 'type': 'select'});
     expect(configGroups(created).last['proxies'], ['北京', 'JP']);
     expect(readSubscriptionFilters(created)['新建'], '');
+    expect(created, contains('"新建":""'));
+    expect(created.indexOf('# Mclash 代理组正则: '),
+        lessThan(created.indexOf('proxies:')));
     expect(
         () => editSubscriptionFilter(source, '自选', '['), throwsFormatException);
   });

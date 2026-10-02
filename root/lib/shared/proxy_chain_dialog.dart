@@ -68,6 +68,7 @@ Future<bool> showProxyChainDialog({
   required BuildContext context,
   required List<String> nodes,
   required bool prepend,
+  String? chainLabel,
   List<String> initialNodes = const [],
   List<String> initialTargets = const [],
   List<String> excludedTargets = const [],
@@ -75,8 +76,13 @@ Future<bool> showProxyChainDialog({
       onSave,
 }) async {
   var other = initialNodes.where(nodes.contains).toSet().toList();
-  var current = initialTargets.where((name) => nodes.contains(name) &&
-      !other.contains(name) && !excludedTargets.contains(name)).toSet().toList();
+  var current = initialTargets
+      .where((name) =>
+          nodes.contains(name) &&
+          !other.contains(name) &&
+          !excludedTargets.contains(name))
+      .toSet()
+      .toList();
   String? error;
   var saving = false;
   return await showDialog<bool>(
@@ -92,12 +98,20 @@ Future<bool> showProxyChainDialog({
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (chainLabel != null) ...[
+                      Text(chainLabel,
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 12),
+                    ],
                     OutlinedButton(
                       onPressed: saving
                           ? null
                           : () async {
-                              final values = await _selectNodes(context,
-                                  prepend ? '选择前置节点' : '选择后置节点', nodes, other,
+                              final values = await _selectNodes(
+                                  context,
+                                  prepend ? '选择前置节点' : '选择后置节点',
+                                  nodes,
+                                  other,
                                   prepend ? '清除前置代理' : '清除后置代理');
                               if (values != null && context.mounted) {
                                 setDialogState(() {
@@ -146,18 +160,23 @@ Future<bool> showProxyChainDialog({
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: saving ? null : () async {
-                        final eligible = nodes.where((name) =>
-                            !other.contains(name) && !excludedTargets.contains(name)).toList();
-                        final values = await _selectNodes(context, '选择作用节点',
-                            eligible, current, '清空选择');
-                        if (values != null && context.mounted) {
-                          setDialogState(() {
-                            current = values;
-                            error = null;
-                          });
-                        }
-                      },
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              final eligible = nodes
+                                  .where((name) =>
+                                      !other.contains(name) &&
+                                      !excludedTargets.contains(name))
+                                  .toList();
+                              final values = await _selectNodes(
+                                  context, '选择作用节点', eligible, current, '清空选择');
+                              if (values != null && context.mounted) {
+                                setDialogState(() {
+                                  current = values;
+                                  error = null;
+                                });
+                              }
+                            },
                       child: Text('选择作用节点（已选 ${current.length} 个）'),
                     ),
                     if (error != null) ...[
@@ -175,33 +194,30 @@ Future<bool> showProxyChainDialog({
                         saving ? null : () => Navigator.of(context).pop(false),
                     child: const Text('取消')),
                 FilledButton(
-                  onPressed:
-                      saving ||
-                              (other.isEmpty && initialNodes.isEmpty) ||
-                              (other.isNotEmpty && current.isEmpty) ||
-                              other.length == nodes.length
-                          ? null
-                          : () async {
+                  onPressed: saving ||
+                          (other.isEmpty && initialNodes.isEmpty) ||
+                          (other.isNotEmpty && current.isEmpty) ||
+                          other.length == nodes.length
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            saving = true;
+                            error = null;
+                          });
+                          try {
+                            await onSave(current, other);
+                            if (context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          } catch (failure) {
+                            if (context.mounted) {
                               setDialogState(() {
-                                saving = true;
-                                error = null;
+                                saving = false;
+                                error = failure.toString();
                               });
-                              try {
-                                await onSave(
-                                    current,
-                                    other);
-                                if (context.mounted) {
-                                  Navigator.of(context).pop(true);
-                                }
-                              } catch (failure) {
-                                if (context.mounted) {
-                                  setDialogState(() {
-                                    saving = false;
-                                    error = failure.toString();
-                                  });
-                                }
-                              }
-                            },
+                            }
+                          }
+                        },
                   child: Text(saving ? '保存中…' : '保存'),
                 ),
               ],

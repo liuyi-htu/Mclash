@@ -6,6 +6,34 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.SafeConstructor
 
 internal object SubscriptionConfig {
+    // Runtime comments describe effective settings; editor-only chain roles stay in the profile.
+    fun runtimeMetadata(source: String): String {
+        val generic = "# Mclash 代理组正则: "
+        val regions = linkedMapOf("🚀 国内" to "# Mclash 国内正则: ", "🌍 国外" to "# Mclash 国外正则: ")
+        val lines = source.removePrefix("\uFEFF").lineSequence().toList()
+        val saved = lines.firstOrNull { it.startsWith(generic) }
+        val legacy = regions.filterValues { prefix -> lines.any { it.startsWith(prefix) } }
+        val hasFilters = saved != null || legacy.isNotEmpty()
+        val filters = linkedMapOf<String, String>()
+        if (hasFilters) {
+            val loader = Yaml(SafeConstructor(LoaderOptions()))
+            if (saved != null) filters.putAll(loader.load<Map<String, String>>(saved.removePrefix(generic)))
+            for ((name, prefix) in legacy) {
+                if (saved == null || filters.containsKey(name)) {
+                    filters[name] = loader.load<String>(lines.first { it.startsWith(prefix) }.removePrefix(prefix))
+                }
+            }
+        }
+        val numbered = lines.any { it.startsWith("# Mclash 节点链路 ") }
+        val body = lines.filterNot { line ->
+            line.startsWith("# Mclash 链路设置: ") || (numbered && line.startsWith("# Mclash 节点链路: ")) ||
+            line.startsWith("# Mclash 全局链路: ") || line.startsWith(generic) ||
+                regions.values.any { line.startsWith(it) } || line.startsWith("# Mclash 代理组「")
+        }.joinToString("\n")
+        val header = if (hasFilters) generic + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n" else ""
+        return header + body
+    }
+
     fun links(value: String): List<String> {
         val urls = value.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.distinct().toList()
         require(urls.isNotEmpty()) { "请输入订阅链接" }
@@ -95,6 +123,11 @@ internal object SubscriptionConfig {
         val globalPrefix = "# Mclash 全局链路: "
         val globalComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(globalPrefix) }
         val globalRoles = globalComment?.let { loader.load<Map<String, List<String>>>(it.removePrefix(globalPrefix)) }.orEmpty()
+        val setsPrefix = "# Mclash 链路设置: "
+        val setsComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(setsPrefix) }
+        val roleSets = setsComment?.let { loader.load<Map<String, Map<String, List<String>>>>(it.removePrefix(setsPrefix)) }
+            ?.mapValues { (_, roles) -> roles.mapValues { (_, members) -> members.filter { it in names } } }
+        val numberedChains = linkedMapOf<String, Map<String, String>>()
         val chainGroupPrefix = "# Mclash 链路代理组: "
         val chainGroupComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(chainGroupPrefix) }
         val oldChainGroups = chainGroupComment?.let { loader.load<Map<String, List<String>>>(it.removePrefix(chainGroupPrefix)) }.orEmpty()
@@ -103,30 +136,46 @@ internal object SubscriptionConfig {
         val chainComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(chainPrefix) }
         val chainOverrides = chainComment?.let { loader.load<Map<String, String>>(it.removePrefix(chainPrefix)) }.orEmpty().toMutableMap()
         val baseGroups = (config["proxy-groups"] as List<*>).filter { (it as Map<*, *>)["name"] !in oldChainGroups }
-        if (globalRoles.isNotEmpty()) {
+        if (globalRoles.isNotEmpty() || roleSets != null) {
             chainGroups.clear()
             chainOverrides.clear()
-            val front = globalRoles["front"].orEmpty().filter { it in names }
-            val back = globalRoles["back"].orEmpty().filter { it in names }
-            require(front.none { it in back }) { "前置和后置不能选择同一个节点" }
-            val normal = names.filter { it !in front && it !in back }
-            require(normal.isNotEmpty()) { "请保留至少一个节点作为作用对象" }
-            val usedNames = names.toMutableSet().apply { addAll(baseGroups.map { (it as Map<*, *>)["name"] as String }) }
-            fun connect(targets: List<String>, upstreams: List<String>, base: String) {
-                if (upstreams.isEmpty() || targets.isEmpty()) return
-                var upstream = upstreams.first()
-                if (upstreams.size > 1) {
-                    upstream = base
-                    var index = 2
-                    while (upstream in usedNames) upstream = "$base (${index++})"
-                    usedNames.add(upstream)
-                    chainGroups[upstream] = upstreams
-                }
-                for (target in targets) chainOverrides[target] = upstream
+            val allRoleNodes = roleSets?.values?.flatMap { it["front"].orEmpty() + it["back"].orEmpty() }.orEmpty().toSet()
+            if (roleSets != null) {
+                val fronts = roleSets.values.flatMap { it["front"].orEmpty() }.toSet()
+                val backs = roleSets.values.flatMap { it["back"].orEmpty() }.toSet()
+                require(fronts.intersect(backs).isEmpty()) { "前置和后置不能选择同一个节点" }
             }
-            for (index in 1 until front.size) chainOverrides[front[index]] = front[index - 1]
-            if (front.isNotEmpty()) connect((globalRoles["frontTargets"] ?: normal).filter { it in normal }, listOf(front.last()), "🔗 前置代理")
-            connect(back, (globalRoles["backTargets"] ?: normal).filter { it in normal }, "🔗 后置入口")
+            for ((setId, roles) in (roleSets ?: mapOf("" to globalRoles))) {
+                val ownChains = linkedMapOf<String, String>()
+                fun assign(target: String, upstream: String) {
+                    require(chainOverrides[target] == null || chainOverrides[target] == upstream) { "节点 $target 被多条链路连接到不同入口，请调整选择；原配置已保留" }
+                    chainOverrides[target] = upstream
+                    ownChains[target] = upstream
+                }
+                val front = roles["front"].orEmpty().filter { it in names }
+                val back = roles["back"].orEmpty().filter { it in names }
+                require(front.none { it in back }) { "前置和后置不能选择同一个节点" }
+                val normal = names.filter { it !in front && it !in back }
+                require(normal.isNotEmpty()) { "请保留至少一个节点作为作用对象" }
+                val usedNames = names.toMutableSet().apply { addAll(baseGroups.map { (it as Map<*, *>)["name"] as String }) }
+                fun connect(targets: List<String>, upstreams: List<String>, base: String) {
+                    if (upstreams.isEmpty() || targets.isEmpty()) return
+                    var upstream = upstreams.first()
+                    if (upstreams.size > 1) {
+                        val label = if (setId.isEmpty()) base else "$base (链路 $setId)"
+                        upstream = label
+                        var index = 2
+                        while (upstream in usedNames) upstream = "$label (${index++})"
+                        usedNames.add(upstream)
+                        chainGroups[upstream] = upstreams
+                    }
+                    for (target in targets) assign(target, upstream)
+                }
+                for (index in 1 until front.size) assign(front[index], front[index - 1])
+                if (front.isNotEmpty()) connect((roles["frontTargets"] ?: normal).filter { it in normal && it !in allRoleNodes }, listOf(front.last()), "🔗 前置代理")
+                connect(back, (roles["backTargets"] ?: normal).filter { it in normal && it !in allRoleNodes }, "🔗 后置入口")
+                if (setId.isNotEmpty()) numberedChains[setId] = ownChains
+            }
         }
         val groups = baseGroups + chainGroups.map { (name, members) ->
             mapOf("name" to name, "type" to "select", "proxies" to members.filter { it in names }.ifEmpty { listOf("DIRECT") })
@@ -139,7 +188,7 @@ internal object SubscriptionConfig {
             @Suppress("UNCHECKED_CAST")
             val node = item as Map<String, Any?>
             val upstream = chainOverrides[node["name"]]
-            if (node["name"] !in retainedNames && upstream != null && (upstream in names || groups.any { (it as Map<*, *>)["name"] == upstream })) node.toMutableMap().apply { this["dialer-proxy"] = upstream }
+            if ((node["name"] !in retainedNames || roleSets != null) && upstream != null && (upstream in names || groups.any { (it as Map<*, *>)["name"] == upstream })) node.toMutableMap().apply { this["dialer-proxy"] = upstream }
             else node
         }
         val hostPrefix = "# Mclash HTTP/WS Host: "
@@ -222,8 +271,12 @@ internal object SubscriptionConfig {
             active.remove(name)
         }
         for (name in graph.keys) visit(name)
-        val header = (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
-            regionNames.indices.filter { filters.containsKey(regionNames[it]) }.joinToString("") { "\n" + prefixes[it] + quote(filters.getValue(regionNames[it])) } +
+        val setMetadata = if (roleSets == null) "" else setsPrefix + "{" + roleSets.entries.joinToString(",") { (id, roles) ->
+            quote(id) + ":{" + roles.entries.joinToString(",") { (role, members) -> quote(role) + ":[" + members.joinToString(",", transform = ::quote) + "]" } + "}"
+        } + "}\n" + numberedChains.entries.joinToString("") { (id, chains) ->
+            "# Mclash 节点链路 $id: {" + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
+        }
+        val header = setMetadata + (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +
             (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]") +
             (if (chainOverrides.isEmpty()) "" else "\n$chainPrefix{${chainOverrides.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) }}}") +

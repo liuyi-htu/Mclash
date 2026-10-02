@@ -487,7 +487,7 @@ class _ConfigPageState extends State<ConfigPage> {
     );
   }
 
-  Future<void> _renameLocalProfile(ConfigProfile profile) async {
+  Future<void> _renameProfile(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
 
     final controller = TextEditingController(text: profile.name);
@@ -646,22 +646,61 @@ class _ConfigPageState extends State<ConfigPage> {
       if (nodes.length < 2) throw const FormatException('请先保存至少两个节点');
       if (!mounted) return;
       setState(() => _working = false);
+      final sets = readProxyChainSets(content);
+      final role = prepend ? 'front' : 'back';
+      final existing = sets.entries
+          .where((entry) => (entry.value[role] ?? []).isNotEmpty)
+          .toList();
+      String? id;
+      if (existing.isNotEmpty) {
+        id = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (sheetContext) => SafeArea(
+              child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final entry in existing)
+                ListTile(
+                  title: Text('节点链路 ${entry.key}'),
+                  subtitle: Text(
+                      '${entry.value[role]!.join(' → ')}\n作用节点：${(entry.value['${role}Targets'] ?? []).join('、')}'),
+                  isThreeLine: true,
+                  onTap: () => Navigator.of(sheetContext).pop(entry.key),
+                ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: Text(prepend ? '新增前置链路' : '新增后置链路'),
+                onTap: () => Navigator.of(sheetContext).pop('new'),
+              ),
+            ],
+          )),
+        );
+        if (id == null || !mounted) return;
+      }
+      final chainId =
+          id == null || id == 'new' ? nextProxyChainSetId(content) : id;
+      final initial = sets[chainId] ?? const <String, List<String>>{};
       final saved = await showProxyChainDialog(
         context: context,
         nodes: nodes,
         prepend: prepend,
-        initialNodes:
-            readGlobalProxyChains(content)[prepend ? 'front' : 'back'] ??
-                const [],
-        initialTargets: readProxyChainTargets(content, prepend: prepend),
-        excludedTargets:
-            readGlobalProxyChains(content)[prepend ? 'back' : 'front'] ??
-                const [],
+        chainLabel: '节点链路 $chainId',
+        initialNodes: initial[role] ?? const [],
+        initialTargets: initial['${role}Targets'] ?? const [],
+        excludedTargets: [
+          for (final entry in sets.entries)
+            if (entry.key != chainId) ...[
+              ...entry.value['front'] ?? <String>[],
+              ...entry.value['back'] ?? <String>[]
+            ]
+        ],
         onSave: (current, other) async {
           final latest = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
             id: profile.id,
-            content: setGlobalProxyChain(latest, other,
+            content: setProxyChainSet(latest, chainId, other,
                 prepend: prepend, targets: current),
           );
         },
@@ -928,13 +967,6 @@ class _ConfigPageState extends State<ConfigPage> {
                   ),
                   const Divider(height: 1),
                 ],
-                if (!profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.drive_file_rename_outline),
-                    title: const Text('修改配置名称'),
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('rename'),
-                  ),
                 for (final action in orderedActions)
                   if (action != 'host' || profile.isSubscription)
                     ListTile(
@@ -944,6 +976,12 @@ class _ConfigPageState extends State<ConfigPage> {
                       onTap: () => Navigator.of(sheetContext).pop(action),
                     ),
                 const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.drive_file_rename_outline),
+                  title: const Text('修改配置名称'),
+                  enabled: !widget.proxyRunning,
+                  onTap: () => Navigator.of(sheetContext).pop('rename'),
+                ),
                 if (profile.isSubscription)
                   ListTile(
                     leading: const Icon(Icons.cloud_outlined),
@@ -1032,7 +1070,7 @@ class _ConfigPageState extends State<ConfigPage> {
         await _returnToActions(profile);
         return;
       case 'rename':
-        await _renameLocalProfile(profile);
+        await _renameProfile(profile);
         await _returnToActions(profile);
         return;
       case 'delete':

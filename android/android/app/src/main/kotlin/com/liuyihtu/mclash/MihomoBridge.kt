@@ -232,8 +232,7 @@ internal object MihomoProcess {
             "secret",
         )
 
-        val original = importedConfig.readText(Charsets.UTF_8)
-            .removePrefix("\uFEFF")
+        val original = SubscriptionConfig.runtimeMetadata(importedConfig.readText(Charsets.UTF_8))
 
         val ipv6Adjusted = overrideDnsIpv6(original, ipv6Enabled)
         val filtered = removeTopLevelKeys(ipv6Adjusted, controlledKeys).trimEnd()

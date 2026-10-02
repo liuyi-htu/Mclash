@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pages/config_page.dart';
 import 'package:mclash/shared/proxy_chain_dialog.dart';
+import 'package:mclash/shared/proxy_chain.dart';
 import 'package:yaml/yaml.dart';
 
 void main() {
@@ -77,6 +78,44 @@ rules: ["MATCH,DIRECT"]
       }
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets(
+      'subscription rename sits below divider and above subscription management',
+      (tester) async {
+    String? renamed;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'renameConfig') {
+        expect(call.arguments['id'], 'airport');
+        renamed = call.arguments['name'] as String;
+        return [
+          {...profile, 'name': renamed}
+        ];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('修改配置名称')).dy,
+        greaterThan(tester.getTopLeft(find.byType(Divider).first).dy));
+    expect(tester.getTopLeft(find.text('修改配置名称')).dy,
+        lessThan(tester.getTopLeft(find.text('订阅管理')).dy));
+    await tester.tap(find.text('修改配置名称'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Airport');
+    await tester.enterText(find.byType(TextField), '新配置名称');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(renamed, '新配置名称');
+    expect(find.text('新配置名称'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -430,6 +469,8 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('添加前置代理'));
     await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('节点链路 1'));
+    await tester.pumpAndSettle();
     expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
     await tester.tap(find.textContaining('选择前置节点（已选'));
@@ -453,6 +494,64 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(saves, 1);
     expect(find.text('订阅管理'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('front chain chooser creates and edits independent numbered sets',
+      (tester) async {
+    final expanded = content.replaceFirst('type: ss}]',
+        'type: ss}, {name: wap, type: http}, {name: front2, type: http}]');
+    var saved = setProxyChainSet(expanded, '1', ['wap'],
+        prepend: true, targets: ['上海']);
+    var saves = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') return saved;
+      if (call.method == 'saveConfigContent') {
+        saved = call.arguments['content'] as String;
+        saves++;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('添加前置代理'));
+    await tester.tap(find.text('添加前置代理'));
+    await tester.pumpAndSettle();
+    expect(find.text('节点链路 1'), findsOneWidget);
+    await tester.tap(find.text('新增前置链路'));
+    await tester.pumpAndSettle();
+    expect(find.text('节点链路 2'), findsOneWidget);
+    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('front2'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('KR'));
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(readProxyChains(saved), {'上海': 'wap', 'KR': 'front2'});
+    await tester.ensureVisible(find.text('添加前置代理'));
+    await tester.tap(find.text('添加前置代理'));
+    await tester.pumpAndSettle();
+    expect(find.text('节点链路 1'), findsOneWidget);
+    expect(find.text('节点链路 2'), findsOneWidget);
+    await tester.tap(find.text('节点链路 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('front2'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -589,7 +688,8 @@ rules: ["MATCH,DIRECT"]
           'url': 'https://example.org/a',
           'subscriptionNames': {'https://example.org/a': '第一机场'},
           'subscriptionInfos': {
-            'https://example.org/a': 'upload=0;download=0;total=1073741824;expire=0'
+            'https://example.org/a':
+                'upload=0;download=0;total=1073741824;expire=0'
           }
         };
         return [current];

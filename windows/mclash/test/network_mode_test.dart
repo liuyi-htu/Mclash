@@ -108,6 +108,11 @@ rules:
     await profiles.create(recursive: true);
     final profile = File('${profiles.path}\\anchored.yaml');
     const source = '''
+# Mclash 全局链路: {"front":["wap"]}
+# Mclash 节点链路: {"JP":"wap"}
+# Mclash 国内正则: "北京"
+# Mclash 代理组正则: {"测速":"^JP"}
+proxy-groups: [{name: 测速, type: select, proxies: [DIRECT]}]
 mixed-port: 7890
 dns:
   enable: true
@@ -133,6 +138,10 @@ rules:
     final runtimeContent = await File(
       '${temporaryDirectory.path}\\config.yaml',
     ).readAsString();
+    expect(runtimeContent, startsWith('# Mclash 代理组正则: {"测速":"^JP"}\n'));
+    expect(runtimeContent, isNot(contains('# Mclash 全局链路: ')));
+    expect(runtimeContent, isNot(contains('# Mclash 国内正则: ')));
+    expect(runtimeContent, contains('# Mclash 节点链路: {"JP":"wap"}'));
     final runtime = loadYaml(runtimeContent) as YamlMap;
     expect(runtime['dns']['nameserver-policy']['geosite:cn'], <String>[
       'https://doh.pub/dns-query',

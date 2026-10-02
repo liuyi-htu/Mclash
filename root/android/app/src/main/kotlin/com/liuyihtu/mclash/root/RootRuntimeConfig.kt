@@ -18,7 +18,7 @@ internal object RootRuntimeConfig {
             codePointLimit = 8 * 1024 * 1024
             isAllowDuplicateKeys = false
         }))
-        val content = source.removePrefix("\uFEFF")
+        val content = SubscriptionConfig.runtimeMetadata(source)
         val original = loader.load<Any>(content) as? Map<*, *>
             ?: error("配置必须是 Mihomo YAML 对象")
         val config = linkedMapOf<String, Any?>()
