@@ -68,15 +68,24 @@ class NativeProxyService implements ProxyPlatformService {
   Future<List<ConfigProfile>> addSubscription({
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) =>
-      _delegate.addSubscription(name: name, url: url);
+      _delegate.addSubscription(
+          name: name, url: url, subscriptionNames: subscriptionNames);
   @override
   Future<List<ConfigProfile>> updateSubscription({
     required String id,
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) =>
-      _delegate.updateSubscription(id: id, name: name, url: url);
+      _delegate.updateSubscription(
+          id: id, name: name, url: url, subscriptionNames: subscriptionNames);
+  @override
+  Future<List<ConfigProfile>> editSubscriptionAirport(String id,
+          {String? oldUrl, String? name, String? url, List<String>? order}) =>
+      _delegate.editSubscriptionAirport(id,
+          oldUrl: oldUrl, name: name, url: url, order: order);
   @override
   Future<List<ConfigProfile>> refreshSubscription(String id, {String? url}) =>
       _delegate.refreshSubscription(id, url: url);

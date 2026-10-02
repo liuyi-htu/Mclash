@@ -32,12 +32,16 @@ abstract interface class ProxyPlatformService {
   Future<List<ConfigProfile>> addSubscription({
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   });
   Future<List<ConfigProfile>> updateSubscription({
     required String id,
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   });
+  Future<List<ConfigProfile>> editSubscriptionAirport(String id,
+      {String? oldUrl, String? name, String? url, List<String>? order});
   Future<List<ConfigProfile>> refreshSubscription(String id, {String? url});
   Future<SubscriptionUrlTestResult> testSubscriptionUrl(String id);
   Future<bool> getDebugLoggingEnabled();

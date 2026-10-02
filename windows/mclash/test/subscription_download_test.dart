@@ -19,12 +19,16 @@ void main() {
     final counts = <String, int>{};
     var secondName = '香港';
     var failSecond = false;
+    var firstUsage = 'upload=0;download=10;total=1000;expire=0';
+    var secondUsage = 'upload=0;download=20;total=2000;expire=0';
     server.listen((request) async {
       final path = request.uri.path;
       counts[path] = (counts[path] ?? 0) + 1;
       if (path == '/b' && failSecond) {
         request.response.statusCode = 503;
       } else {
+        request.response.headers.set(
+            'Subscription-Userinfo', path == '/a' ? firstUsage : secondUsage);
         final name = path == '/a' ? '香港' : secondName;
         request.response.write(
             'proxies: [{name: $name, type: http, server: example.org, port: 80}]');
@@ -38,11 +42,18 @@ void main() {
     final first = 'http://127.0.0.1:${server.port}/a';
     final second = 'http://127.0.0.1:${server.port}/b';
     try {
-      await service.addSubscription(name: '合并', url: '$first\n$second');
+      await service.addSubscription(
+          name: '合并',
+          url: '$first\n$second',
+          subscriptionNames: {first: '第一机场', second: '第二机场'});
       final settings = File('${dir.path}\\settings.json');
       final state = jsonDecode(await settings.readAsString());
       final id = (state['profileUrls'] as Map).keys.single as String;
       expect(state['profileUrls'][id], '$first\n$second');
+      expect(state['profileSubscriptionNames'][id],
+          {first: '第一机场', second: '第二机场'});
+      expect(state['profileSubscriptionInfos'][id],
+          {first: firstUsage, second: secondUsage});
       final profile = File('${dir.path}\\profiles\\$id');
       final cache = File('${profile.path}.subscriptions.json');
       List<String> names(String content) =>
@@ -52,8 +63,20 @@ void main() {
       expect(names(await profile.readAsString()), ['1-香港', '2-香港']);
       await service.selectConfig(id);
       secondName = '日本';
+      final savedFirstUsage = firstUsage;
+      firstUsage =
+          'total=9000;expire=0'; // An unselected airport must not be downloaded.
+      secondUsage = 'upload=0;download=30;total=2000;expire=0';
       await service.refreshSubscription(id, url: second);
       expect(counts, {'/a': 1, '/b': 2});
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionInfos']
+              [id],
+          {first: savedFirstUsage, second: secondUsage});
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionNames']
+              [id],
+          {first: '第一机场', second: '第二机场'});
       expect(names(await profile.readAsString()), ['1-香港', '2-日本']);
       final runtime = File('${dir.path}\\config.yaml');
       expect(names(await runtime.readAsString()), ['1-香港', '2-日本']);
@@ -73,11 +96,55 @@ void main() {
       expect(testResult.success, isFalse);
       expect(await cache.readAsString(), beforeCache);
       failSecond = false;
-      await service.updateSubscription(
-          id: id, name: '重排', url: '$second\n$first');
+      final beforeOrderRequests = Map<String, int>.from(counts);
+      await service.editSubscriptionAirport(id, order: [second, first]);
+      expect(counts,
+          beforeOrderRequests); // Reordering uses the existing node cache.
       expect(names(await profile.readAsString()), ['1-日本', '2-香港']);
-      await service.refreshSubscription(id, url: first);
+      await service.editSubscriptionAirport(id,
+          oldUrl: first, name: '第一机场更名', url: first);
+      expect(counts['/b'], beforeOrderRequests['/b']);
+      expect(counts['/a'], beforeOrderRequests['/a']! + 1);
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionNames']
+              [id],
+          {first: '第一机场更名', second: '第二机场'});
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionInfos']
+              [id],
+          {first: firstUsage, second: secondUsage});
+      final third = 'http://127.0.0.1:${server.port}/c';
+      await service.editSubscriptionAirport(id,
+          oldUrl: first, name: '第三机场', url: third);
+      expect(counts['/c'], 1);
+      expect(counts['/b'], beforeOrderRequests['/b']);
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionNames']
+              [id],
+          {third: '第三机场', second: '第二机场'});
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionInfos']
+              [id],
+          {third: secondUsage, second: secondUsage});
+      final beforeDeletion = Map<String, int>.from(counts);
+      await service.editSubscriptionAirport(id, oldUrl: third);
+      expect(counts, beforeDeletion);
+      expect(names(await profile.readAsString()), ['日本']);
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionNames']
+              [id],
+          {second: '第二机场'});
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionInfos']
+              [id],
+          {second: secondUsage});
+      await service.editSubscriptionAirport(id, name: '重新添加', url: first);
+      expect(counts['/b'], beforeDeletion['/b']);
       expect(names(await profile.readAsString()), ['1-日本', '2-香港']);
+      expect(
+          jsonDecode(await settings.readAsString())['profileSubscriptionNames']
+              [id],
+          {second: '第二机场', first: '重新添加'});
     } finally {
       await server.close(force: true);
       for (final entry in dir.parent.listSync()) {

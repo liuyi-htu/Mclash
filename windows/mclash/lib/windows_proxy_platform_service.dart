@@ -485,6 +485,12 @@ public static class WinInetProxy {
           url: urls[id]?.toString(),
           subscriptionUserInfo:
               _stateMap(state, 'profileSubscriptionInfo')[id]?.toString(),
+          subscriptionNames: Map<String, String>.from(
+              _stateMap(state, 'profileSubscriptionNames')[id] as Map? ??
+                  const {}),
+          subscriptionInfos: Map<String, String>.from(
+              _stateMap(state, 'profileSubscriptionInfos')[id] as Map? ??
+                  const {}),
           active: active == id,
           exists: true,
           updatedAt: stat.modified.millisecondsSinceEpoch,
@@ -840,6 +846,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       'profileUrls': urls,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..remove(id),
+      'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
+        ..remove(id),
+      'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
+        ..remove(id),
       if (deletingDefault) 'defaultProfileDeleted': true,
       if (deletingActive) 'activeProfile': null,
       if (state['activeMihomoProfile'] == id) 'activeMihomoProfile': null,
@@ -948,25 +958,35 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   Future<_SubscriptionDownload> _downloadSubscription(String url,
       {String? previousConfig,
       String? selectedUrl,
-      Map<String, String> cachedSources = const {}}) async {
+      Map<String, String> cachedSources = const {},
+      Map<String, String> cachedUserInfos = const {},
+      bool downloadAll = true}) async {
     final links = subscriptionLinks(url);
     if (selectedUrl != null && !links.contains(selectedUrl)) {
       throw ArgumentError('订阅链接不存在');
     }
     final sources = <String, String>{};
+    final userInfos = <String, String>{};
     final downloads = <_SubscriptionDownload>[];
     var totalBytes = 0;
     for (var i = 0; i < links.length; i++) {
       final link = links[i];
-      if (selectedUrl != null && link != selectedUrl) {
+      if ((!downloadAll && selectedUrl == null) ||
+          (selectedUrl != null && link != selectedUrl)) {
         final cached = cachedSources[link];
-        if (cached == null) throw StateError('缺少其他订阅的缓存，请先更新全部订阅');
+        if (cached == null) throw StateError('缺少机场节点缓存，请先更新该机场');
         sources[link] = cached;
+        if (cachedUserInfos[link] != null) {
+          userInfos[link] = cachedUserInfos[link]!;
+        }
       } else {
         try {
           final download = await _downloadSubscriptionSource(link);
           downloads.add(download);
           sources[link] = download.content;
+          if (download.subscriptionUserInfo != null) {
+            userInfos[link] = download.subscriptionUserInfo!;
+          }
         } catch (error) {
           if (links.length == 1) rethrow;
           throw StateError('第 ${i + 1} 个订阅下载失败：$error；原配置已保留');
@@ -983,12 +1003,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       ),
       responseTimeMs:
           downloads.fold(0, (sum, download) => sum + download.responseTimeMs),
-      statusCode: downloads.last.statusCode,
-      contentType: downloads.last.contentType,
+      statusCode: downloads.isEmpty ? 200 : downloads.last.statusCode,
+      contentType: downloads.isEmpty ? null : downloads.last.contentType,
       contentLength: totalBytes,
-      subscriptionUserInfo:
-          links.length == 1 ? downloads.single.subscriptionUserInfo : null,
+      subscriptionUserInfo: links.length == 1 ? userInfos[links.single] : null,
       sources: sources,
+      subscriptionInfos: userInfos,
     );
   }
 
@@ -1105,6 +1125,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   Future<List<ConfigProfile>> addSubscription({
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) async {
     await _requireConfigStopped();
     final cleanName = name.trim();
@@ -1117,10 +1138,22 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final types = _stateMap(state, 'profileTypes')..[id] = 'subscription';
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
+    final airportNames = subscriptionNames ??
+        Map<String, String>.from(
+            _stateMap(state, 'profileSubscriptionNames')[id] as Map? ??
+                const {});
     await _saveSubscription(id, download, <String, dynamic>{
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
+      'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
+        ..[id] = {
+          for (final link in subscriptionLinks(cleanUrl))
+            if (airportNames.containsKey(link))
+              link: airportNames[link]!.trim(),
+        },
+      'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
+        ..[id] = download.subscriptionInfos,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..[id] = download.subscriptionUserInfo,
     });
@@ -1132,6 +1165,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String id,
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) async {
     await _requireConfigStopped();
     final cleanName = name.trim();
@@ -1146,9 +1180,90 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     await _requireConfigStopped();
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
+    final airportNames = subscriptionNames ??
+        Map<String, String>.from(
+            _stateMap(state, 'profileSubscriptionNames')[id] as Map? ??
+                const {});
     await _saveSubscription(id, download, <String, dynamic>{
       'profileNames': names,
       'profileUrls': urls,
+      'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
+        ..[id] = {
+          for (final link in subscriptionLinks(cleanUrl))
+            if (airportNames.containsKey(link))
+              link: airportNames[link]!.trim(),
+        },
+      'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
+        ..[id] = download.subscriptionInfos,
+      'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
+        ..[id] = download.subscriptionUserInfo,
+    });
+    return getConfigs();
+  }
+
+  @override
+  Future<List<ConfigProfile>> editSubscriptionAirport(String id,
+      {String? oldUrl, String? name, String? url, List<String>? order}) async {
+    await _requireConfigStopped();
+    final state = await _readSettings();
+    if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
+      throw StateError('这不是订阅配置');
+    }
+    final links = subscriptionLinks(
+        _stateMap(state, 'profileUrls')[id]?.toString() ?? '');
+    final next = [...links];
+    final names = Map<String, String>.from(
+        _stateMap(state, 'profileSubscriptionNames')[id] as Map? ?? const {});
+    final newUrl = url == null ? null : subscriptionLinks(url).single;
+    if (order != null) {
+      if (order.length != links.length ||
+          order.toSet().length != links.length ||
+          !order.toSet().containsAll(links)) {
+        throw ArgumentError('机场排序无效');
+      }
+      next
+        ..clear()
+        ..addAll(order);
+    } else {
+      if (oldUrl != null && !links.contains(oldUrl)) throw StateError('找不到机场');
+      if (oldUrl == null && newUrl == null) throw ArgumentError('订阅链接不能为空');
+      if (newUrl != null) {
+        if (name == null || name.trim().isEmpty) {
+          throw ArgumentError('机场名称不能为空');
+        }
+        if (newUrl != oldUrl && links.contains(newUrl)) {
+          throw ArgumentError('订阅链接重复');
+        }
+      }
+      if (oldUrl == null) {
+        next.add(newUrl!);
+      } else {
+        final index = next.indexOf(oldUrl);
+        if (newUrl == null) {
+          next.removeAt(index);
+        } else {
+          next[index] = newUrl;
+        }
+        names.remove(oldUrl);
+      }
+      if (newUrl != null) names[newUrl] = name!.trim();
+    }
+    if (next.isEmpty) throw StateError('删除最后一个机场时请删除配置');
+    final download = await _downloadSubscription(
+      next.join('\n'),
+      previousConfig: await _subscriptionContent(id),
+      selectedUrl: newUrl,
+      cachedSources: await _readSubscriptionCache(id),
+      cachedUserInfos: Map<String, String>.from(
+          _stateMap(state, 'profileSubscriptionInfos')[id] as Map? ?? const {}),
+      downloadAll: false,
+    );
+    await _saveSubscription(id, download, {
+      'profileUrls': _stateMap(state, 'profileUrls')..[id] = next.join('\n'),
+      'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
+        ..[id] = names,
+      'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
+        ..[id] = download.subscriptionInfos,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..[id] = download.subscriptionUserInfo,
     });
@@ -1169,9 +1284,14 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         previousConfig: await _subscriptionContent(id),
         selectedUrl: url,
         cachedSources:
-            url == null ? const {} : await _readSubscriptionCache(id));
+            url == null ? const {} : await _readSubscriptionCache(id),
+        cachedUserInfos: Map<String, String>.from(
+            _stateMap(state, 'profileSubscriptionInfos')[id] as Map? ??
+                const {}));
     await _requireConfigStopped();
     await _saveSubscription(id, download, {
+      'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
+        ..[id] = download.subscriptionInfos,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..[id] = download.subscriptionUserInfo
     });
@@ -1211,6 +1331,7 @@ class _SubscriptionDownload {
     required this.contentType,
     this.subscriptionUserInfo,
     this.sources = const {},
+    this.subscriptionInfos = const {},
   });
 
   final String content;
@@ -1220,6 +1341,7 @@ class _SubscriptionDownload {
   final String? contentType;
   final String? subscriptionUserInfo;
   final Map<String, String> sources;
+  final Map<String, String> subscriptionInfos;
 }
 
 class _RuntimePreferences {

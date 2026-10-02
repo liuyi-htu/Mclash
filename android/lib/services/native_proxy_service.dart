@@ -75,10 +75,16 @@ class NativeProxyService {
   Future<List<ConfigProfile>> addSubscription({
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) async {
     final result = await _channel.invokeListMethod<Object?>(
           'addSubscription',
-          <String, Object>{'name': name, 'url': url},
+          <String, Object>{
+            'name': name,
+            'url': url,
+            if (subscriptionNames != null)
+              'subscriptionNames': subscriptionNames
+          },
         ) ??
         const [];
     return result
@@ -91,10 +97,36 @@ class NativeProxyService {
     required String id,
     required String name,
     required String url,
+    Map<String, String>? subscriptionNames,
   }) async {
     final result = await _channel.invokeListMethod<Object?>(
           'updateSubscription',
-          <String, Object>{'id': id, 'name': name, 'url': url},
+          <String, Object>{
+            'id': id,
+            'name': name,
+            'url': url,
+            if (subscriptionNames != null)
+              'subscriptionNames': subscriptionNames
+          },
+        ) ??
+        const [];
+    return result
+        .whereType<Map<Object?, Object?>>()
+        .map(ConfigProfile.fromMap)
+        .toList(growable: false);
+  }
+
+  Future<List<ConfigProfile>> editSubscriptionAirport(String id,
+      {String? oldUrl, String? name, String? url, List<String>? order}) async {
+    final result = await _channel.invokeListMethod<Object?>(
+          'editSubscriptionAirport',
+          <String, Object>{
+            'id': id,
+            if (oldUrl != null) 'oldUrl': oldUrl,
+            if (name != null) 'name': name,
+            if (url != null) 'url': url,
+            if (order != null) 'order': order,
+          },
         ) ??
         const [];
     return result

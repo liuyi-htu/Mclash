@@ -46,6 +46,8 @@ class ConfigProfile {
     required this.updatedAt,
     this.url,
     this.subscriptionUserInfo,
+    this.subscriptionNames = const {},
+    this.subscriptionInfos = const {},
   });
 
   factory ConfigProfile.fromMap(Map<Object?, Object?> map) {
@@ -55,6 +57,10 @@ class ConfigProfile {
       type: map['type']! as String,
       url: map['url'] as String?,
       subscriptionUserInfo: map['subscriptionUserInfo'] as String?,
+      subscriptionNames: Map<String, String>.from(
+          map['subscriptionNames'] as Map? ?? const {}),
+      subscriptionInfos: Map<String, String>.from(
+          map['subscriptionInfos'] as Map? ?? const {}),
       active: map['active'] as bool? ?? false,
       exists: map['exists'] as bool? ?? false,
       updatedAt: map['updatedAt'] as int? ?? 0,
@@ -66,11 +72,23 @@ class ConfigProfile {
   final String type;
   final String? url;
   final String? subscriptionUserInfo;
+  final Map<String, String> subscriptionNames;
+  final Map<String, String> subscriptionInfos;
   final bool active;
   final bool exists;
   final int updatedAt;
 
   bool get isSubscription => type == 'subscription';
+
+  String? subscriptionInfoFor(String link) =>
+      subscriptionInfos[link] ??
+      (!(url ?? '').contains('\n') ? subscriptionUserInfo : null);
+
+  String subscriptionNameFor(String link, int index) {
+    final stored = subscriptionNames[link]?.trim();
+    if (stored != null && stored.isNotEmpty) return stored;
+    return !(url ?? '').contains('\n') ? name : '机场 ${index + 1}';
+  }
 }
 
 class SubscriptionUrlTestResult {
