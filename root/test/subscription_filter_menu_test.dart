@@ -88,8 +88,6 @@ rules: ["MATCH,DIRECT"]
       '规则管理',
       '代理组管理',
       '正则设置',
-      '国内正则表达式',
-      '国外正则表达式',
       '修改 Host',
       '添加节点',
       '添加前置代理',
@@ -120,7 +118,12 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    for (final title in ['国内正则表达式', '国外正则表达式']) {
+    expect(find.text('国内正则表达式'), findsNothing);
+    expect(find.text('国外正则表达式'), findsNothing);
+    await tester.ensureVisible(find.text('正则设置'));
+    await tester.tap(find.text('正则设置'));
+    await tester.pumpAndSettle();
+    for (final title in ['🚀 国内', '🌍 国外']) {
       await tester.ensureVisible(find.text(title));
       await tester.tap(find.text(title));
       await tester.pumpAndSettle();
@@ -157,10 +160,12 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
-    expect(find.text('国内正则表达式'), findsOneWidget);
-    expect(find.text('国外正则表达式'), findsOneWidget);
-    await tester.ensureVisible(find.text('国内正则表达式'));
-    await tester.tap(find.text('国内正则表达式'));
+    expect(find.text('国内正则表达式'), findsNothing);
+    expect(find.text('国外正则表达式'), findsNothing);
+    await tester.ensureVisible(find.text('正则设置'));
+    await tester.tap(find.text('正则设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('🚀 国内'));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         '上海');
@@ -173,15 +178,16 @@ rules: ["MATCH,DIRECT"]
     expect(saved, contains('上海|广州'));
     expect(yaml['rules'], loadYaml(content)['rules']);
     expect(saves, 1);
-    expect(find.text('修改订阅'), findsOneWidget);
-    await tester.ensureVisible(find.text('国外正则表达式'));
-    await tester.tap(find.text('国外正则表达式'));
+    expect(find.text('正则设置'), findsOneWidget);
+    await tester.tap(find.text('🌍 国外'));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'KR');
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('修改订阅'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
