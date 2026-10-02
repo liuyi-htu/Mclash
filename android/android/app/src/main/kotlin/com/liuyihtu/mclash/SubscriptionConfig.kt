@@ -150,7 +150,7 @@ internal object SubscriptionConfig {
         val manual = (previous?.get("proxies") as? List<*>).orEmpty().filterIsInstance<Map<*, *>>()
             .filter { it["name"] in manualNames }
         val retainedNames = manual.map { it["name"] }.toSet()
-        val nodes = downloaded.filter { (it as? Map<*, *>)?.get("name") !in retainedNames } + manual
+        val nodes = manual + downloaded.filter { (it as? Map<*, *>)?.get("name") !in retainedNames }
         val names = nodes.map { node ->
             require(node is Map<*, *>) { "订阅节点格式无效" }
             val name = node["name"] as? String

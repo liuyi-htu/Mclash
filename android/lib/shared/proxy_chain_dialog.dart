@@ -109,8 +109,10 @@ Future<bool> showProxyChainDialog({
                           : () async {
                               final values = await _selectNodes(
                                   context,
-                                  prepend ? '选择链式节点' : '选择后置节点',
-                                  nodes,
+                                  prepend ? '选择前置节点' : '选择后置节点',
+                                  nodes
+                                      .where((name) => !current.contains(name))
+                                      .toList(),
                                   other,
                                   prepend ? '清除链式节点' : '清除后置代理');
                               if (values != null && context.mounted) {
@@ -122,7 +124,7 @@ Future<bool> showProxyChainDialog({
                               }
                             },
                       child: Text(
-                          '${prepend ? '选择链式节点' : '选择后置节点'}（已选 ${other.length} 个）'),
+                          '${prepend ? '选择前置节点' : '选择后置节点'}（已选 ${other.length} 个）'),
                     ),
                     SizedBox(
                       width: double.maxFinite,

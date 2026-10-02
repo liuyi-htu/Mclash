@@ -220,6 +220,6 @@ void main() {
     final filtered = editSubscriptionFilter(manual, '自选', '');
     final result = addNodeLink(filtered, 'http://example.org:80#New');
     expect(loadYaml(result)['proxy-groups'][0]['proxies'], ['JP']);
-    expect(loadYaml(result)['proxy-groups'][1]['proxies'], ['北京', 'JP', 'New']);
+    expect(loadYaml(result)['proxy-groups'][1]['proxies'], ['New', '北京', 'JP']);
   });
 }

@@ -314,8 +314,8 @@ class SubscriptionConfigTest {
         val text = SubscriptionConfig.build(template, source, previous)
         val nodes = Yaml().load<Map<String, Any>>(text)["proxies"] as List<*>
         assertEquals(2, nodes.size)
-        assertEquals("上海手动", (nodes[1] as Map<*, *>)["name"])
-        assertEquals("preset.example", ((((nodes[1] as Map<*, *>)["ws-opts"] as Map<*, *>)["headers"] as Map<*, *>)["Host"]))
+        assertEquals("上海手动", (nodes[0] as Map<*, *>)["name"])
+        assertEquals("preset.example", ((((nodes[0] as Map<*, *>)["ws-opts"] as Map<*, *>)["headers"] as Map<*, *>)["Host"]))
         assertTrue(text.contains("# Mclash 手动节点: [\"上海手动\"]"))
         val repeated = SubscriptionConfig.build(template, "proxies: [{name: 上海手动, type: ss}]", text)
         val refreshedNodes = Yaml().load<Map<String, Any>>(repeated)["proxies"] as List<*>
