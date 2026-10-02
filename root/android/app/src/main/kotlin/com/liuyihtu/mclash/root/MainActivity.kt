@@ -109,11 +109,16 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "restart" -> restartProxy(result)
-                "isRunning" -> runAsync(result, "root-status") {
-                    val deadline = System.currentTimeMillis() + START_TIMEOUT_MS
-                    while ((ProxyTProxyService.starting || ProxyTProxyService.restoring) && System.currentTimeMillis() < deadline) Thread.sleep(100)
+                "isRunning" -> result.success(
                     ProxyTProxyService.running && MihomoProcess.isRunning()
-                }
+                )
+                "getProxyStatus" -> result.success(
+                    when {
+                        ProxyTProxyService.starting || ProxyTProxyService.restoring -> "starting"
+                        ProxyTProxyService.running && MihomoProcess.isRunning() -> "running"
+                        else -> "stopped"
+                    }
+                )
                 "getTrafficStats" -> runAsync(result, "root-traffic") {
                     if (!ProxyTProxyService.running) mapOf("rxBytes" to 0L, "txBytes" to 0L)
                     else {

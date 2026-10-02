@@ -63,7 +63,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     if (widget.runtimeView || _loading || _saving || _checkingState) return;
     _checkingState = true;
     try {
-      final running = await _service.isRunning();
+      final running = await _service.getProxyStatus() != ProxyStatus.stopped;
       if (mounted && running != _runtimeContent) await _load();
     } catch (_) {
       // Keep the current view; native save guards still reject unsafe writes.
@@ -74,7 +74,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
 
   Future<void> _load() async {
     try {
-      final running = await _service.isRunning();
+      final running = await _service.getProxyStatus() != ProxyStatus.stopped;
       if (!mounted) return;
       setState(() {
         _runtimeContent = widget.runtimeView || running;
@@ -160,7 +160,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       _error = null;
     });
     try {
-      if (await _service.isRunning()) {
+      if (await _service.getProxyStatus() != ProxyStatus.stopped) {
         await _load();
         return;
       }
