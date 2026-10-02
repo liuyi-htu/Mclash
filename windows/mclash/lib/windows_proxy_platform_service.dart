@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'subscription_config.dart';
+import 'bundled_dashboard.dart';
 import 'subscription_filter.dart';
 import 'config_management.dart' show orderRuntimeMetadata;
 import 'proxy_chain.dart' show runtimeProxyChainComments;
@@ -175,8 +176,20 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
   @override
   Future<bool> isRunning() async => (await _status())['state'] == 'running';
 
+  Future<void> _prepareDashboard() async {
+    await installBundledDashboard(Directory('$_dataDir\\dashboard'));
+    final config = File(_configPath);
+    if (await config.exists()) {
+      await config.writeAsString(
+        await _runtimeConfigForCurrentMode(await config.readAsString()),
+        flush: true,
+      );
+    }
+  }
+
   @override
   Future<void> start() async {
+    await _prepareDashboard();
     final status = await _status();
     if (status['installed'] != true) await _runService('install');
     try {
@@ -197,6 +210,7 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   @override
   Future<void> restart() async {
+    await _prepareDashboard();
     await _setSystemProxyEnabled(false);
     await _runService('restart');
     try {
@@ -598,6 +612,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       final editor = YamlEditor(secured);
       editor.update(<Object>['external-controller'], '127.0.0.1:9090');
       editor.update(<Object>['secret'], '');
+      editor.update(<Object>['external-ui'], '$_dataDir\\dashboard');
+      for (final key in ['external-ui-url', 'external-ui-name']) {
+        if (document.containsKey(key)) editor.remove(<Object>[key]);
+      }
       editor.update(<Object>['ipv6'], ipv6Enabled);
       final dns = document['dns'];
       if (dns is YamlMap) {
@@ -659,6 +677,9 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final runtime = _plainYamlMap(document);
     runtime['external-controller'] = '127.0.0.1:9090';
     runtime['secret'] = '';
+    runtime['external-ui'] = '$_dataDir\\dashboard';
+    runtime.remove('external-ui-url');
+    runtime.remove('external-ui-name');
     runtime['ipv6'] = ipv6Enabled;
     final dns = runtime['dns'];
     if (dns is Map) dns['ipv6'] = ipv6Enabled;

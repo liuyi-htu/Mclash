@@ -17,6 +17,7 @@ internal object MihomoProcess {
     fun prepare(context: Context): File {
         val directory = File(context.filesDir, "mihomo").apply { mkdirs() }
         home = directory
+        BundledDashboard.install(context, directory)
         for ((asset, name) in listOf("geosite.dat" to "GeoSite.dat", "geoip.dat" to "GeoIP.dat", "country.mmdb" to "Country.mmdb")) {
             val target = File(directory, name)
             if (target.isFile && target.length() > 0) continue
