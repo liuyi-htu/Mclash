@@ -5,6 +5,7 @@ import 'package:yaml_edit/yaml_edit.dart';
 const domesticGroup = '🚀 国内';
 const foreignGroup = '🌍 国外';
 const defaultSubscriptionFilters = {domesticGroup: '', foreignGroup: ''};
+const groupFilterPrefix = '# Mclash 代理组正则: ';
 const _prefixes = {
   domesticGroup: '# Mclash 国内正则: ',
   foreignGroup: '# Mclash 国外正则: '
@@ -20,17 +21,62 @@ int _groupIndex(YamlMap config, String name) {
   throw FormatException('配置文件中找不到 $name 代理组');
 }
 
-String readSubscriptionFilter(String content, String groupName) {
-  final prefix = _prefixes[groupName]!;
-  for (final line in content.split('\n')) {
-    if (line.startsWith(prefix)) {
-      return jsonDecode(line.substring(prefix.length)) as String;
+Map<String, String> readSubscriptionFilters(String content) {
+  final config = loadYaml(content) as YamlMap;
+  final groups = (config['proxy-groups'] as List? ?? []);
+  final names = groups.map((group) => group['name']).toSet();
+  final generic =
+      content.split('\n').where((line) => line.startsWith(groupFilterPrefix));
+  if (generic.isNotEmpty) {
+    final result = Map<String, String>.from(
+        jsonDecode(generic.first.substring(groupFilterPrefix.length)) as Map)
+      ..removeWhere((name, _) => !names.contains(name));
+    for (final entry in _prefixes.entries) {
+      final lines =
+          content.split('\n').where((line) => line.startsWith(entry.value));
+      if (result.containsKey(entry.key) && lines.isNotEmpty) {
+        result[entry.key] =
+            jsonDecode(lines.first.substring(entry.value.length)) as String;
+      }
+    }
+    return result;
+  }
+  final result = <String, String>{};
+  for (final group in groups) {
+    final name = group['name'] as String;
+    final prefix = _prefixes[name];
+    final comments = content
+        .split('\n')
+        .where((line) => prefix != null && line.startsWith(prefix));
+    if (comments.isNotEmpty) {
+      result[name] =
+          jsonDecode(comments.first.substring(prefix!.length)) as String;
+    } else if (group['filter'] is String ||
+        defaultSubscriptionFilters.containsKey(name)) {
+      result[name] = group['filter'] as String? ?? '';
     }
   }
-  final config = loadYaml(content) as YamlMap;
-  final index = _groupIndex(config, groupName);
-  return config['proxy-groups'][index]['filter'] as String? ??
-      defaultSubscriptionFilters[groupName]!;
+  return result;
+}
+
+String readSubscriptionFilter(String content, String groupName) {
+  _groupIndex(loadYaml(content) as YamlMap, groupName);
+  return readSubscriptionFilters(content)[groupName] ?? '';
+}
+
+String writeSubscriptionFilters(String content, Map<String, String> filters) {
+  final body = content
+      .split('\n')
+      .where((line) =>
+          !line.startsWith(groupFilterPrefix) &&
+          !_prefixes.values.any(line.startsWith) &&
+          line != '# Mclash 默认机场订阅')
+      .join('\n');
+  return '$groupFilterPrefix${jsonEncode(filters)}\n${[
+    for (final entry in filters.entries)
+      if (_prefixes.containsKey(entry.key))
+        '${_prefixes[entry.key]}${jsonEncode(entry.value)}\n'
+  ].join()}$body';
 }
 
 RegExp _compile(String filter) {
@@ -51,7 +97,7 @@ String applySubscriptionFilters(String content, Map<String, String> filters) {
   }
   final names = nodes.map((node) => node['name'] as String).toList();
   final editor = YamlEditor(content);
-  for (final groupName in defaultSubscriptionFilters.keys) {
+  for (final groupName in filters.keys) {
     final index = _groupIndex(config, groupName);
     final group = config['proxy-groups'][index] as YamlMap;
     final filter = filters[groupName]!;
@@ -73,23 +119,12 @@ String applySubscriptionFilters(String content, Map<String, String> filters) {
     editor.update(['proxy-groups', index, 'proxies'],
         selected.isEmpty ? ['DIRECT'] : selected);
   }
-  final body = editor
-      .toString()
-      .split('\n')
-      .where((line) =>
-          !_prefixes.values.any(line.startsWith) && line != '# Mclash 默认机场订阅')
-      .join('\n');
-  return '${[
-    for (final group in defaultSubscriptionFilters.keys)
-      '${_prefixes[group]}${jsonEncode(filters[group])}'
-  ].join('\n')}\n$body';
+  return writeSubscriptionFilters(editor.toString(), filters);
 }
 
 String editSubscriptionFilter(String content, String groupName, String filter) {
   return applySubscriptionFilters(content, {
-    for (final group in defaultSubscriptionFilters.keys)
-      group: group == groupName
-          ? filter.trim()
-          : readSubscriptionFilter(content, group),
+    ...readSubscriptionFilters(content),
+    groupName: filter.trim(),
   });
 }

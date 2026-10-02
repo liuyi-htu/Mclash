@@ -30,7 +30,17 @@ internal object SubscriptionConfig {
             name
         }
         require(names.distinct().size == names.size) { "订阅节点名称重复" }
+        val missing = (previous?.get("proxies") as? List<*>).orEmpty().filterIsInstance<Map<*, *>>().map { it["name"] }.toSet() - names.toSet()
+        val subRules = previous?.get("sub-rules") as? Map<*, *>
+        val savedRules = (previous?.get("rules") as? List<*>).orEmpty() + subRules?.values.orEmpty().flatMap { (it as? List<*>).orEmpty() }
+        for (rule in savedRules.filterIsInstance<String>()) {
+            val parts = rule.split(',').map { it.trim() }
+            if (parts.first() == "SUB-RULE") continue
+            val target = parts.dropLastWhile { it in listOf("no-resolve", "src") }.lastOrNull()
+            require(target !in missing) { "节点 $target 已从订阅移除，但仍被规则引用，请先修改规则；原配置已保留" }
+        }
         val config = loader.load<Map<String, Any?>>(template).toMutableMap()
+        previous?.forEach { (key, value) -> config[key as String] = value }
         val globalPrefix = "# Mclash 全局链路: "
         val globalComment = previousConfig?.lineSequence()?.firstOrNull { it.startsWith(globalPrefix) }
         val globalRoles = globalComment?.let { loader.load<Map<String, List<String>>>(it.removePrefix(globalPrefix)) }.orEmpty()
@@ -107,26 +117,39 @@ internal object SubscriptionConfig {
         }
         val regionNames = listOf("🚀 国内", "🌍 国外")
         val prefixes = listOf("# Mclash 国内正则: ", "# Mclash 国外正则: ")
-        val previousGroups = (previous?.get("proxy-groups") as? List<*>).orEmpty()
-            .filterIsInstance<Map<*, *>>()
-        val filters = regionNames.mapIndexed { index, name ->
-            val comment = (previousConfig ?: template).lineSequence().firstOrNull { it.startsWith(prefixes[index]) }
-            val oldGroup = previousGroups.firstOrNull { it["name"] == name }
-            val defaultGroup = groups.filterIsInstance<Map<*, *>>().first { it["name"] == name }
-            if (comment != null) loader.load<String>(comment.removePrefix(prefixes[index]))
-            else (oldGroup?.get("filter") ?: defaultGroup["filter"] ?: "") as String
+        val filterPrefix = "# Mclash 代理组正则: "
+        val filterSource = previousConfig ?: template
+        val genericComment = filterSource.lineSequence().firstOrNull { it.startsWith(filterPrefix) }
+        val filters = mutableMapOf<String, String>()
+        if (genericComment != null) {
+            filters.putAll(loader.load<Map<String, String>>(genericComment.removePrefix(filterPrefix)))
+        } else {
+            for (item in groups.filterIsInstance<Map<*, *>>()) {
+                val name = item["name"] as String
+                val region = regionNames.indexOf(name)
+                val comment = if (region < 0) null else filterSource.lineSequence().firstOrNull { it.startsWith(prefixes[region]) }
+                if (comment != null) filters[name] = loader.load<String>(comment.removePrefix(prefixes[region]))
+                else if (item["filter"] is String || region >= 0) filters[name] = item["filter"] as? String ?: ""
+            }
         }
+        for (index in regionNames.indices) {
+            val comment = filterSource.lineSequence().firstOrNull { it.startsWith(prefixes[index]) }
+            if (filters.containsKey(regionNames[index]) && comment != null) filters[regionNames[index]] = loader.load<String>(comment.removePrefix(prefixes[index]))
+        }
+        filters.keys.retainAll(groups.map { (it as Map<*, *>)["name"] })
+        val validMembers = names.toSet() + reserved
         config["proxy-groups"] = groups.map { item ->
             @Suppress("UNCHECKED_CAST")
             val group = (item as Map<String, Any?>).toMutableMap()
-            val region = regionNames.indexOf(group["name"])
-            if (region >= 0) {
-                val pattern = Regex(filters[region])
-                val selected = (if (region == 0) listOf("DIRECT") else emptyList()) +
-                    names.filter { pattern.containsMatchIn(it) }
-                for (key in listOf("filter", "use", "include-all-proxies", "include-all", "include-all-providers", "empty-fallback")) {
-                    group.remove(key)
-                }
+            val name = group["name"] as String
+            if (filters.containsKey(name)) {
+                val pattern = Regex(filters.getValue(name))
+                val selected = (if (name == regionNames[0]) listOf("DIRECT") else emptyList()) + names.filter { pattern.containsMatchIn(it) }
+                for (key in listOf("filter", "use", "include-all-proxies", "include-all", "include-all-providers", "empty-fallback")) group.remove(key)
+                group["proxies"] = selected.ifEmpty { listOf("DIRECT") }
+            } else {
+                val selected = (group["proxies"] as? List<*>).orEmpty().filter { it in validMembers }
+                group.remove("use")
                 group["proxies"] = selected.ifEmpty { listOf("DIRECT") }
             }
             group
@@ -148,7 +171,8 @@ internal object SubscriptionConfig {
             active.remove(name)
         }
         for (name in graph.keys) visit(name)
-        val header = (globalComment?.let { "$it\n" } ?: "") + prefixes.indices.joinToString("\n") { prefixes[it] + quote(filters[it]) } +
+        val header = (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
+            regionNames.indices.filter { filters.containsKey(regionNames[it]) }.joinToString("") { "\n" + prefixes[it] + quote(filters.getValue(regionNames[it])) } +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +
             (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]") +
             (if (chainOverrides.isEmpty()) "" else "\n$chainPrefix{${chainOverrides.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) }}}") +

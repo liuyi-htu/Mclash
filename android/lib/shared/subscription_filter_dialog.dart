@@ -18,7 +18,11 @@ Future<bool> showSubscriptionFilterDialog({
             builder: (context, setDialogState) => PopScope(
               canPop: !saving,
               child: AlertDialog(
-                title: Text(groupName == domesticGroup ? '国内正则表达式' : '国外正则表达式'),
+                title: Text(groupName == domesticGroup
+                    ? '国内正则表达式'
+                    : groupName == foreignGroup
+                        ? '国外正则表达式'
+                        : '$groupName 正则表达式'),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

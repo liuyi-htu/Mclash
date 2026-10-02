@@ -213,14 +213,14 @@ String addNodeLink(String content, String link) {
   node['name'] = name;
   final editor = YamlEditor(content)..update(['proxies'], [...nodes, node]);
   var result = editor.toString();
-  final groupNames = groups.map((g) => g['name']).toSet();
-  if (defaultSubscriptionFilters.keys.every(groupNames.contains)) {
-    result = applySubscriptionFilters(result, {
-      for (final group in defaultSubscriptionFilters.keys)
-        group: readSubscriptionFilter(content, group),
-    });
-  } else {
-    // Local configurations keep their routing and gain the node in manual groups.
+  final filters = readSubscriptionFilters(content);
+  if (filters.isNotEmpty) {
+    result = applySubscriptionFilters(result, filters);
+  } else if (!content
+      .split('\n')
+      .any((line) => line.startsWith(groupFilterPrefix))) {
+    // Preserve the existing local-config behavior; subscription manual groups
+    // keep their explicitly selected members.
     for (var i = 0; i < groups.length; i++) {
       final group = groups[i];
       if (group['type'] == 'select' &&
@@ -232,6 +232,7 @@ String addNodeLink(String content, String link) {
     }
     result = editor.toString();
   }
+
   return applySavedProxyChains(
       writeManualNodeNames(result, [...readManualNodeNames(content), name]),
       content);

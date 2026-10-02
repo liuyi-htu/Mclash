@@ -16,6 +16,53 @@ proxies:
 rules: [MATCH,REJECT]
 dns: {enable: false}
 ''';
+  test(
+      'refresh retains custom rules, manual groups, arbitrary filters and options',
+      () {
+    const previous = """
+# Mclash 代理组正则: {"测速":"^JP"}
+proxies: [{name: Old, type: http}, {name: Keep, type: http}]
+proxy-groups:
+  - {name: 手选, type: select, proxies: [Old, Keep]}
+  - {name: 空组, type: select, proxies: [Old]}
+  - {name: 测速, type: url-test, proxies: [Old], url: 'https://example.org', interval: 60, tolerance: 30}
+  - {name: 总组, type: select, proxies: [手选, 测速]}
+rules: ['DOMAIN-SUFFIX,example.org,总组', 'MATCH,DIRECT']
+""";
+    final text = buildSubscriptionConfig(template,
+        'proxies: [{name: Keep, type: http}, {name: JP New, type: http}, {name: US New, type: http}]',
+        previousConfig: previous);
+    final config = loadYaml(text);
+    expect(config['rules'], loadYaml(previous)['rules']);
+    final groups = config['proxy-groups'];
+    expect(groups.map((group) => group['name']).toList(),
+        ['手选', '空组', '测速', '总组']);
+    expect(groups[0]['proxies'], ['Keep']);
+    expect(groups[1]['proxies'], ['DIRECT']);
+    expect(groups[2]['proxies'], ['JP New']);
+    expect(groups[2]['interval'], 60);
+    expect(groups[2]['tolerance'], 30);
+    expect(groups[3]['proxies'], ['手选', '测速']);
+    expect(readSubscriptionFilters(text), {'测速': '^JP'});
+  });
+  test('manual regional groups do not resume regex matching on refresh', () {
+    const previous =
+        '# Mclash 代理组正则: {}\nproxies: [{name: Keep, type: http}]\nproxy-groups: [{name: 🚀 国内, type: select, proxies: [Keep]}]\nrules: ["MATCH,🚀 国内"]';
+    final config = loadYaml(buildSubscriptionConfig(template,
+        'proxies: [{name: Keep, type: http}, {name: New, type: http}]',
+        previousConfig: previous));
+    expect(config['proxy-groups'][0]['proxies'], ['Keep']);
+  });
+  test('refresh rejects a missing node still referenced by a rule', () {
+    const previous =
+        "# Mclash 代理组正则: {}\nproxies: [{name: Old, type: http}]\nproxy-groups: [{name: Custom, type: select, proxies: [Old]}]\nrules: ['IP-CIDR,1.1.1.0/24,Old,no-resolve,src']";
+    expect(
+        () => buildSubscriptionConfig(
+            template, 'proxies: [{name: New, type: http}]',
+            previousConfig: previous),
+        throwsA(isA<FormatException>()
+            .having((error) => error.message, 'message', contains('仍被规则引用'))));
+  });
   test('refresh preserves all manual fields despite Host and chain overrides',
       () {
     const previous =

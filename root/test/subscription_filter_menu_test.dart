@@ -25,11 +25,48 @@ proxies: [{name: 上海, type: ss}, {name: KR, type: ss}]
 proxy-groups:
   - {name: 🚀 国内, type: select, proxies: [DIRECT, 上海]}
   - {name: 🌍 国外, type: select, proxies: [KR]}
-rules: [MATCH,DIRECT]
+rules: ["MATCH,DIRECT"]
 ''';
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets(
+      'airport menu opens rule management and saves the selected profile',
+      (tester) async {
+    String? saved;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        return saved ?? content;
+      }
+      if (call.method == 'saveConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        saved = call.arguments['content'] as String;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Airport'));
+    await tester.pumpAndSettle();
+    expect(find.text('修改配置文件'), findsNothing);
+    await tester.ensureVisible(find.text('规则管理'));
+    await tester.tap(find.text('规则管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新增规则'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'new.example');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(loadYaml(saved!)['rules'],
+        ['DOMAIN-SUFFIX,new.example,DIRECT', 'MATCH,DIRECT']);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('regex editing is disabled while the proxy is running',
@@ -48,6 +85,9 @@ rules: [MATCH,DIRECT]
     expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
     expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
+      '规则管理',
+      '代理组管理',
+      '正则设置',
       '国内正则表达式',
       '国外正则表达式',
       '修改 Host',
@@ -68,13 +108,15 @@ rules: [MATCH,DIRECT]
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'getConfigs') return [profile];
       if (call.method == 'getConfigContent') {
-        return content.split('\n')
-            .where((line) => !line.startsWith('# Mclash ')).join('\n');
+        return content
+            .split('\n')
+            .where((line) => !line.startsWith('# Mclash '))
+            .join('\n');
       }
       throw StateError('Unexpected mutation: ${call.method}');
     });
-    await tester.pumpWidget(
-        const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
@@ -451,12 +493,19 @@ rules: [MATCH,DIRECT]
     await tester.tap(find.text('D'));
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, '保存')).onPressed, isNull);
+    expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
+            .onPressed,
+        isNull);
     await tester.tap(find.textContaining('选择作用节点（已选'));
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNWidgets(2));
-    expect(tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
-        .every((tile) => tile.value == false), isTrue);
+    expect(
+        tester
+            .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+            .every((tile) => tile.value == false),
+        isTrue);
     await tester.tap(find.text('A'));
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
@@ -489,7 +538,8 @@ rules: [MATCH,DIRECT]
               .widgetList<ListTile>(find.byType(ListTile))
               .map((tile) => (tile.title as Text).data),
           ['D', 'C']);
-      await tester.tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
+      await tester
+          .tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();
