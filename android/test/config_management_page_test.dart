@@ -1,0 +1,114 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mclash/shared/config_management_page.dart';
+import 'package:mclash/shared/config_management.dart';
+import 'package:mclash/shared/subscription_filter.dart';
+import 'package:yaml/yaml.dart';
+import 'config_management_test.dart' show source;
+
+void main() {
+  testWidgets('new group selects members and automatically saves',
+      (tester) async {
+    String? saved;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {
+              saved = value;
+            })));
+    await tester.tap(find.byTooltip('新增代理组'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '新建');
+    await tester.enterText(find.byType(TextField).last, 'JP');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('JP').last);
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(configGroups(saved!).last['proxies'], ['JP']);
+    expect(find.text('新建'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('rule add and drag ordering persist correctly', (tester) async {
+    String? saved;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.rules,
+            onSave: (value) async {
+              saved = value;
+            })));
+    await tester.tap(find.byTooltip('新增规则'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'new.example');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(configRules(saved!)[1], 'DOMAIN-SUFFIX,new.example,DIRECT');
+    expect(configRules(saved!).last, 'MATCH,DIRECT');
+    final first = tester.getCenter(find.byIcon(Icons.drag_handle).first);
+    final gesture = await tester
+        .startGesture(tester.getCenter(find.byIcon(Icons.drag_handle).at(1)));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -20));
+    await tester.pump();
+    await gesture.moveTo(first - const Offset(0, 60));
+    await tester.pump(const Duration(milliseconds: 500));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(configRules(saved!).first, 'DOMAIN-SUFFIX,new.example,DIRECT');
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('regex settings edits any named group', (tester) async {
+    String? saved;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.filters,
+            onSave: (value) async {
+              saved = value;
+            })));
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '^北');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(readSubscriptionFilters(saved!)['自选'], '^北');
+    expect(loadYaml(saved!)['proxy-groups'][1]['proxies'], ['北京']);
+    expect(find.text('^北'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('failed save keeps the existing configuration', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.rules,
+            onSave: (value) async {
+              throw StateError('内核校验失败');
+            })));
+    await tester.tap(find.byTooltip('删除规则').first);
+    await tester.pumpAndSettle();
+    expect(find.text('DOMAIN-SUFFIX,example.org,自选'), findsOneWidget);
+    expect(find.textContaining('内核校验失败'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('group dialog scrolls on a small screen with the keyboard',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 600);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    addTearDown(tester.view.reset);
+    final content =
+        source.replaceAll('name: 自选, type: select', 'name: 自选, type: url-test');
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: content,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {})));
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    expect(find.text('保存'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+  });
+}

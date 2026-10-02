@@ -1,11 +1,12 @@
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 import 'subscription_filter.dart';
+import 'config_management.dart' show rulePolicy;
 import 'subscription_host.dart';
 import 'node_link.dart';
 import 'proxy_chain.dart';
 
-/// Keeps the bundled routing policy and embeds only downloaded proxy nodes.
+/// Refreshes nodes while retaining user routing and proxy groups.
 String buildSubscriptionConfig(String template, String subscription,
     {String? previousConfig}) {
   final source = loadYaml(subscription);
@@ -29,7 +30,25 @@ String buildSubscriptionConfig(String template, String subscription,
   if (names.toSet().length != names.length) {
     throw const FormatException('订阅节点名称重复');
   }
-  final config = loadYaml(template) as YamlMap;
+  if (previousConfig != null) {
+    final previous = loadYaml(previousConfig) as YamlMap;
+    final missing = {
+      for (final node in previous['proxies'] as List? ?? [])
+        node['name'] as String
+    }..removeAll(names);
+    final subRules = previous['sub-rules'] as Map? ?? {};
+    for (final rule in [
+      ...List<String>.from(previous['rules'] as List? ?? []),
+      for (final rules in subRules.values) ...List<String>.from(rules as List)
+    ]) {
+      final target = rulePolicy(rule);
+      if (missing.contains(target)) {
+        throw FormatException('节点 $target 已从订阅移除，但仍被规则引用，请先修改规则；原配置已保留');
+      }
+    }
+  }
+  final configContent = previousConfig ?? template;
+  final config = loadYaml(configContent) as YamlMap;
   final groups = config['proxy-groups'] as YamlList;
   final reserved = <String>{
     'DIRECT',
@@ -43,17 +62,20 @@ String buildSubscriptionConfig(String template, String subscription,
   if (names.any(reserved.contains)) {
     throw const FormatException('订阅节点名称与默认策略冲突');
   }
-  final editor = YamlEditor(template);
+  final editor = YamlEditor(configContent);
   if (config.containsKey('proxy-providers')) editor.remove(['proxy-providers']);
   editor.update(['proxies'], nodes);
   for (var i = 0; i < groups.length; i++) {
     final group = groups[i] as YamlMap;
     if (group.containsKey('use')) editor.remove(['proxy-groups', i, 'use']);
+    final selected = (group['proxies'] as List? ?? [])
+        .where((name) => names.contains(name) || reserved.contains(name))
+        .toList();
+    editor.update(['proxy-groups', i, 'proxies'],
+        selected.isEmpty ? ['DIRECT'] : selected);
   }
-  final filtered = applySubscriptionFilters(editor.toString(), {
-    for (final name in defaultSubscriptionFilters.keys)
-      name: readSubscriptionFilter(previousConfig ?? template, name),
-  });
+  final filtered = applySubscriptionFilters(
+      editor.toString(), readSubscriptionFilters(configContent));
   final host = readSubscriptionHost(previousConfig ?? template);
   final result = host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
   return restoreManualNodes(

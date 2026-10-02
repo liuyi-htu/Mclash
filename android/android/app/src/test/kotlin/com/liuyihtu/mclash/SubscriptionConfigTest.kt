@@ -8,6 +8,53 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun refreshRetainsCustomRulesGroupsAndArbitraryFilters() {
+        val previous = """
+            # Mclash 代理组正则: {"测速":"^JP"}
+            proxies: [{name: Old, type: http}, {name: Keep, type: http}]
+            proxy-groups:
+              - {name: 手选, type: select, proxies: [Old, Keep]}
+              - {name: 空组, type: select, proxies: [Old]}
+              - {name: 测速, type: url-test, proxies: [Old], url: 'https://example.org', interval: 60, tolerance: 30}
+              - {name: 总组, type: select, proxies: [手选, 测速]}
+            rules: ['DOMAIN-SUFFIX,example.org,总组', 'MATCH,DIRECT']
+        """.trimIndent()
+        val text = SubscriptionConfig.build(template,
+            "proxies: [{name: Keep, type: http}, {name: JP New, type: http}, {name: US New, type: http}]", previous)
+        val yaml = Yaml()
+        val result = yaml.load<Map<String, Any>>(text)
+        assertEquals(yaml.load<Map<String, Any>>(previous)["rules"], result["rules"])
+        val groups = (result["proxy-groups"] as List<*>).filterIsInstance<Map<*, *>>()
+        assertEquals(listOf("手选", "空组", "测速", "总组"), groups.map { it["name"] })
+        assertEquals(listOf("Keep"), groups[0]["proxies"])
+        assertEquals(listOf("DIRECT"), groups[1]["proxies"])
+        assertEquals(listOf("JP New"), groups[2]["proxies"])
+        assertEquals(60, groups[2]["interval"])
+        assertEquals(30, groups[2]["tolerance"])
+        assertEquals(listOf("手选", "测速"), groups[3]["proxies"])
+        assertTrue(text.contains("# Mclash 代理组正则: {\"测速\":\"^JP\"}"))
+    }
+
+    @Test fun emptyFilterMapKeepsRegionalManualSelection() {
+        val previous = """
+            # Mclash 代理组正则: {}
+            proxies: [{name: Keep, type: http}]
+            proxy-groups: [{name: 🚀 国内, type: select, proxies: [Keep]}]
+            rules: ['MATCH,🚀 国内']
+        """.trimIndent()
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(template,
+            "proxies: [{name: Keep, type: http}, {name: New, type: http}]", previous))
+        assertEquals(listOf("Keep"), ((result["proxy-groups"] as List<*>)[0] as Map<*, *>)["proxies"])
+    }
+
+    @Test fun missingNodeReferencedByRuleRejectsRefresh() {
+        val previous = "# Mclash 代理组正则: {}\nproxies: [{name: Old, type: http}]\nproxy-groups: [{name: Custom, type: select, proxies: [Old]}]\nrules: ['IP-CIDR,1.1.1.0/24,Old,no-resolve,src']"
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            SubscriptionConfig.build(template, "proxies: [{name: New, type: http}]", previous)
+        }
+        assertTrue(error.message!!.contains("仍被规则引用"))
+    }
+
     @Test fun refreshDoesNotRewriteManualHostOrDialer() {
         val previous = """
             # Mclash 手动节点: ["Manual"]

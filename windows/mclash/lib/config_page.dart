@@ -1,3 +1,4 @@
+import 'config_management_page.dart';
 import 'subscription_usage.dart';
 import 'package:flutter/material.dart';
 import 'proxy_chain.dart';
@@ -445,6 +446,31 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  Future<void> _manageConfiguration(
+      ConfigProfile profile, ConfigManagementMode mode) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      if (!mounted) return;
+      setState(() => _working = false);
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => ConfigManagementPage(
+                content: content,
+                mode: mode,
+                onSave: (value) async {
+                  await _service.saveConfigContent(
+                      id: profile.id, content: value);
+                },
+              )));
+      if (mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _editSubscriptionFilter(
       ConfigProfile profile, String groupName) async {
     if (!_ensureStopped()) return;
@@ -549,12 +575,15 @@ class _ConfigPageState extends State<ConfigPage> {
             readGlobalProxyChains(content)[prepend ? 'front' : 'back'] ??
                 const [],
         initialTargets: readProxyChainTargets(content, prepend: prepend),
-        excludedTargets: readGlobalProxyChains(content)[prepend ? 'back' : 'front'] ?? const [],
+        excludedTargets:
+            readGlobalProxyChains(content)[prepend ? 'back' : 'front'] ??
+                const [],
         onSave: (current, other) async {
           final latest = await _service.getConfigContent(profile.id);
           await _service.saveConfigContent(
             id: profile.id,
-            content: setGlobalProxyChain(latest, other, prepend: prepend, targets: current),
+            content: setGlobalProxyChain(latest, other,
+                prepend: prepend, targets: current),
           );
         },
       );
@@ -641,6 +670,16 @@ class _ConfigPageState extends State<ConfigPage> {
                     onTap: () =>
                         Navigator.of(sheetContext).pop('foreignFilter'),
                   ),
+                for (final entry in {
+                  'rules': ('规则管理', Icons.rule),
+                  'groups': ('代理组管理', Icons.account_tree_outlined),
+                  'filters': ('正则设置', Icons.filter_alt_outlined),
+                }.entries)
+                  ListTile(
+                      leading: Icon(entry.value.$2),
+                      title: Text(entry.value.$1),
+                      enabled: !widget.proxyRunning,
+                      onTap: () => Navigator.of(sheetContext).pop(entry.key)),
                 ListTile(
                   leading: const Icon(Icons.first_page),
                   title: const Text('添加前置代理'),
@@ -702,6 +741,19 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
+      case 'rules':
+      case 'groups':
+      case 'filters':
+        await _manageConfiguration(
+            profile,
+            action == 'rules'
+                ? ConfigManagementMode.rules
+                : action == 'groups'
+                    ? ConfigManagementMode.groups
+                    : ConfigManagementMode.filters);
+        await _returnToActions(profile);
+        return;
+
       case 'prependProxy':
         await _editProxyChain(profile, true);
         await _returnToActions(profile);
