@@ -71,7 +71,7 @@ void main() {
       expect(saves, 1);
       expect(loadYaml(saved), loadYaml(source));
       expect(readGlobalProxyChains(saved)[prepend ? 'front' : 'back'], isEmpty);
-      expect(find.text('修改订阅'), findsOneWidget);
+      expect(find.text('订阅管理'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });
