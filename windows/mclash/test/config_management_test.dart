@@ -31,9 +31,9 @@ void main() {
     final nodeHeaders = [
       headers[6],
       headers[4],
-      headers[5],
-      headers[2],
-      headers[1]
+      '# Mclash 前置链路 2: {"JP":"B"}',
+      '# Mclash 后置链路 1: {"A":"JP"}',
+      '# Mclash 后置链路 3: {"C":"JP"}'
     ];
     final groupHeaders = [headers[3], headers[0]];
     for (final groupsFirst in [false, true]) {

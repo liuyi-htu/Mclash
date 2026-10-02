@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'subscription_config.dart';
 import 'subscription_filter.dart';
 import 'config_management.dart' show orderRuntimeMetadata;
+import 'proxy_chain.dart' show runtimeProxyChainComments;
 import 'subscription_links.dart';
 
 import 'package:yaml/yaml.dart';
@@ -578,16 +579,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     bool ipv6Enabled = false,
     bool bypassLanEnabled = true,
   }) {
-    final numbered =
-        content.split('\n').any((line) => line.startsWith('# Mclash 节点链路 '));
-    final withoutGlobal = content
-        .replaceFirst(RegExp(r'^\uFEFF'), '')
-        .split('\n')
-        .where((line) =>
-            !line.startsWith('# Mclash 全局链路: ') &&
-            !line.startsWith('# Mclash 链路设置: ') &&
-            !(numbered && line.startsWith('# Mclash 节点链路: ')))
-        .join('\n');
+    final withoutGlobal = runtimeProxyChainComments(content);
     final hasFilters = withoutGlobal.split('\n').any((line) =>
         line.startsWith(groupFilterPrefix) ||
         line.startsWith('# Mclash 国内正则: ') ||

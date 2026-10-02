@@ -670,7 +670,7 @@ class _ConfigPageState extends State<ConfigPage> {
             children: [
               for (final entry in existing)
                 ListTile(
-                  title: Text('节点链路 ${entry.key}'),
+                  title: Text('${prepend ? '前置链路' : '后置链路'} ${entry.key}'),
                   subtitle: Text(
                       '${entry.value[role]!.join(' → ')}\n作用节点：${(entry.value['${role}Targets'] ?? []).join('、')}'),
                   isThreeLine: true,
@@ -694,7 +694,7 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         nodes: nodes,
         prepend: prepend,
-        chainLabel: '节点链路 $chainId',
+        chainLabel: '${prepend ? '前置链路' : '后置链路'} $chainId',
         initialNodes: initial[role] ?? const [],
         initialTargets: initial['${role}Targets'] ?? const [],
         excludedTargets: [

@@ -469,7 +469,7 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('添加前置代理'));
     await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('节点链路 1'));
+    await tester.tap(find.text('前置链路 1'));
     await tester.pumpAndSettle();
     expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
@@ -523,10 +523,10 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('添加前置代理'));
     await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
-    expect(find.text('节点链路 1'), findsOneWidget);
+    expect(find.text('前置链路 1'), findsOneWidget);
     await tester.tap(find.text('新增前置链路'));
     await tester.pumpAndSettle();
-    expect(find.text('节点链路 2'), findsOneWidget);
+    expect(find.text('前置链路 2'), findsOneWidget);
     await tester.tap(find.textContaining('选择前置节点（已选'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('front2'));
@@ -544,9 +544,9 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('添加前置代理'));
     await tester.tap(find.text('添加前置代理'));
     await tester.pumpAndSettle();
-    expect(find.text('节点链路 1'), findsOneWidget);
-    expect(find.text('节点链路 2'), findsOneWidget);
-    await tester.tap(find.text('节点链路 2'));
+    expect(find.text('前置链路 1'), findsOneWidget);
+    expect(find.text('前置链路 2'), findsOneWidget);
+    await tester.tap(find.text('前置链路 2'));
     await tester.pumpAndSettle();
     expect(find.text('front2'), findsOneWidget);
     await tester.tap(find.text('取消'));
