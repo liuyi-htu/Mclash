@@ -205,7 +205,7 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpAndSettle();
       expect(
           tester
-              .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+              .widget<TextField>(find.widgetWithText(TextField, '正则表达式'))
               .controller!
               .text,
           isEmpty);
@@ -249,11 +249,11 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+            .widget<TextField>(find.widgetWithText(TextField, '正则表达式'))
             .controller!
             .text,
         '上海');
-    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '上海|广州');
+    await tester.enterText(find.widgetWithText(TextField, '正则表达式'), '上海|广州');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     final yaml = loadYaml(saved!);
@@ -267,7 +267,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+            .widget<TextField>(find.widgetWithText(TextField, '正则表达式'))
             .controller!
             .text,
         'KR');
@@ -356,7 +356,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
-    expect(find.text('手动添加的节点（1）'), findsOneWidget);
+    expect(find.text('添加节点（1）'), findsOneWidget);
     expect(find.text('上海手动'), findsOneWidget);
     expect(find.text('KR机场'), findsNothing);
     await tester.tap(find.byTooltip('删除手动节点'));
@@ -398,7 +398,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.byTooltip('添加节点'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('手动添加的节点（0）'), findsOneWidget);
+    expect(find.text('添加节点（0）'), findsOneWidget);
     expect(find.text('上海'), findsNothing);
     expect(find.text('KR'), findsNothing);
     await tester.enterText(find.byType(TextField), 'vmess://bad');
@@ -640,7 +640,7 @@ rules: ["MATCH,DIRECT"]
     await tester.enterText(find.widgetWithText(TextField, '机场名称'), '新机场');
     await tester.enterText(
         find.widgetWithText(TextField, '订阅链接'), 'https://example.org/new');
-    await tester.tap(find.text('更新'));
+    await tester.tap(find.text('保存并更新'));
     await confirmAirportUpdate(tester);
     expect(find.text('1 · 新机场'), findsOneWidget);
     expect(updates, 1);
@@ -674,7 +674,7 @@ rules: ["MATCH,DIRECT"]
             .controller!
             .text,
         'https://example.org/b');
-    await tester.tap(find.text('更新'));
+    await tester.tap(find.text('保存并更新'));
     await confirmAirportUpdate(tester);
     expect(args, {
       'id': 'airport',
@@ -682,6 +682,34 @@ rules: ["MATCH,DIRECT"]
       'name': '第二机场',
       'url': 'https://example.org/b'
     });
+    expect(find.text('2 · 第二机场'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'airport refresh updates the clicked link without opening the editor',
+      (tester) async {
+    Map<Object?, Object?>? args;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [multiProfile];
+      if (call.method == 'getConfigContent') return content;
+      if (call.method == 'editSubscriptionAirport') {
+        args = Map<Object?, Object?>.from(call.arguments as Map);
+        return [multiProfile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await openAirports(tester);
+    await tester.tap(find.byTooltip('更新机场').last);
+    await confirmAirportUpdate(tester);
+    expect(args, {
+      'id': 'airport',
+      'oldUrl': 'https://example.org/b',
+      'name': '第二机场',
+      'url': 'https://example.org/b',
+    });
+    expect(find.byType(TextField), findsNothing);
     expect(find.text('2 · 第二机场'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -711,9 +739,7 @@ rules: ["MATCH,DIRECT"]
       throw StateError('Unexpected call: ${call.method}');
     });
     await openAirports(tester);
-    await tester.tap(find.text('2 · 第二机场'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('删除'));
+    await tester.tap(find.byTooltip('删除机场').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();
@@ -745,9 +771,8 @@ rules: ["MATCH,DIRECT"]
     await tester.pump();
     await gesture.moveBy(const Offset(0, -5));
     await tester.pump();
-    await gesture.moveBy(const Offset(0, -40));
-    await tester.pump();
-    await gesture.moveBy(const Offset(0, -65));
+    await gesture.moveTo(
+        tester.getCenter(find.byType(ReorderableDragStartListener).first));
     await tester.pump(const Duration(milliseconds: 500));
     await gesture.up();
     await tester.pumpAndSettle();
@@ -784,7 +809,7 @@ rules: ["MATCH,DIRECT"]
             .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
             .every((tile) => tile.value == true),
         isTrue);
-    await tester.tap(find.text('清除链式节点'));
+    await tester.tap(find.text('清空选择'));
     await tester.pumpAndSettle();
     expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
     await tester.tap(find.textContaining('选择前置节点（已选'));

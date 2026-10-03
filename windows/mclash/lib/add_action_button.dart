@@ -58,3 +58,7 @@ class AddActionButton extends StatelessWidget {
         ),
       );
 }
+
+FloatingActionButtonLocation managementAddButtonLocation(
+        BuildContext context) =>
+    FloatingActionButtonLocation.endFloat;

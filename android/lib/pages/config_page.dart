@@ -1,3 +1,4 @@
+import '../shared/management_style.dart';
 import '../shared/add_action_button.dart';
 import '../shared/config_management.dart' show configActionOrder;
 import '../shared/config_management_page.dart';
@@ -245,6 +246,8 @@ class _ConfigPageState extends State<ConfigPage> {
               ],
             ),
           ),
+          floatingActionButtonLocation:
+              managementAddButtonLocation(dialogContext),
           floatingActionButton: AddActionButton(
             tooltip: '添加订阅链接',
             onPressed: () => setDialogState(() {
@@ -368,7 +371,7 @@ class _ConfigPageState extends State<ConfigPage> {
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: const Text('取消'),
               ),
-              FilledButton(
+              DestructiveActionButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text('删除'),
               ),
@@ -714,7 +717,7 @@ class _ConfigPageState extends State<ConfigPage> {
                     TextButton(
                         onPressed: () => Navigator.of(dialogContext).pop(false),
                         child: const Text('取消')),
-                    FilledButton(
+                    DestructiveActionButton(
                         onPressed: () => Navigator.of(dialogContext).pop(true),
                         child: const Text('删除')),
                   ],
@@ -737,22 +740,38 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(
-                title: Text(link == null
-                    ? '添加机场'
-                    : '${index + 1} · ${nameController.text}'),
+                title: Text(link == null ? '添加机场' : '编辑机场'),
                 content: SizedBox(
-                    width: double.maxFinite,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    width: 480,
+                    child: SingleChildScrollView(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
                       TextField(
                           controller: nameController,
                           enabled: !widget.proxyRunning,
-                          decoration: const InputDecoration(labelText: '机场名称')),
+                          decoration: InputDecoration(
+                            labelText: '机场名称',
+                            filled: true,
+                            fillColor: Theme.of(dialogContext)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.45),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          )),
                       const SizedBox(height: 12),
                       TextField(
                           controller: urlController,
                           enabled: !widget.proxyRunning,
                           decoration: InputDecoration(
                               labelText: '订阅链接',
+                              filled: true,
+                              fillColor: Theme.of(dialogContext)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.45),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14)),
                               hintText: 'https://...',
                               errorText: error),
                           keyboardType: TextInputType.url,
@@ -760,14 +779,13 @@ class _ConfigPageState extends State<ConfigPage> {
                           enableSuggestions: false,
                           smartDashesType: SmartDashesType.disabled,
                           smartQuotesType: SmartQuotesType.disabled),
-                    ])),
+                    ]))),
                 actions: [
                   TextButton(
                       onPressed: widget.proxyRunning
                           ? null
-                          : () => Navigator.of(dialogContext)
-                              .pop(link == null ? null : 'delete'),
-                      child: Text(link == null ? '取消' : '删除')),
+                          : () => Navigator.of(dialogContext).pop(),
+                      child: const Text('取消')),
                   FilledButton(
                       onPressed: widget.proxyRunning
                           ? null
@@ -790,7 +808,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 setDialogState(() => error = failure.message);
                               }
                             },
-                      child: Text(link == null ? '添加' : '更新')),
+                      child: Text(link == null ? '添加' : '保存并更新')),
                 ],
               ),
             ));
@@ -801,9 +819,7 @@ class _ConfigPageState extends State<ConfigPage> {
     nameController.dispose();
     urlController.dispose();
     if (!mounted) return;
-    if (action == 'delete') {
-      await _removeAirport(profile, link!);
-    } else if (action == 'save') {
+    if (action == 'save') {
       await _applyAirportChange(
           () => _service.editSubscriptionAirport(profile.id,
               oldUrl: link, name: name, url: url),
@@ -825,6 +841,20 @@ class _ConfigPageState extends State<ConfigPage> {
               proxyRunning: widget.proxyRunning,
               onEdit: (current, link) async {
                 await _showAirportDialog(current, link: link);
+                return latestProfile();
+              },
+              onUpdate: (current, link) async {
+                final links = subscriptionLinks(current.url ?? '');
+                final name =
+                    current.subscriptionNameFor(link, links.indexOf(link));
+                await _applyAirportChange(
+                    () => _service.editSubscriptionAirport(current.id,
+                        oldUrl: link, name: name, url: link),
+                    message: '“$name”已更新');
+                return latestProfile();
+              },
+              onDelete: (current, link) async {
+                await _removeAirport(current, link);
                 return latestProfile();
               },
               onReorder: (current, order) async {
@@ -877,40 +907,49 @@ class _ConfigPageState extends State<ConfigPage> {
                 ],
                 for (final action in orderedActions)
                   if (action != 'host' || profile.isSubscription)
-                    ListTile(
-                      leading: Icon(editingActions[action]!.$2),
-                      title: Text(editingActions[action]!.$1),
-                      enabled: !widget.proxyRunning,
-                      onTap: () => Navigator.of(sheetContext).pop(action),
-                    ),
+                    if (action == 'host')
+                      ListTile(
+                        leading: Icon(editingActions[action]!.$2),
+                        title: Text(editingActions[action]!.$1),
+                        enabled: !widget.proxyRunning,
+                        onTap: () => Navigator.of(sheetContext).pop(action),
+                      )
+                    else
+                      ManagementMenuTile(
+                        icon: editingActions[action]!.$2,
+                        title: editingActions[action]!.$1,
+                        enabled: !widget.proxyRunning,
+                        onTap: () => Navigator.of(sheetContext).pop(action),
+                      ),
                 const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.drive_file_rename_outline),
-                  title: const Text('修改配置名称'),
+                ManagementMenuTile(
+                  icon: Icons.drive_file_rename_outline,
+                  title: '修改配置名称',
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('rename'),
                 ),
                 if (profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.cloud_outlined),
-                    title: const Text('订阅管理'),
+                  ManagementMenuTile(
+                    icon: Icons.cloud_outlined,
+                    title: '订阅管理',
                     onTap: () => Navigator.of(sheetContext).pop('subscription'),
                   ),
                 if (!profile.isSubscription)
-                  ListTile(
-                    leading: const Icon(Icons.code_outlined),
-                    title: const Text('修改配置文件'),
+                  ManagementMenuTile(
+                    icon: Icons.code_outlined,
+                    title: '修改配置文件',
                     enabled: !widget.proxyRunning,
                     onTap: () => Navigator.of(sheetContext).pop('editContent'),
                   ),
-                ListTile(
-                  leading: const Icon(Icons.visibility_outlined),
-                  title: const Text('查看当前运行配置'),
+                ManagementMenuTile(
+                  icon: Icons.visibility_outlined,
+                  title: '查看当前运行配置',
                   onTap: () => Navigator.of(sheetContext).pop('runtime'),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.delete_outline),
-                  title: const Text('删除'),
+                ManagementMenuTile(
+                  icon: Icons.delete_outline,
+                  title: '删除',
+                  destructive: true,
                   enabled: !widget.proxyRunning,
                   onTap: () => Navigator.of(sheetContext).pop('delete'),
                 ),

@@ -94,7 +94,7 @@ void main() {
     await tester.pump();
     await gesture.moveBy(const Offset(0, -20));
     await tester.pump();
-    await gesture.moveTo(first - const Offset(0, 60));
+    await gesture.moveTo(first);
     await tester.pump(const Duration(milliseconds: 500));
     await gesture.up();
     await tester.pumpAndSettle();
@@ -112,7 +112,7 @@ void main() {
             })));
     await tester.tap(find.text('自选'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '^北');
+    await tester.enterText(find.widgetWithText(TextField, '正则表达式'), '^北');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(readSubscriptionFilters(saved!)['自选'], '^北');
@@ -132,13 +132,13 @@ void main() {
             })));
     await tester.tap(find.text('自选'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '[');
+    await tester.enterText(find.widgetWithText(TextField, '正则表达式'), '[');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(saves, 0);
     expect(find.text('编辑代理组'), findsOneWidget);
     expect(find.textContaining('FormatException'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '^JP');
+    await tester.enterText(find.widgetWithText(TextField, '正则表达式'), '^JP');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(saves, 1);

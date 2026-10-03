@@ -25,7 +25,7 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                         ),
                         TextButton(
                           onPressed: () => setState(selected.clear),
-                          child: const Text('清空'),
+                          child: const Text('清空选择'),
                         ),
                       ],
                     ),

@@ -19,6 +19,7 @@ void main() {
         onDelete: (name) async => [],
       ),
     ));
+    expect(find.text('添加节点（0）'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
     final position = tester.getCenter(find.byType(AddActionButton));
     expect(position.dx, greaterThan(700));
@@ -34,9 +35,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('新节点'), findsOneWidget);
+    expect(find.text('添加节点（1）'), findsOneWidget);
     await tester.tap(find.byTooltip('删除手动节点'));
     await tester.pumpAndSettle();
     expect(find.text('暂无手动节点'), findsOneWidget);
+    expect(find.text('添加节点（0）'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
