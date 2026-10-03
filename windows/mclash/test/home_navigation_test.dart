@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/home_page.dart';
 import 'package:mclash/models.dart';
@@ -48,7 +49,10 @@ void main() {
       expect(
           tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
           enabled ? isNotNull : isNull);
-      expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      expect(
+          tester
+              .widget<FilledButton>(find.widgetWithText(FilledButton, '更新内核'))
+              .onPressed,
           enabled ? isNotNull : isNull);
     }
 
@@ -65,7 +69,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   });
-  for (final width in [360.0, 900.0]) {
+  for (final width in [320.0, 360.0, 900.0]) {
     for (final brightness in Brightness.values) {
       testWidgets('Windows navigation at $width in $brightness',
           (tester) async {
@@ -108,6 +112,7 @@ void main() {
           expect(find.descendant(of: sheet, matching: find.text(title)),
               findsNothing);
         }
+        expect(find.widgetWithText(FilledButton, '关闭'), findsOneWidget);
         await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('更新内核'));
@@ -116,14 +121,29 @@ void main() {
         expect(find.byType(BottomSheet), findsNothing);
         expect(tester.getCenter(find.byType(AlertDialog)).dy, closeTo(400, 1));
         expect(find.text('检测版本'), findsOneWidget);
+        for (final button in [
+          find.widgetWithText(OutlinedButton, '检测版本'),
+          find.widgetWithText(FilledButton, '更新内核'),
+        ]) {
+          final text = find.descendant(of: button, matching: find.byType(Text));
+          final paragraph = tester.renderObject<RenderParagraph>(text);
+          final label = tester.widget<Text>(text).data!;
+          final lines = paragraph.getBoxesForSelection(
+              TextSelection(baseOffset: 0, extentOffset: label.length));
+          expect(lines.map((box) => box.top).toSet(), hasLength(1));
+        }
         expect(
             tester
                 .widget<OutlinedButton>(find.byType(OutlinedButton))
                 .onPressed,
             isNull);
-        expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        expect(
+            tester
+                .widget<FilledButton>(find.widgetWithText(FilledButton, '更新内核'))
+                .onPressed,
             isNull);
         expect(tester.takeException(), isNull);
+        expect(find.widgetWithText(FilledButton, '关闭'), findsOneWidget);
         await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

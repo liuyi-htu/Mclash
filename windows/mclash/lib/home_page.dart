@@ -654,7 +654,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           actions: [
-            TextButton(
+            FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('关闭'),
             ),
@@ -722,7 +722,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         actions: [
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('关闭'),
           ),
@@ -783,7 +783,13 @@ class _HomePageState extends State<HomePage> {
                                     setCardState(() => busy = false);
                                   }
                                 },
-                          child: const Text('检测版本'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('检测版本', maxLines: 1, softWrap: false),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -819,7 +825,14 @@ class _HomePageState extends State<HomePage> {
                                     });
                                   }
                                 },
-                          child: Text(updating ? '正在更新…' : '更新内核'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(updating ? '正在更新…' : '更新内核',
+                                maxLines: 1, softWrap: false),
+                          ),
                         ),
                       ),
                     ],
