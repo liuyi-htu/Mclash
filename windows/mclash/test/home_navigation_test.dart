@@ -61,7 +61,10 @@ void main() {
         expect(find.text('更新内核'), findsOneWidget);
         await tester.tap(find.text('常规设置'));
         await tester.pumpAndSettle();
-        final sheet = find.byType(BottomSheet);
+        final sheet = find.byType(AlertDialog);
+        expect(sheet, findsOneWidget);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(tester.getCenter(sheet).dy, closeTo(400, 1));
         expect(
             find.descendant(of: sheet, matching: find.byType(SwitchListTile)),
             findsNWidgets(3));
@@ -73,7 +76,16 @@ void main() {
           expect(find.descendant(of: sheet, matching: find.text(title)),
               findsNothing);
         }
-        await tester.tapAt(const Offset(5, 5));
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('更新内核'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(tester.getCenter(find.byType(AlertDialog)).dy, closeTo(400, 1));
+        expect(find.text('检测版本'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('首页'));

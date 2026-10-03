@@ -545,112 +545,117 @@ class _HomePageState extends State<HomePage> {
     var changingAutoStart = false;
     var changingIpv6 = false;
     var changingBypassLan = false;
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-            children: [
-              Text(
-                '常规设置',
-                style: Theme.of(
-                  sheetContext,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('常规设置'),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    secondary: const Icon(Icons.power_settings_new_rounded),
+                    title: const Text(
+                      '开机自启',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    value: _serviceAutoStartEnabled,
+                    onChanged: changingAutoStart
+                        ? null
+                        : (enabled) async {
+                            setDialogState(() => changingAutoStart = true);
+                            try {
+                              await _service
+                                  .setServiceAutoStartEnabled(enabled);
+                              if (mounted) {
+                                setState(
+                                    () => _serviceAutoStartEnabled = enabled);
+                              }
+                            } catch (error) {
+                              if (mounted) _showError('修改服务开机自启失败：$error');
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => changingAutoStart = false);
+                              }
+                            }
+                          },
+                  ),
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    secondary: const Icon(Icons.language_rounded),
+                    title: const Text(
+                      '启用 IPv6',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Text('允许代理内核使用 IPv6 网络'),
+                    value: _ipv6Enabled,
+                    onChanged: changingIpv6
+                        ? null
+                        : (enabled) async {
+                            setDialogState(() => changingIpv6 = true);
+                            try {
+                              await _service.setIpv6Enabled(enabled);
+                              if (_status == ProxyStatus.running) {
+                                await _service.restart();
+                              }
+                              if (mounted) {
+                                setState(() => _ipv6Enabled = enabled);
+                              }
+                            } catch (error) {
+                              if (mounted) _showError('修改 IPv6 设置失败：$error');
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => changingIpv6 = false);
+                              }
+                            }
+                          },
+                  ),
+                  SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                    secondary: const Icon(Icons.lan_outlined),
+                    title: const Text(
+                      '绕过局域网',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: const Text('局域网和私有地址不经过代理'),
+                    value: _bypassLanEnabled,
+                    onChanged: changingBypassLan
+                        ? null
+                        : (enabled) async {
+                            setDialogState(() => changingBypassLan = true);
+                            try {
+                              await _service.setBypassLanEnabled(enabled);
+                              if (_status == ProxyStatus.running) {
+                                await _service.restart();
+                              } else {
+                                await _service.syncSystemProxy();
+                              }
+                              if (mounted) {
+                                setState(() => _bypassLanEnabled = enabled);
+                              }
+                            } catch (error) {
+                              if (mounted) _showError('修改局域网绕过设置失败：$error');
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => changingBypassLan = false);
+                              }
+                            }
+                          },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                secondary: const Icon(Icons.power_settings_new_rounded),
-                title: const Text(
-                  '开机自启',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                value: _serviceAutoStartEnabled,
-                onChanged: changingAutoStart
-                    ? null
-                    : (enabled) async {
-                        setSheetState(() => changingAutoStart = true);
-                        try {
-                          await _service.setServiceAutoStartEnabled(enabled);
-                          if (mounted) {
-                            setState(() => _serviceAutoStartEnabled = enabled);
-                          }
-                        } catch (error) {
-                          if (mounted) _showError('修改服务开机自启失败：$error');
-                        } finally {
-                          if (sheetContext.mounted) {
-                            setSheetState(() => changingAutoStart = false);
-                          }
-                        }
-                      },
-              ),
-              SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                secondary: const Icon(Icons.language_rounded),
-                title: const Text(
-                  '启用 IPv6',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text('允许代理内核使用 IPv6 网络'),
-                value: _ipv6Enabled,
-                onChanged: changingIpv6
-                    ? null
-                    : (enabled) async {
-                        setSheetState(() => changingIpv6 = true);
-                        try {
-                          await _service.setIpv6Enabled(enabled);
-                          if (_status == ProxyStatus.running) {
-                            await _service.restart();
-                          }
-                          if (mounted) {
-                            setState(() => _ipv6Enabled = enabled);
-                          }
-                        } catch (error) {
-                          if (mounted) _showError('修改 IPv6 设置失败：$error');
-                        } finally {
-                          if (sheetContext.mounted) {
-                            setSheetState(() => changingIpv6 = false);
-                          }
-                        }
-                      },
-              ),
-              SwitchListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                secondary: const Icon(Icons.lan_outlined),
-                title: const Text(
-                  '绕过局域网',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text('局域网和私有地址不经过代理'),
-                value: _bypassLanEnabled,
-                onChanged: changingBypassLan
-                    ? null
-                    : (enabled) async {
-                        setSheetState(() => changingBypassLan = true);
-                        try {
-                          await _service.setBypassLanEnabled(enabled);
-                          if (_status == ProxyStatus.running) {
-                            await _service.restart();
-                          } else {
-                            await _service.syncSystemProxy();
-                          }
-                          if (mounted) {
-                            setState(() => _bypassLanEnabled = enabled);
-                          }
-                        } catch (error) {
-                          if (mounted) _showError('修改局域网绕过设置失败：$error');
-                        } finally {
-                          if (sheetContext.mounted) {
-                            setSheetState(() => changingBypassLan = false);
-                          }
-                        }
-                      },
-              ),
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
         ),
       ),
     );
@@ -697,28 +702,30 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCoreUpdate() async {
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '更新内核',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 18),
-              _coreUpdateCard(sheetContext, CoreType.mihomo, 'mihomo'),
-              const SizedBox(height: 14),
-              const Center(child: Text('更新会先完成下载，再自动停止代理、替换内核并恢复运行。')),
-            ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更新内核'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _coreUpdateCard(dialogContext, CoreType.mihomo, 'mihomo'),
+                const SizedBox(height: 14),
+                const Text('更新会先完成下载，再自动停止代理、替换内核并恢复运行。'),
+              ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
       ),
     );
   }
