@@ -37,13 +37,13 @@ void main() {
           body: ConfigTextEditor(
             controller: controller,
             readOnly: false,
+            showLineNumbers: true,
             scrollController: scroll,
           ),
         ),
       );
 
-  testWidgets('transparent line overlay adapts to the number of digits',
-      (tester) async {
+  testWidgets('line gutter adapts to the number of digits', (tester) async {
     final controller =
         TextEditingController(text: List.filled(9, 'mode: rule').join('\n'));
     await tester.pumpWidget(app(controller));
@@ -60,11 +60,6 @@ void main() {
     await tester.pump();
     expect(width(), greaterThan(small));
     expect(tester.widget<Text>(numbers).data!.split('\n').length, 100);
-    // The overlay has no opaque container or background.
-    for (final box in tester.widgetList<ColoredBox>(
-        find.ancestor(of: numbers, matching: find.byType(ColoredBox)))) {
-      expect(box.color, Colors.transparent);
-    }
     controller.text = 'mode: rule';
     await tester.pump();
     expect(width(), small);

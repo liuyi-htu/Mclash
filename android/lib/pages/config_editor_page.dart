@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:yaml/yaml.dart';
 
 import '../core/models.dart';
@@ -29,6 +30,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _controller = TextEditingController();
   final _jumpController = TextEditingController();
   final _editorScrollController = ScrollController();
+  bool _showLineNumbers = false;
+  bool _searchVisible = false;
+  int _searchIndex = -1;
+  final _searchController = TextEditingController();
   bool _readOnly = false;
   bool _runtimeContent = false;
   Timer? _stateTimer;
@@ -54,6 +59,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   void dispose() {
     _stateTimer?.cancel();
     _controller.dispose();
+    _searchController.dispose();
     _jumpController.dispose();
     _editorScrollController.dispose();
     super.dispose();
@@ -120,11 +126,21 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('跳转到行（1–$_lineCount）'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: TextField(
             controller: input,
             autofocus: true,
-            keyboardType: TextInputType.number),
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+                labelText: '行号',
+                filled: true,
+                contentPadding: const EdgeInsets.all(16),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none))),
         actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('取消')),
           TextButton(
               onPressed: () => Navigator.pop(context, int.tryParse(input.text)),
               child: const Text('跳转'))
@@ -152,6 +168,69 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   }
 
   int _countLines(String text) => '\n'.allMatches(text).length + 1;
+
+  List<RegExpMatch> get _matches => _searchController.text.isEmpty
+      ? []
+      : RegExp(RegExp.escape(_searchController.text), caseSensitive: false)
+          .allMatches(_controller.text)
+          .toList();
+
+  void _findMatch({bool reset = false, bool previous = false}) {
+    final matches = _matches;
+    setState(() => _searchIndex = matches.isEmpty
+        ? -1
+        : reset
+            ? 0
+            : (_searchIndex + (previous ? -1 : 1)) % matches.length);
+    if (_searchIndex < 0) return;
+    final match = matches[_searchIndex];
+    _controller.selection =
+        TextSelection(baseOffset: match.start, extentOffset: match.end);
+    if (_editorScrollController.hasClients) {
+      final line = _countLines(_controller.text.substring(0, match.start));
+      final height = MediaQuery.textScalerOf(context).scale(13) * 1.35;
+      _editorScrollController.jumpTo(((line - 1) * height)
+          .clamp(0.0, _editorScrollController.position.maxScrollExtent));
+    }
+  }
+
+  Widget _searchBar() => Row(children: [
+        Expanded(
+            child: TextField(
+          controller: _searchController,
+          onChanged: (_) => _findMatch(reset: true),
+          onSubmitted: (_) => _findMatch(),
+          decoration: InputDecoration(
+              hintText: '搜索配置',
+              filled: true,
+              isDense: true,
+              contentPadding: const EdgeInsets.all(12),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none)),
+        )),
+        Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(
+                '${_searchIndex < 0 ? 0 : _searchIndex + 1}/${_matches.length}',
+                style: Theme.of(context).textTheme.bodySmall)),
+        IconButton(
+            tooltip: '上一个匹配',
+            visualDensity: VisualDensity.compact,
+            onPressed:
+                _matches.isEmpty ? null : () => _findMatch(previous: true),
+            icon: const Icon(Icons.keyboard_arrow_up, size: 20)),
+        IconButton(
+            tooltip: '下一个匹配',
+            visualDensity: VisualDensity.compact,
+            onPressed: _matches.isEmpty ? null : () => _findMatch(),
+            icon: const Icon(Icons.keyboard_arrow_down, size: 20)),
+        IconButton(
+            tooltip: '关闭搜索',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => _searchVisible = false),
+            icon: const Icon(Icons.close, size: 20)),
+      ]);
 
   Future<void> _save() async {
     if (_saving || _readOnly) return;
@@ -222,16 +301,57 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: Text(_runtimeContent
-              ? '当前运行配置（只读）'
-              : _readOnly
-                  ? '订阅配置（只读）'
-                  : '修改配置'),
+          title: Row(children: [
+            Expanded(
+                child: Text(
+                    _runtimeContent
+                        ? '当前运行配置'
+                        : _readOnly
+                            ? '订阅配置（只读）'
+                            : '修改配置',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis)),
+            if (_runtimeContent)
+              const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Tooltip(
+                      message: '只读',
+                      child: Icon(Icons.lock_outline, size: 18))),
+          ]),
           actions: [
+            IconButton(
+              tooltip: _showLineNumbers ? '隐藏行号' : '显示行号',
+              icon: Icon(Icons.numbers,
+                  color: _showLineNumbers
+                      ? Theme.of(context).colorScheme.primary
+                      : null),
+              onPressed: _loading
+                  ? null
+                  : () => setState(() => _showLineNumbers = !_showLineNumbers),
+            ),
             IconButton(
                 onPressed: _loading ? null : _jumpToLine,
                 tooltip: '跳转到行',
                 icon: const Icon(Icons.format_list_numbered)),
+            PopupMenuButton<String>(
+              tooltip: '更多操作',
+              enabled: !_loading,
+              onSelected: (value) async {
+                if (value == 'search') {
+                  setState(() => _searchVisible = true);
+                } else {
+                  await Clipboard.setData(
+                      ClipboardData(text: _controller.text));
+                  if (!context.mounted) return;
+                  showTopSnackBar(
+                      context, const SnackBar(content: Text('配置已复制')));
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'search', child: Text('搜索配置')),
+                PopupMenuItem(value: 'copy', child: Text('复制全文')),
+              ],
+            ),
             if (!_readOnly)
               Padding(
                 padding: const EdgeInsets.only(right: 10),
@@ -252,10 +372,18 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
             ? const Center(child: CircularProgressIndicator())
             : SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  padding: EdgeInsets.fromLTRB(
+                      MediaQuery.sizeOf(context).width < 600 ? 8 : 16,
+                      8,
+                      MediaQuery.sizeOf(context).width < 600 ? 8 : 16,
+                      12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (_searchVisible) ...[
+                        _searchBar(),
+                        const SizedBox(height: 8)
+                      ],
                       if (_error != null) ...[
                         Text(
                           _error!,
@@ -270,10 +398,20 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                           controller: _controller,
                           readOnly: _readOnly,
                           scrollController: _editorScrollController,
+                          showLineNumbers: _showLineNumbers,
                         ),
                       ),
-                      Text(
-                          '第 $_currentLine 行，第 $_currentColumn 列 · 共 $_lineCount 行'),
+                      Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                              '第 $_currentLine 行，第 $_currentColumn 列 · 共 $_lineCount 行',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant))),
                     ],
                   ),
                 ),
