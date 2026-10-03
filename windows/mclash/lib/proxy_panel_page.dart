@@ -5,12 +5,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'native_proxy_service.dart';
+import 'proxy_platform_service.dart';
 import 'top_notice.dart';
 import 'delay_test_queue.dart';
 import 'proxy_node_details.dart';
 
 class ProxyPanelPage extends StatefulWidget {
-  const ProxyPanelPage({required this.proxyRunning, super.key});
+  const ProxyPanelPage({required this.proxyRunning, this.service, super.key});
+
+  final ProxyPlatformService? service;
 
   final bool proxyRunning;
 
@@ -19,7 +22,9 @@ class ProxyPanelPage extends StatefulWidget {
 }
 
 class _ProxyPanelPageState extends State<ProxyPanelPage> {
-  final _service = NativeProxyService.instance;
+  late final ProxyPlatformService _service =
+      widget.service ?? NativeProxyService.instance;
+  final _connectionSignal = ValueNotifier(0);
   final _client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 5)
     ..findProxy = (_) => 'DIRECT';
@@ -68,14 +73,34 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     }
   }
 
+  int _connectionGeneration = 0;
+
+  @override
+  void didUpdateWidget(covariant ProxyPanelPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.proxyRunning == widget.proxyRunning) return;
+    _connectionGeneration++;
+    _connectionSignal.value++;
+    if (widget.proxyRunning) {
+      unawaited(_loadProxies());
+    } else {
+      _groups = const [];
+      _delaysByNode.removeWhere((_, delay) => delay.testing);
+      _loading = false;
+    }
+  }
+
   @override
   void dispose() {
+    _connectionSignal.dispose();
     _delayTestQueue.dispose();
     _client.close(force: true);
     super.dispose();
   }
 
   Future<void> _loadProxies() async {
+    if (!widget.proxyRunning) return;
+    final generation = _connectionGeneration;
     setState(() => _loading = true);
     try {
       final rememberedDelays = _decodeDelayResults(
@@ -126,7 +151,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
 
       _sortGroupsByConfigOrder(groups, groupOrder);
 
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       setState(() {
         for (final entry in rememberedDelays.entries) {
           _delaysByNode.putIfAbsent(_nodeKey(entry.key), () => entry.value);
@@ -138,10 +163,12 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
           ..addAll(providerByNode);
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       _showError(error);
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _connectionGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -152,6 +179,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   }
 
   Future<void> _testAllNodes() async {
+    if (!widget.proxyRunning) return;
     if (_testingAllNodes) return;
     if (!_groups.any(
       (group) => group.nodes.any((node) => _nodeKey(node).isNotEmpty),
@@ -198,43 +226,49 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   }
 
   Future<void> _testNodeDelay(String node) {
+    final generation = _connectionGeneration;
     final key = _effectiveNodeName(node);
-    if (!mounted || key.isEmpty) return Future<void>.value();
+    if (!mounted || !widget.proxyRunning || key.isEmpty) {
+      return Future<void>.value();
+    }
     final builtin = _builtinDelayResult(key);
     if (builtin != null) {
       setState(() => _delaysByNode[key] = builtin);
       return Future<void>.value();
     }
     return _delayTestQueue.schedule(key, () async {
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       setState(() => _delaysByNode[key] = const _DelayResult.testing());
       await _runNodeDelayTest(key);
     });
   }
 
   Future<void> _runNodeDelayTest(String key) async {
+    final generation = _connectionGeneration;
     try {
       final data = await _requestNodeDelay(
         node: key,
         url: _delayTestUrlForNode(key),
       );
       final delay = _asInt(data['delay']);
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       setState(() {
         _delaysByNode[key] =
             delay > 0 ? _DelayResult(delay) : _DelayResult.failed('测速失败');
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       setState(
         () => _delaysByNode[key] = _DelayResult.failed(_failureLabel(error)),
       );
     } finally {
-      if (mounted) setState(() {});
-      try {
-        await _saveDelayResults();
-      } catch (_) {
-        // A persistence failure must not block this node's next delay test.
+      if (mounted && generation == _connectionGeneration) {
+        setState(() {});
+        try {
+          await _saveDelayResults();
+        } catch (_) {
+          // A persistence failure must not block this node's next delay test.
+        }
       }
     }
   }
@@ -333,7 +367,8 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     String node, {
     VoidCallback? onChanged,
   }) async {
-    if (!group.isManualSelectable) return;
+    if (!widget.proxyRunning || !group.isManualSelectable) return;
+    final generation = _connectionGeneration;
     final previousNode = group.now;
     setState(() {
       _groups = [
@@ -351,11 +386,11 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         body: <String, Object>{'name': node},
       );
 
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       await _testNodeDelay(node);
       onChanged?.call();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _connectionGeneration) return;
       setState(() {
         _delaysByNode[_effectiveNodeName(node)] = _DelayResult.failed(
           _failureLabel(error),
@@ -384,6 +419,8 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     Map<String, String>? queryParameters,
     Duration responseTimeout = const Duration(seconds: 14),
   }) async {
+    if (!widget.proxyRunning) throw StateError('代理已断开');
+    final generation = _connectionGeneration;
     final uri = Uri(
       scheme: 'http',
       host: '127.0.0.1',
@@ -400,6 +437,10 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       request.write(jsonEncode(body));
     }
 
+    if (!mounted || generation != _connectionGeneration) {
+      request.abort();
+      throw StateError('代理状态已改变');
+    }
     late HttpClientResponse response;
     late String text;
     try {
@@ -411,6 +452,9 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     } catch (_) {
       request.abort();
       rethrow;
+    }
+    if (!mounted || generation != _connectionGeneration) {
+      throw StateError('代理状态已改变');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Controller ${response.statusCode}: ${text.trim()}');
@@ -453,6 +497,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   }
 
   void _showError(Object error) {
+    if (!widget.proxyRunning) return;
     showErrorNotice(context, error);
   }
 
@@ -485,152 +530,168 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       },
       pageBuilder: (context, animation, secondaryAnimation) {
         var testingGroup = false;
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final colors = Theme.of(context).colorScheme;
-            final liveGroup = _groups.firstWhere(
-              (item) => item.name == group.name,
-              orElse: () => group,
-            );
-            final details = ProxyNodeDetails(liveGroup.now, {
-              ..._proxyDetails,
-              for (final item in _groups)
-                item.name: {..._proxyDetails[item.name] ?? {}, 'now': item.now},
-            });
-            return SafeArea(
-              child: Center(
-                child: Dialog(
-                  insetPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 28,
-                  ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: 960,
-                      maxHeight: MediaQuery.sizeOf(context).height * 0.8,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      group.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${liveGroup.isManualSelectable ? 'SELECT' : liveGroup.type.toUpperCase()} · ${liveGroup.selectedIndex}/${liveGroup.nodes.length}',
-                                      style: TextStyle(
-                                        color: colors.onSurfaceVariant,
+        return AnimatedBuilder(
+          animation: _connectionSignal,
+          builder: (_, child) => !widget.proxyRunning
+              ? const AlertDialog(
+                  title: Text('代理已断开'), content: Text('请重新连接代理后操作'))
+              : StatefulBuilder(
+                  builder: (context, setModalState) {
+                    final colors = Theme.of(context).colorScheme;
+                    final liveGroup = _groups.firstWhere(
+                      (item) => item.name == group.name,
+                      orElse: () => group,
+                    );
+                    final details = ProxyNodeDetails(liveGroup.now, {
+                      ..._proxyDetails,
+                      for (final item in _groups)
+                        item.name: {
+                          ..._proxyDetails[item.name] ?? {},
+                          'now': item.now
+                        },
+                    });
+                    return SafeArea(
+                      child: Center(
+                        child: Dialog(
+                          insetPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 28,
+                          ),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: 960,
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * 0.8,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              group.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${liveGroup.isManualSelectable ? 'SELECT' : liveGroup.type.toUpperCase()} · ${liveGroup.selectedIndex}/${liveGroup.nodes.length}',
+                                              style: TextStyle(
+                                                color: colors.onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: '测速当前代理组',
+                                        onPressed: _testingAllNodes ||
+                                                testingGroup
+                                            ? null
+                                            : () async {
+                                                setModalState(
+                                                  () => testingGroup = true,
+                                                );
+                                                try {
+                                                  await _testGroupNodes(
+                                                    group,
+                                                    onProgress: () {
+                                                      if (context.mounted) {
+                                                        setModalState(() {});
+                                                      }
+                                                    },
+                                                  );
+                                                } finally {
+                                                  if (context.mounted) {
+                                                    setModalState(
+                                                      () =>
+                                                          testingGroup = false,
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                        icon: testingGroup
+                                            ? const SizedBox.square(
+                                                dimension: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Icon(Icons.speed_rounded),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _SelectedNodeDetails(details: details),
+                                  const SizedBox(height: 14),
+                                  Flexible(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) =>
+                                          GridView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: group.nodes.length,
+                                        gridDelegate: _panelGridDelegate(
+                                          context,
+                                          constraints.maxWidth,
+                                          spacing: 10,
+                                        ),
+                                        itemBuilder: (context, index) {
+                                          final liveGroup = _groups.firstWhere(
+                                            (item) => item.name == group.name,
+                                            orElse: () => group,
+                                          );
+                                          final node = group.nodes[index];
+                                          final selected =
+                                              node == liveGroup.now;
+                                          return _NodeButton(
+                                            name: node,
+                                            delay: _delayForNode(node),
+                                            selected: selected,
+                                            onTap: liveGroup.isManualSelectable
+                                                ? () {
+                                                    unawaited(
+                                                      _selectNode(
+                                                        liveGroup,
+                                                        node,
+                                                        onChanged: () {
+                                                          if (context.mounted) {
+                                                            setModalState(
+                                                                () {});
+                                                          }
+                                                        },
+                                                      ),
+                                                    );
+                                                  }
+                                                : null,
+                                          );
+                                        },
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: '测速当前代理组',
-                                onPressed: _testingAllNodes || testingGroup
-                                    ? null
-                                    : () async {
-                                        setModalState(
-                                          () => testingGroup = true,
-                                        );
-                                        try {
-                                          await _testGroupNodes(
-                                            group,
-                                            onProgress: () {
-                                              if (context.mounted) {
-                                                setModalState(() {});
-                                              }
-                                            },
-                                          );
-                                        } finally {
-                                          if (context.mounted) {
-                                            setModalState(
-                                              () => testingGroup = false,
-                                            );
-                                          }
-                                        }
-                                      },
-                                icon: testingGroup
-                                    ? const SizedBox.square(
-                                        dimension: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.speed_rounded),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _SelectedNodeDetails(details: details),
-                          const SizedBox(height: 14),
-                          Flexible(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) =>
-                                  GridView.builder(
-                                shrinkWrap: true,
-                                itemCount: group.nodes.length,
-                                gridDelegate: _panelGridDelegate(
-                                  context,
-                                  constraints.maxWidth,
-                                  spacing: 10,
-                                ),
-                                itemBuilder: (context, index) {
-                                  final liveGroup = _groups.firstWhere(
-                                    (item) => item.name == group.name,
-                                    orElse: () => group,
-                                  );
-                                  final node = group.nodes[index];
-                                  final selected = node == liveGroup.now;
-                                  return _NodeButton(
-                                    name: node,
-                                    delay: _delayForNode(node),
-                                    selected: selected,
-                                    onTap: liveGroup.isManualSelectable
-                                        ? () {
-                                            unawaited(
-                                              _selectNode(
-                                                liveGroup,
-                                                node,
-                                                onChanged: () {
-                                                  if (context.mounted) {
-                                                    setModalState(() {});
-                                                  }
-                                                },
-                                              ),
-                                            );
-                                          }
-                                        : null,
-                                  );
-                                },
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              ),
-            );
-          },
         );
       },
     );
@@ -643,7 +704,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('代理面板'),
-        bottom: _testingAllNodes
+        bottom: widget.proxyRunning && _testingAllNodes
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(30),
                 child: Column(children: [
@@ -659,7 +720,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
           IconButton(
             tooltip: '全部测速',
             onPressed: widget.proxyRunning && !busy ? _refreshAndTestAll : null,
-            icon: _testingAllNodes
+            icon: widget.proxyRunning && _testingAllNodes
                 ? const SizedBox.square(
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),

@@ -2,6 +2,10 @@ import 'models.dart';
 
 abstract interface class ProxyPlatformService {
   Future<bool> isRunning();
+  Future<ProxyStatus> getProxyStatus();
+  Future<String> getDelayResults();
+  Future<void> setDelayResults(String json);
+  Future<List<String>> getProxyGroupOrder();
   Future<void> start();
   Future<void> stop();
   Future<void> restart();
