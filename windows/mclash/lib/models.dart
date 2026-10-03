@@ -1,4 +1,12 @@
-enum ProxyStatus { stopped, starting, running, stopping }
+enum ProxyStatus {
+  stopped,
+  starting,
+  running,
+  stopping,
+  checking,
+  recovering,
+  failed
+}
 
 enum NetworkMode { proxy, tun }
 

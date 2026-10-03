@@ -29,7 +29,7 @@ class _HomePageState extends State<HomePage> {
   late final ProxyPlatformService _service =
       widget.service ?? NativeProxyService.instance;
 
-  final _statusNotifier = ValueNotifier(ProxyStatus.stopped);
+  final _statusNotifier = ValueNotifier(ProxyStatus.checking);
   ProxyStatus get _status => _statusNotifier.value;
   set _status(ProxyStatus value) => _statusNotifier.value = value;
   ConfigInfo _config = const ConfigInfo(exists: false);
@@ -49,6 +49,18 @@ class _HomePageState extends State<HomePage> {
   double _uploadBytesPerSecond = 0;
   String _proxyMode = 'rule';
   bool _changingProxyMode = false;
+  Future<void>? _statusPoll;
+  bool _refreshing = false;
+  int _operationGeneration = 0;
+  String? _statusError;
+  final _coreBusy = ValueNotifier(false);
+  CoreUpdateInfo? _coreInfo;
+  bool _coreUpdating = false;
+  String? _coreMessage;
+  bool get _canOperate =>
+      !_coreBusy.value &&
+      !_switchingMode &&
+      (_status == ProxyStatus.running || _status == ProxyStatus.stopped);
 
   @override
   void initState() {
@@ -66,24 +78,44 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _pollStatus() async {
+  Future<void> _pollStatus() {
+    if (_statusPoll != null) return _statusPoll!;
+    if (_switchingMode || _operationDialogOpen) return Future.value();
+    final task = _detectStatus();
+    _statusPoll = task;
+    return task.whenComplete(() {
+      if (identical(_statusPoll, task)) _statusPoll = null;
+    });
+  }
+
+  Future<void> _statusAfterOperation() async {
+    if (_statusPoll != null) await _statusPoll;
+    if (mounted) await _pollStatus();
+  }
+
+  Future<void> _detectStatus() async {
+    final generation = _operationGeneration;
     try {
-      final running = await _service.isRunning();
-      if (!mounted ||
-          _status == ProxyStatus.starting ||
-          _status == ProxyStatus.stopping) {
-        return;
+      final next =
+          await _service.getProxyStatus().timeout(const Duration(seconds: 12));
+      if (!mounted || generation != _operationGeneration) return;
+      final previous = _status;
+      setState(() {
+        _status = next;
+        _statusError = null;
+      });
+      if (next == ProxyStatus.stopped && previous != next) {
+        await _service.syncSystemProxy();
       }
-      final next = running ? ProxyStatus.running : ProxyStatus.stopped;
-      if (_status != next) {
-        if (!running) await _service.syncSystemProxy();
-        if (mounted) {
-          setState(() => _status = next);
-          if (running) unawaited(_loadProxyMode());
-        }
+      if (next == ProxyStatus.running && previous != next) {
+        unawaited(_loadProxyMode());
       }
-    } catch (_) {
-      // Transient SCM/controller failures are reported by explicit actions.
+    } catch (error) {
+      if (!mounted || generation != _operationGeneration) return;
+      setState(() {
+        _status = ProxyStatus.failed;
+        _statusError = error.toString();
+      });
     }
   }
 
@@ -92,6 +124,7 @@ class _HomePageState extends State<HomePage> {
     _statusTimer?.cancel();
     _trafficTimer?.cancel();
     _statusNotifier.dispose();
+    _coreBusy.dispose();
     super.dispose();
   }
 
@@ -231,9 +264,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _refresh() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    await _pollStatus();
     try {
       final config = await _service.getConfigInfo();
-      final running = await _service.isRunning();
       final debugLoggingEnabled = await _service.getDebugLoggingEnabled();
       final serviceAutoStartEnabled =
           await _service.getServiceAutoStartEnabled();
@@ -241,11 +276,10 @@ class _HomePageState extends State<HomePage> {
       final bypassLanEnabled = await _service.getBypassLanEnabled();
       final networkMode = await _service.getNetworkMode();
       final coreType = await _service.getCoreType();
-      await _service.syncSystemProxy();
+      if (_status != ProxyStatus.failed) await _service.syncSystemProxy();
       if (!mounted) return;
       setState(() {
         _config = config;
-        _status = running ? ProxyStatus.running : ProxyStatus.stopped;
         _debugLoggingEnabled = debugLoggingEnabled;
         _serviceAutoStartEnabled = serviceAutoStartEnabled;
         _ipv6Enabled = ipv6Enabled;
@@ -253,17 +287,22 @@ class _HomePageState extends State<HomePage> {
         _networkMode = networkMode;
         _coreType = coreType;
       });
-      if (running) await _loadProxyMode();
+      if (_status == ProxyStatus.running) await _loadProxyMode();
     } catch (error) {
       if (!mounted) return;
       _showError(error);
+    } finally {
+      _refreshing = false;
     }
   }
 
   Future<void> _openProxyPanel() async {
     await Navigator.of(context).push<void>(MaterialPageRoute(
-      builder: (_) =>
-          ProxyPanelPage(proxyRunning: _status == ProxyStatus.running),
+      builder: (_) => ValueListenableBuilder<ProxyStatus>(
+        valueListenable: _statusNotifier,
+        builder: (_, status, child) => ProxyPanelPage(
+            proxyRunning: status == ProxyStatus.running, service: _service),
+      ),
     ));
     await _refresh();
   }
@@ -501,13 +540,15 @@ class _HomePageState extends State<HomePage> {
       };
 
   Future<void> _switchRunMode(CoreType core, NetworkMode target) async {
-    if (_switchingMode ||
+    if (!_canOperate ||
+        _switchingMode ||
         _status == ProxyStatus.starting ||
         _status == ProxyStatus.stopping) {
       return;
     }
     if (target == _networkMode && core == _coreType) return;
     final wasRunning = _status == ProxyStatus.running;
+    _operationGeneration++;
     setState(() => _switchingMode = true);
     if (wasRunning) {
       _showOperationWaitDialog('正在切换运行模式', 8);
@@ -540,11 +581,13 @@ class _HomePageState extends State<HomePage> {
       }
       if (mounted) {
         setState(() => _switchingMode = false);
+        await _statusAfterOperation();
       }
     }
   }
 
   Future<void> _showGeneralSettings() async {
+    if (_coreBusy.value) return;
     var changingAutoStart = false;
     var changingIpv6 = false;
     var changingBypassLan = false;
@@ -707,143 +750,125 @@ class _HomePageState extends State<HomePage> {
   Future<void> _showCoreUpdate() async {
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('更新内核'),
-        content: SizedBox(
-          width: 440,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _coreUpdateCard(dialogContext, CoreType.mihomo, 'mihomo'),
-              ],
-            ),
+      barrierDismissible: false,
+      builder: (dialogContext) => AnimatedBuilder(
+        animation: Listenable.merge([_statusNotifier, _coreBusy]),
+        builder: (_, child) => PopScope(
+          canPop: !_coreBusy.value,
+          child: AlertDialog(
+            title: const Text('更新内核'),
+            content: SizedBox(
+                width: 440,
+                child: SingleChildScrollView(child: _coreUpdateCard())),
+            actions: [
+              FilledButton(
+                onPressed: _coreBusy.value
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              )
+            ],
           ),
         ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _coreUpdateCard(BuildContext context, CoreType core, String name) {
-    CoreUpdateInfo? info;
-    var busy = false;
-    var updating = false;
-    return ValueListenableBuilder<ProxyStatus>(
-      valueListenable: _statusNotifier,
-      builder: (context, status, _) => StatefulBuilder(
-        builder: (context, setCardState) {
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    info == null
-                        ? '尚未检测版本'
-                        : '当前 ${info!.currentVersion} / 官方 ${info!.latestVersion}',
-                  ),
-                  if (updating) ...[
-                    const SizedBox(height: 14),
-                    const LinearProgressIndicator(),
-                    const SizedBox(height: 8),
-                    const Text('正在下载并更新内核，请勿关闭应用…'),
-                  ],
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: busy || status != ProxyStatus.running
-                              ? null
-                              : () async {
-                                  if (_status != ProxyStatus.running) return;
-                                  setCardState(() => busy = true);
-                                  try {
-                                    info = await _service.checkCoreUpdate(core);
-                                  } catch (error) {
-                                    if (mounted) _showError(error);
-                                  }
-                                  if (context.mounted) {
-                                    setCardState(() => busy = false);
-                                  }
-                                },
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          child: const FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text('检测版本', maxLines: 1, softWrap: false),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: busy || status != ProxyStatus.running
-                              ? null
-                              : () async {
-                                  if (_status != ProxyStatus.running) return;
-                                  setCardState(() {
-                                    busy = true;
-                                    updating = true;
-                                  });
-                                  try {
-                                    info ??=
-                                        await _service.checkCoreUpdate(core);
-                                    await _service.updateCore(core);
-                                    if (mounted) {
-                                      AppNotice.show(
-                                        this.context,
-                                        '$name 内核更新完成',
-                                      );
-                                    }
-                                  } catch (error) {
-                                    if (mounted) {
-                                      await _showCoreUpdateFailure(name, error);
-                                    }
-                                  }
-                                  if (context.mounted) {
-                                    setCardState(() {
-                                      busy = false;
-                                      updating = false;
-                                    });
-                                  }
-                                },
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(updating ? '正在更新…' : '更新内核',
-                                maxLines: 1, softWrap: false),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+  Future<void> _runCoreOperation({required bool update}) async {
+    if (_coreBusy.value || _status != ProxyStatus.running) return;
+    setState(() {
+      _coreUpdating = update;
+      _coreMessage = null;
+      _coreBusy.value = true;
+    });
+    try {
+      _coreInfo = await _service.checkCoreUpdate(CoreType.mihomo);
+      if (update && _coreInfo!.updateAvailable) {
+        if (!mounted || _status != ProxyStatus.running) {
+          throw StateError('代理已断开，请重新连接后更新');
+        }
+        await _service.updateCore(CoreType.mihomo);
+        _coreMessage = 'mihomo 内核更新完成';
+        // Read the installed version again; the pre-update snapshot is stale.
+        try {
+          _coreInfo = await _service.checkCoreUpdate(CoreType.mihomo);
+        } catch (error) {
+          _coreInfo = null;
+          _coreMessage = '内核更新完成，但读取版本失败：$error';
+        }
+        await _pollStatus();
+      } else {
+        _coreMessage = _coreInfo!.updateAvailable ? '发现新版本' : '当前已是最新稳定版';
+      }
+    } catch (error) {
+      if (mounted) {
+        _coreMessage = '${update ? '更新' : '检测'}失败：$error';
+        if (update) {
+          await _showCoreUpdateFailure('mihomo', error);
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _coreUpdating = false;
+          _coreBusy.value = false;
+        });
+      }
+    }
+  }
+
+  Widget _coreUpdateCard() {
+    final enabled = !_coreBusy.value && _status == ProxyStatus.running;
+    return Card(
+        child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('mihomo',
+                    style:
+                        TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 6),
+                Text(_coreInfo == null
+                    ? '尚未检测版本'
+                    : '当前 ${_coreInfo!.currentVersion} / 官方 ${_coreInfo!.latestVersion}'),
+                if (_coreBusy.value) ...[
+                  const SizedBox(height: 14),
+                  const LinearProgressIndicator(),
+                  const SizedBox(height: 8),
+                  Text(_coreUpdating ? '正在下载并更新内核，请勿关闭应用…' : '正在检测版本…'),
                 ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                      child: OutlinedButton(
+                    onPressed:
+                        enabled ? () => _runCoreOperation(update: false) : null,
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8)),
+                    child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('检测版本', maxLines: 1, softWrap: false)),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: FilledButton(
+                    onPressed:
+                        enabled ? () => _runCoreOperation(update: true) : null,
+                    style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8)),
+                    child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_coreUpdating ? '正在更新…' : '更新内核',
+                            maxLines: 1, softWrap: false)),
+                  )),
+                ]),
+                if (_coreMessage != null) ...[
+                  const SizedBox(height: 14),
+                  SelectableText(_coreMessage!)
+                ],
+              ],
+            )));
   }
 
   Future<void> _showCoreUpdateFailure(String name, Object error) async {
@@ -981,10 +1006,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _toggle() async {
-    if (_status == ProxyStatus.starting || _status == ProxyStatus.stopping) {
+    if (!_canOperate) {
       return;
     }
 
+    _operationGeneration++;
     try {
       if (_status == ProxyStatus.running) {
         setState(() => _status = ProxyStatus.stopping);
@@ -995,7 +1021,7 @@ class _HomePageState extends State<HomePage> {
           _closeOperationWaitDialog();
         }
         if (!mounted) return;
-        setState(() => _status = ProxyStatus.stopped);
+        await _statusAfterOperation();
         return;
       }
 
@@ -1012,13 +1038,12 @@ class _HomePageState extends State<HomePage> {
         _closeOperationWaitDialog();
       }
       if (!mounted) return;
-      setState(() => _status = ProxyStatus.running);
-      unawaited(_loadProxyMode());
+      await _statusAfterOperation();
     } catch (error) {
       _closeOperationWaitDialog();
       if (!mounted) return;
-      setState(() => _status = ProxyStatus.stopped);
       _showError(error);
+      await _statusAfterOperation();
     }
   }
 
@@ -1224,6 +1249,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   String get _statusText => switch (_status) {
+        ProxyStatus.checking => '检测中',
+        ProxyStatus.recovering => '恢复中',
+        ProxyStatus.failed => '检测失败',
         ProxyStatus.stopped => '未启动',
         ProxyStatus.starting => '正在启动',
         ProxyStatus.running => '运行中',
@@ -1232,8 +1260,11 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final busy =
-        _status == ProxyStatus.starting || _status == ProxyStatus.stopping;
+    final busy = _coreBusy.value ||
+        _switchingMode ||
+        (_status != ProxyStatus.running &&
+            _status != ProxyStatus.stopped &&
+            _status != ProxyStatus.failed);
     final colors = Theme.of(context).colorScheme;
     final running = _status == ProxyStatus.running;
 
@@ -1348,7 +1379,8 @@ class _HomePageState extends State<HomePage> {
                               else
                                 Switch(
                                   value: running,
-                                  onChanged: (_) => _toggle(),
+                                  onChanged:
+                                      _canOperate ? (_) => _toggle() : null,
                                   activeThumbColor: const Color(0xFF315FE8),
                                   activeTrackColor: Colors.white,
                                   inactiveThumbColor: Colors.white,
@@ -1401,6 +1433,11 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                 ),
+                if (_statusError != null) ...[
+                  const SizedBox(height: 12),
+                  Text('状态检测失败：$_statusError'),
+                  TextButton(onPressed: _pollStatus, child: const Text('重新检测')),
+                ],
                 const SizedBox(height: 16),
                 Card(
                   clipBehavior: Clip.antiAlias,
@@ -1451,15 +1488,14 @@ class _HomePageState extends State<HomePage> {
                   _HomeActionTile(
                       icon: Icons.tune_rounded,
                       title: '常规设置',
-                      onTap: _showGeneralSettings),
+                      onTap: _coreBusy.value ? null : _showGeneralSettings),
                   const Divider(height: 1, indent: 64),
                   _HomeActionTile(
                       icon: Icons.swap_horiz_rounded,
                       title: '运行模式',
                       trailing: Text(
                           _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'),
-                      onTap:
-                          busy || _switchingMode ? null : _showRunModeDialog),
+                      onTap: _canOperate ? _showRunModeDialog : null),
                   const Divider(height: 1, indent: 64),
                   _HomeActionTile(
                       icon: Icons.article_outlined,

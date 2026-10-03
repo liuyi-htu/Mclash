@@ -19,6 +19,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/windows"
 )
 
 const mihomoReleaseAPI = "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest"
@@ -100,7 +102,27 @@ func checkCoreUpdate(paths appPaths) (coreUpdateInfo, githubRelease, error) {
 	}, release, nil
 }
 
+func acquireCoreUpdateLock(paths appPaths) (func(), error) {
+	// Exclusive handle protects updates even if the GUI is closed and reopened.
+	lockPath, err := windows.UTF16PtrFromString(paths.MihomoExe + ".update.lock")
+	if err != nil {
+		return nil, err
+	}
+	lock, err := windows.CreateFile(lockPath, windows.GENERIC_READ|windows.GENERIC_WRITE,
+		0, nil, windows.OPEN_ALWAYS, windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_DELETE_ON_CLOSE, 0)
+	if err != nil {
+		return nil, fmt.Errorf("cannot acquire core update lock (another update may be running): %w", err)
+	}
+	return func() { _ = windows.CloseHandle(lock) }, nil
+}
+
 func updateCore(paths appPaths) error {
+	releaseLock, err := acquireCoreUpdateLock(paths)
+	if err != nil {
+		return err
+	}
+	defer releaseLock()
+
 	info, release, err := checkCoreUpdate(paths)
 	if err != nil {
 		return err

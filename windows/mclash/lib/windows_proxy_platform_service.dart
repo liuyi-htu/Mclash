@@ -22,6 +22,8 @@ typedef ServiceProcessRunner = Future<ProcessResult> Function(
 class WindowsProxyPlatformService implements ProxyPlatformService {
   WindowsProxyPlatformService({
     String? dataDir,
+    this.statusTimeout = const Duration(seconds: 5),
+    this.controllerHealthCheck,
     this.subscriptionIdleTimeout = const Duration(seconds: 30),
     String? systemProxyBackupPath,
     RegistryProcessRunner? registryProcessRunner,
@@ -31,6 +33,8 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
         _registryProcessRunner = registryProcessRunner,
         _serviceProcessRunner = serviceProcessRunner;
 
+  final Duration statusTimeout;
+  final Future<bool> Function()? controllerHealthCheck;
   final Duration subscriptionIdleTimeout;
   final String? _dataDirOverride;
   final String? _systemProxyBackupPathOverride;
@@ -132,7 +136,18 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
     await _writeSettings(settings);
   }
 
-  Future<Map<String, dynamic>> _status() async {
+  Future<Map<String, dynamic>>? _statusFlight;
+  Future<Map<String, dynamic>> _status() {
+    if (_statusFlight != null) return _statusFlight!;
+    late final Future<Map<String, dynamic>> task;
+    task = _readServiceStatus().whenComplete(() {
+      if (identical(_statusFlight, task)) _statusFlight = null;
+    });
+    _statusFlight = task;
+    return task;
+  }
+
+  Future<Map<String, dynamic>> _readServiceStatus() async {
     final result = await _runService('status-json', allowFailure: true);
     try {
       final decoded = jsonDecode(result.stdout.toString().trim());
@@ -162,8 +177,29 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
       '--data-dir',
       _dataDir,
     ];
-    final result = await (_serviceProcessRunner?.call(_serviceExe, arguments) ??
-        Process.run(_serviceExe, arguments, runInShell: false));
+    final timeout = command == 'status-json' || command == 'autostart-json'
+        ? statusTimeout
+        : const Duration(minutes: 10);
+    late ProcessResult result;
+    if (_serviceProcessRunner != null) {
+      result =
+          await _serviceProcessRunner(_serviceExe, arguments).timeout(timeout);
+    } else {
+      final process =
+          await Process.start(_serviceExe, arguments, runInShell: false);
+      final stdout = utf8.decodeStream(process.stdout);
+      final stderr = utf8.decodeStream(process.stderr);
+      try {
+        final values =
+            await Future.wait<Object>([process.exitCode, stdout, stderr])
+                .timeout(timeout);
+        result =
+            ProcessResult(process.pid, values[0] as int, values[1], values[2]);
+      } on TimeoutException {
+        process.kill();
+        throw TimeoutException('服务命令 $command 超时', timeout);
+      }
+    }
     if (!allowFailure && result.exitCode != 0) {
       final message = result.stderr.toString().trim();
       throw StateError(
@@ -176,12 +212,60 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
   @override
   Future<bool> isRunning() async => (await _status())['state'] == 'running';
 
+  @override
+  Future<ProxyStatus> getProxyStatus() async {
+    final snapshot = await _status();
+    switch (snapshot['state']) {
+      case 'stopped':
+      case 'not_installed':
+        return ProxyStatus.stopped;
+      case 'start_pending':
+        return ProxyStatus.starting;
+      case 'stop_pending':
+        return ProxyStatus.stopping;
+      case 'running':
+        if ((snapshot['mihomoPid'] as num? ?? 0) <= 0) {
+          return ProxyStatus.recovering;
+        }
+        return await (controllerHealthCheck?.call() ?? _checkControllerHealth())
+                .timeout(statusTimeout)
+            ? ProxyStatus.running
+            : ProxyStatus.recovering;
+      default:
+        throw StateError(snapshot['message']?.toString() ?? '无法读取代理服务状态');
+    }
+  }
+
+  Future<bool> _checkControllerHealth() async {
+    final client = HttpClient()
+      ..connectionTimeout = statusTimeout
+      ..findProxy = (_) => 'DIRECT';
+    try {
+      return await (() async {
+        final request =
+            await client.getUrl(Uri.parse('http://127.0.0.1:9090/version'));
+        final response = await request.close();
+        if (response.statusCode != 200) return false;
+        final data = jsonDecode(await utf8.decodeStream(response));
+        return data is Map && data['version'] is String;
+      })()
+          .timeout(statusTimeout);
+    } catch (_) {
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  @override
   Future<String> getDelayResults() async =>
       (await _readSettings())['delayResults'] as String? ?? '{}';
 
+  @override
   Future<void> setDelayResults(String json) =>
       _updateSettings({'delayResults': json});
 
+  @override
   Future<List<String>> getProxyGroupOrder() async {
     final config = loadYaml(await getRuntimeConfigContent());
     if (config is! Map || config['proxy-groups'] is! List) return [];
@@ -1000,9 +1084,17 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     return CoreUpdateInfo.fromMap(decoded);
   }
 
+  Future<void>? _coreUpdateTask;
   @override
-  Future<void> updateCore(CoreType core) =>
-      _runService('update-core').then((_) {});
+  Future<void> updateCore(CoreType core) {
+    if (_coreUpdateTask != null) return Future.error(StateError('内核更新正在进行'));
+    late final Future<void> task;
+    task = _runService('update-core').then<void>((_) {}).whenComplete(() {
+      if (identical(_coreUpdateTask, task)) _coreUpdateTask = null;
+    });
+    _coreUpdateTask = task;
+    return task;
+  }
 
   bool _looksLikeMihomoConfig(String content) => RegExp(
         r'^\s*(proxies|proxy-providers|proxy-groups|rules|mixed-port|port|socks-port|redir-port|tproxy-port)\s*:',
