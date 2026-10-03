@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
+import '../shared/delay_test_queue.dart';
 
 class ProxyPanelPage extends StatefulWidget {
   const ProxyPanelPage({required this.proxyRunning, super.key});
@@ -27,8 +28,9 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   List<_ProxyGroup> _groups = const [];
   final Map<String, String> _providerByNode = {};
   final Map<String, _DelayResult> _delaysByNode = {};
-  final Set<String> _testingNodes = {};
-  Future<void> _delayTestQueue = Future<void>.value();
+  final _delayTestQueue = DelayTestQueue();
+  var _testedCount = 0;
+  var _testCount = 0;
   Future<void> _saveQueue = Future<void>.value();
 
   static const _delayTimeoutMs = 3000;
@@ -66,6 +68,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
 
   @override
   void dispose() {
+    _delayTestQueue.dispose();
     _client.close(force: true);
     super.dispose();
   }
@@ -136,24 +139,21 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       return;
     }
 
-    setState(() => _testingAllNodes = true);
+    final nodes = _groups
+        .expand((group) => group.nodes)
+        .map(_effectiveNodeName)
+        .where((node) => node.isNotEmpty)
+        .toSet();
+    setState(() {
+      _testingAllNodes = true;
+      _testedCount = 0;
+      _testCount = nodes.length;
+    });
     try {
-      final testedNodes = <String>{};
-
-      for (final group in _groups) {
-        final groupNodes = <String>[];
-        for (final node in group.nodes) {
-          final key = _effectiveNodeName(node);
-          if (key.isNotEmpty && testedNodes.add(key)) {
-            groupNodes.add(key);
-          }
-        }
-
-        for (final node in groupNodes) {
-          await _testNodeDelay(node);
-          if (!mounted) return;
-        }
-      }
+      await Future.wait(nodes.map((node) async {
+        await _testNodeDelay(node);
+        if (mounted) setState(() => _testedCount++);
+      }));
     } finally {
       if (mounted) setState(() => _testingAllNodes = false);
     }
@@ -169,36 +169,27 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         .toSet()
         .toList(growable: false);
 
-    for (final node in nodes) {
+    await Future.wait(nodes.map((node) async {
       final test = _testNodeDelay(node);
       onProgress();
       await test;
       onProgress();
-    }
+    }));
   }
 
   Future<void> _testNodeDelay(String node) {
     final key = _effectiveNodeName(node);
-    if (_testingNodes.contains(key)) {
-      if (_delaysByNode[key]?.failed != true) return Future<void>.value();
-      _testingNodes.remove(key);
-    }
+    if (!mounted || key.isEmpty) return Future<void>.value();
     final builtin = _builtinDelayResult(key);
     if (builtin != null) {
-      if (mounted) setState(() => _delaysByNode[key] = builtin);
+      setState(() => _delaysByNode[key] = builtin);
       return Future<void>.value();
     }
-    _testingNodes.add(key);
-    if (mounted) {
-      setState(() {
-        _delaysByNode[key] = const _DelayResult.testing();
-      });
-    }
-
-    final queuedTest =
-        _delayTestQueue.catchError((_) {}).then((_) => _runNodeDelayTest(key));
-    _delayTestQueue = queuedTest;
-    return queuedTest;
+    return _delayTestQueue.schedule(key, () async {
+      if (!mounted) return;
+      setState(() => _delaysByNode[key] = const _DelayResult.testing());
+      await _runNodeDelayTest(key);
+    });
   }
 
   Future<void> _runNodeDelayTest(String key) async {
@@ -219,7 +210,6 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         () => _delaysByNode[key] = _DelayResult.failed(_failureLabel(error)),
       );
     } finally {
-      _testingNodes.remove(key);
       if (mounted) setState(() {});
       try {
         await _saveDelayResults();
@@ -390,8 +380,18 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       request.write(jsonEncode(body));
     }
 
-    final response = await request.close().timeout(responseTimeout);
-    final text = await utf8.decodeStream(response);
+    late HttpClientResponse response;
+    late String text;
+    try {
+      await (() async {
+        response = await request.close();
+        text = await utf8.decodeStream(response);
+      })()
+          .timeout(responseTimeout);
+    } catch (_) {
+      request.abort();
+      rethrow;
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Controller ${response.statusCode}: ${text.trim()}');
     }
@@ -438,7 +438,6 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
 
   Future<void> _showNodes(_ProxyGroup group, Offset origin) {
     final screenSize = MediaQuery.sizeOf(context);
-    final maxHeight = screenSize.height * 0.72;
     final originAlignment = Alignment(
       (origin.dx / screenSize.width) * 2 - 1,
       (origin.dy / screenSize.height) * 2 - 1,
@@ -478,8 +477,8 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                   ),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxWidth: 520,
-                      maxHeight: maxHeight,
+                      maxWidth: 960,
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.8,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
@@ -552,44 +551,45 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                           ),
                           const SizedBox(height: 14),
                           Flexible(
-                            child: GridView.builder(
-                              shrinkWrap: true,
-                              itemCount: group.nodes.length,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                mainAxisSpacing: 10,
-                                crossAxisSpacing: 10,
-                                childAspectRatio: 2.35,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) =>
+                                  GridView.builder(
+                                shrinkWrap: true,
+                                itemCount: group.nodes.length,
+                                gridDelegate: _panelGridDelegate(
+                                  context,
+                                  constraints.maxWidth,
+                                  spacing: 10,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final liveGroup = _groups.firstWhere(
+                                    (item) => item.name == group.name,
+                                    orElse: () => group,
+                                  );
+                                  final node = group.nodes[index];
+                                  final selected = node == liveGroup.now;
+                                  return _NodeButton(
+                                    name: node,
+                                    delay: _delayForNode(node),
+                                    selected: selected,
+                                    onTap: liveGroup.isManualSelectable
+                                        ? () {
+                                            unawaited(
+                                              _selectNode(
+                                                liveGroup,
+                                                node,
+                                                onChanged: () {
+                                                  if (context.mounted) {
+                                                    setModalState(() {});
+                                                  }
+                                                },
+                                              ),
+                                            );
+                                          }
+                                        : null,
+                                  );
+                                },
                               ),
-                              itemBuilder: (context, index) {
-                                final liveGroup = _groups.firstWhere(
-                                  (item) => item.name == group.name,
-                                  orElse: () => group,
-                                );
-                                final node = group.nodes[index];
-                                final selected = node == liveGroup.now;
-                                return _NodeButton(
-                                  name: node,
-                                  delay: _delayForNode(node),
-                                  selected: selected,
-                                  onTap: liveGroup.isManualSelectable
-                                      ? () {
-                                          unawaited(
-                                            _selectNode(
-                                              liveGroup,
-                                              node,
-                                              onChanged: () {
-                                                if (context.mounted) {
-                                                  setModalState(() {});
-                                                }
-                                              },
-                                            ),
-                                          );
-                                        }
-                                      : null,
-                                );
-                              },
                             ),
                           ),
                         ],
@@ -612,6 +612,18 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('代理面板'),
+        bottom: _testingAllNodes
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(30),
+                child: Column(children: [
+                  Text('测速进度 $_testedCount / $_testCount'),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: _testCount == 0 ? 0 : _testedCount / _testCount,
+                  ),
+                ]),
+              )
+            : null,
         actions: [
           IconButton(
             tooltip: '全部测速',
@@ -726,28 +738,46 @@ class _ProxyTab extends StatelessWidget {
           else
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
-              sliver: SliverGrid.builder(
-                itemCount: groups.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 2.35,
+              sliver: SliverLayoutBuilder(
+                builder: (context, constraints) => SliverGrid.builder(
+                  itemCount: groups.length,
+                  gridDelegate: _panelGridDelegate(
+                    context,
+                    constraints.crossAxisExtent,
+                    spacing: 12,
+                  ),
+                  itemBuilder: (context, index) {
+                    final group = groups[index];
+                    return _ProxyGroupButton(
+                      group: group,
+                      delay: delayForNode(group.now),
+                      onTap: (origin) => onGroupTap(group, origin),
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final group = groups[index];
-                  return _ProxyGroupButton(
-                    group: group,
-                    delay: delayForNode(group.now),
-                    onTap: (origin) => onGroupTap(group, origin),
-                  );
-                },
               ),
             ),
         ],
       ),
     );
   }
+}
+
+SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
+  BuildContext context,
+  double width, {
+  required double spacing,
+}) {
+  final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
+  final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
+  final columns =
+      ((width + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
+  return SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: columns,
+    mainAxisSpacing: spacing,
+    crossAxisSpacing: spacing,
+    mainAxisExtent: 32 + 56 * textScale,
+  );
 }
 
 class _ProxyGroupButton extends StatelessWidget {
@@ -854,8 +884,7 @@ class _NodeButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   name,
-                  maxLines: 1,
-                  softWrap: false,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
