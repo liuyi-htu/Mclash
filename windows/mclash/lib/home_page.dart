@@ -649,34 +649,6 @@ class _HomePageState extends State<HomePage> {
                         }
                       },
               ),
-              _settingsTile(
-                context: sheetContext,
-                icon: Icons.swap_horiz_rounded,
-                title: '运行模式',
-                subtitle: 'mihomo + '
-                    '${_networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'}',
-                onTap: _showRunModeDialog,
-              ),
-              _settingsTile(
-                context: sheetContext,
-                icon: Icons.article_outlined,
-                title: '调试日志',
-                subtitle: _debugLoggingEnabled ? '已启用' : '已关闭',
-                onTap: _showDebugLogSettings,
-              ),
-              _settingsTile(
-                context: sheetContext,
-                icon: Icons.system_update_alt_rounded,
-                title: '更新内核',
-                onTap: _showCoreUpdate,
-              ),
-              _settingsTile(
-                context: sheetContext,
-                icon: Icons.info_outline_rounded,
-                title: '关于',
-                subtitle: 'Mclash 开源信息',
-                onTap: _showAbout,
-              ),
             ],
           ),
         ),
@@ -722,35 +694,6 @@ class _HomePageState extends State<HomePage> {
         ? NetworkMode.tun
         : NetworkMode.proxy;
     await _switchRunMode(core, mode);
-  }
-
-  Widget _settingsTile({
-    required BuildContext context,
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required Future<void> Function() onTap,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: colors.primaryContainer.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(icon, color: colors.onPrimaryContainer),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: subtitle == null ? null : Text(subtitle),
-      trailing: const Icon(Icons.chevron_right_rounded),
-      onTap: () async {
-        Navigator.of(context).pop();
-        await onTap();
-      },
-    );
   }
 
   Future<void> _showCoreUpdate() async {
