@@ -123,174 +123,172 @@ class _ConfigPageState extends State<ConfigPage> {
         urlControllers.map((controller) => controller.text).join('\n');
     String? validationMessage;
 
-    final route = MaterialPageRoute<bool>(
+    final route = DialogRoute<bool>(
+      context: context,
+      barrierDismissible: true,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Scaffold(
-          appBar: AppBar(title: Text(existing == null ? '添加机场订阅' : '修改机场订阅')),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '配置名称',
-                    hintText: '例如：我的代理配置',
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: '配置名称',
+                      hintText: '例如：我的代理配置',
+                    ),
+                    textInputAction: TextInputAction.next,
                   ),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.maxFinite,
-                  height: urlControllers.length * 148.0,
-                  child: ReorderableListView(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    onReorderStart: (_) =>
-                        FocusManager.instance.primaryFocus?.unfocus(),
-                    // ignore: deprecated_member_use
-                    onReorder: (oldIndex, newIndex) => setDialogState(() {
-                      if (newIndex > oldIndex) newIndex--;
-                      urlControllers.insert(
-                          newIndex, urlControllers.removeAt(oldIndex));
-                      airportNameControllers.insert(
-                          newIndex, airportNameControllers.removeAt(oldIndex));
-                    }),
-                    children: [
-                      for (var i = 0; i < urlControllers.length; i++)
-                        Padding(
-                          key: ObjectKey(urlControllers[i]),
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Row(
-                            children: [
-                              ReorderableDragStartListener(
-                                index: i,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(right: 12),
-                                  child: Column(children: [
-                                    Text('${i + 1}'),
-                                    const Icon(Icons.drag_handle)
-                                  ]),
-                                ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    TextField(
-                                      controller: airportNameControllers[i],
-                                      decoration: InputDecoration(
-                                          labelText: '机场 ${i + 1} 名称',
-                                          hintText: '例如：我的机场'),
-                                      textInputAction: TextInputAction.next,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    TextField(
-                                      controller: urlControllers[i],
-                                      decoration: InputDecoration(
-                                          labelText: '机场 ${i + 1} 订阅链接',
-                                          hintText: 'https://...'),
-                                      keyboardType: TextInputType.url,
-                                      autocorrect: false,
-                                      enableSuggestions: false,
-                                      smartDashesType: SmartDashesType.disabled,
-                                      smartQuotesType: SmartQuotesType.disabled,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (urlControllers.length > 1)
-                                IconButton(
-                                  tooltip: '删除机场 ${i + 1}',
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () => setDialogState(() {
-                                    removedControllers
-                                        .add(urlControllers.removeAt(i));
-                                    removedControllers.add(
-                                        airportNameControllers.removeAt(i));
-                                  }),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('拖动调整机场顺序；多个机场的节点按序号加前缀，如 1-香港'),
-                ),
-                if (validationMessage != null) ...[
                   const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.maxFinite,
+                    height: urlControllers.length * 148.0,
+                    child: ReorderableListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      onReorderStart: (_) =>
+                          FocusManager.instance.primaryFocus?.unfocus(),
+                      // ignore: deprecated_member_use
+                      onReorder: (oldIndex, newIndex) => setDialogState(() {
+                        if (newIndex > oldIndex) newIndex--;
+                        urlControllers.insert(
+                            newIndex, urlControllers.removeAt(oldIndex));
+                        airportNameControllers.insert(newIndex,
+                            airportNameControllers.removeAt(oldIndex));
+                      }),
+                      children: [
+                        for (var i = 0; i < urlControllers.length; i++)
+                          Padding(
+                            key: ObjectKey(urlControllers[i]),
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Row(
+                              children: [
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: Column(children: [
+                                      Text('${i + 1}'),
+                                      const Icon(Icons.drag_handle)
+                                    ]),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      TextField(
+                                        controller: airportNameControllers[i],
+                                        decoration: InputDecoration(
+                                            labelText: '机场 ${i + 1} 名称',
+                                            hintText: '例如：我的机场'),
+                                        textInputAction: TextInputAction.next,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      TextField(
+                                        controller: urlControllers[i],
+                                        decoration: InputDecoration(
+                                            labelText: '机场 ${i + 1} 订阅链接',
+                                            hintText: 'https://...'),
+                                        keyboardType: TextInputType.url,
+                                        autocorrect: false,
+                                        enableSuggestions: false,
+                                        smartDashesType:
+                                            SmartDashesType.disabled,
+                                        smartQuotesType:
+                                            SmartQuotesType.disabled,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (urlControllers.length > 1)
+                                  IconButton(
+                                    tooltip: '删除机场 ${i + 1}',
+                                    icon:
+                                        const Icon(Icons.remove_circle_outline),
+                                    onPressed: () => setDialogState(() {
+                                      removedControllers
+                                          .add(urlControllers.removeAt(i));
+                                      removedControllers.add(
+                                          airportNameControllers.removeAt(i));
+                                    }),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      validationMessage!,
-                      style: TextStyle(
-                        color: Theme.of(dialogContext).colorScheme.error,
+                    alignment: Alignment.centerRight,
+                    child: AddActionButton(
+                      tooltip: '添加订阅链接',
+                      onPressed: () => setDialogState(() {
+                        urlControllers.add(TextEditingController());
+                        airportNameControllers.add(TextEditingController());
+                      }),
+                    ),
+                  ),
+                  if (validationMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        validationMessage!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-          floatingActionButtonLocation:
-              managementAddButtonLocation(dialogContext),
-          floatingActionButton: AddActionButton(
-            tooltip: '添加订阅链接',
-            onPressed: () => setDialogState(() {
-              urlControllers.add(TextEditingController());
-              airportNameControllers.add(TextEditingController());
-            }),
-          ),
-          bottomNavigationBar: SafeArea(
-              child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child:
-                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(false),
-                      child: const Text('取消'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        if (nameController.text.isEmpty) {
-                          setDialogState(() => validationMessage = '请输入名称');
-                          return;
-                        }
-                        for (var i = 0; i < urlControllers.length; i++) {
-                          if (airportNameControllers[i].text.trim().isEmpty) {
-                            setDialogState(
-                                () => validationMessage = '请输入机场 ${i + 1} 的名称');
-                            return;
-                          }
-                          if (urlControllers[i].text.trim().isEmpty) {
-                            setDialogState(() =>
-                                validationMessage = '请输入机场 ${i + 1} 的订阅链接');
-                            return;
-                          }
-                        }
-                        try {
-                          final links = subscriptionLinks(enteredUrls());
-                          if (links.length != urlControllers.length) {
-                            setDialogState(
-                                () => validationMessage = '订阅链接重复，请删除重复项');
-                            return;
-                          }
-                        } on FormatException catch (error) {
-                          setDialogState(
-                              () => validationMessage = error.message);
-                          return;
-                        }
-                        Navigator.of(dialogContext).pop(true);
-                      },
-                      child: Text(existing == null ? '添加并下载' : '保存并更新'),
-                    ),
-                  ]))),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (nameController.text.isEmpty) {
+                  setDialogState(() => validationMessage = '请输入名称');
+                  return;
+                }
+                for (var i = 0; i < urlControllers.length; i++) {
+                  if (airportNameControllers[i].text.trim().isEmpty) {
+                    setDialogState(
+                        () => validationMessage = '请输入机场 ${i + 1} 的名称');
+                    return;
+                  }
+                  if (urlControllers[i].text.trim().isEmpty) {
+                    setDialogState(
+                        () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
+                    return;
+                  }
+                }
+                try {
+                  final links = subscriptionLinks(enteredUrls());
+                  if (links.length != urlControllers.length) {
+                    setDialogState(() => validationMessage = '订阅链接重复，请删除重复项');
+                    return;
+                  }
+                } on FormatException catch (error) {
+                  setDialogState(() => validationMessage = error.message);
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: Text(existing == null ? '添加并下载' : '保存并更新'),
+            ),
+          ],
         ),
       ),
     );
@@ -899,20 +897,12 @@ class _ConfigPageState extends State<ConfigPage> {
                 ],
                 for (final action in orderedActions)
                   if (action != 'host' || profile.isSubscription)
-                    if (action == 'host')
-                      ListTile(
-                        leading: Icon(editingActions[action]!.$2),
-                        title: Text(editingActions[action]!.$1),
-                        enabled: !widget.proxyRunning,
-                        onTap: () => Navigator.of(sheetContext).pop(action),
-                      )
-                    else
-                      ManagementMenuTile(
-                        icon: editingActions[action]!.$2,
-                        title: editingActions[action]!.$1,
-                        enabled: !widget.proxyRunning,
-                        onTap: () => Navigator.of(sheetContext).pop(action),
-                      ),
+                    ManagementMenuTile(
+                      icon: editingActions[action]!.$2,
+                      title: editingActions[action]!.$1,
+                      enabled: !widget.proxyRunning,
+                      onTap: () => Navigator.of(sheetContext).pop(action),
+                    ),
                 const Divider(height: 1),
                 ManagementMenuTile(
                   icon: Icons.drive_file_rename_outline,

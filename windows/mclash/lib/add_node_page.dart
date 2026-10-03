@@ -51,7 +51,7 @@ class _AddNodePageState extends State<AddNodePage> {
     String? error;
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (context) => StatefulBuilder(
         builder: (context, update) => PopScope(
           canPop: !_saving,

@@ -26,34 +26,36 @@ void main() {
               )),
     ));
     Future<void> open(String label) async {
-      await tester.tap(find.textContaining(label).last);
+      await tester.tap((label.startsWith('选择')
+          ? find.byTooltip(label)
+          : find.textContaining(label).last));
       await tester.pumpAndSettle();
     }
 
     Finder node(String name) => find.widgetWithText(CheckboxListTile, name);
     await open('打开');
-    await open('选择前置节点（已选');
+    await open('选择前置节点');
     expect(node('A'), findsOneWidget);
     expect(node('B'), findsNothing);
     expect(node('C'), findsOneWidget);
     await open('全选');
     await open('确定');
-    await open('选择作用节点（已选');
+    await open('选择作用节点');
     expect(node('A'), findsNothing);
     expect(node('C'), findsNothing);
     expect(node('B'), findsOneWidget);
     await tester.tap(node('B'));
     await open('确定');
-    await open('选择前置节点（已选');
+    await open('选择前置节点');
     expect(node('B'), findsOneWidget);
     await tester.tap(node('C'));
     await open('确定');
-    await open('选择作用节点（已选');
+    await open('选择作用节点');
     expect(node('A'), findsNothing);
     expect(node('C'), findsOneWidget);
     await tester.tap(node('C'));
     await open('确定');
-    await open('选择前置节点（已选');
+    await open('选择前置节点');
     expect(node('C'), findsNothing);
     await open('取消');
     await open('保存');

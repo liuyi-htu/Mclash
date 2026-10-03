@@ -66,7 +66,8 @@ void main() {
     expect(find.byType(CheckboxListTile), findsNothing);
     expect(find.text('JP'), findsOneWidget);
     expect(find.text('北京'), findsNothing);
-    expect(find.textContaining('保存正则后重新匹配'), findsWidgets);
+    expect(find.textContaining('保存正则后重新匹配'), findsNothing);
+    expect(find.text('当前成员'), findsNothing);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
