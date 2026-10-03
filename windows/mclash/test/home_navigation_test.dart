@@ -59,6 +59,22 @@ void main() {
         expect(find.text('常规设置'), findsOneWidget);
         expect(find.text('系统代理'), findsOneWidget);
         expect(find.text('更新内核'), findsOneWidget);
+        await tester.tap(find.text('常规设置'));
+        await tester.pumpAndSettle();
+        final sheet = find.byType(BottomSheet);
+        expect(
+            find.descendant(of: sheet, matching: find.byType(SwitchListTile)),
+            findsNWidgets(3));
+        for (final title in ['开机自启', '启用 IPv6', '绕过局域网']) {
+          expect(find.descendant(of: sheet, matching: find.text(title)),
+              findsOneWidget);
+        }
+        for (final title in ['运行模式', '更新内核', '调试日志', '关于']) {
+          expect(find.descendant(of: sheet, matching: find.text(title)),
+              findsNothing);
+        }
+        await tester.tapAt(const Offset(5, 5));
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('首页'));
         await tester.pumpAndSettle();
