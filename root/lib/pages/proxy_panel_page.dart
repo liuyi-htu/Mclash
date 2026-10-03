@@ -579,19 +579,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxHeight:
-                                  MediaQuery.sizeOf(context).height * 0.25,
-                            ),
-                            child: SingleChildScrollView(
-                              child: _SelectedNodeDetails(
-                                details: details,
-                                delay: _delayForNode(liveGroup.now),
-                                provider: _providerByNode[details.name],
-                              ),
-                            ),
-                          ),
+                          _SelectedNodeDetails(details: details),
                           const SizedBox(height: 14),
                           Flexible(
                             child: LayoutBuilder(
@@ -603,6 +591,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                   context,
                                   constraints.maxWidth,
                                   spacing: 10,
+                                  compact: true,
                                 ),
                                 itemBuilder: (context, index) {
                                   final liveGroup = _groups.firstWhere(
@@ -810,6 +799,7 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
   BuildContext context,
   double width, {
   required double spacing,
+  bool compact = false,
 }) {
   final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
@@ -819,7 +809,7 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
     crossAxisCount: columns,
     mainAxisSpacing: spacing,
     crossAxisSpacing: spacing,
-    mainAxisExtent: 32 + 56 * textScale,
+    mainAxisExtent: compact ? 24 + 40 * textScale : 32 + 56 * textScale,
   );
 }
 
@@ -895,29 +885,14 @@ class _ProxyGroupButton extends StatelessWidget {
 }
 
 class _SelectedNodeDetails extends StatelessWidget {
-  const _SelectedNodeDetails({
-    required this.details,
-    required this.delay,
-    required this.provider,
-  });
+  const _SelectedNodeDetails({required this.details});
   final ProxyNodeDetails details;
-  final _DelayResult? delay;
-  final String? provider;
 
   @override
   Widget build(BuildContext context) {
-    final info = details.info;
-    final server = info['server'];
-    final port = info['port'];
-    final features = [
-      if (info['type'] != null) info['type'].toString().toUpperCase(),
-      if (info['network'] != null) info['network'].toString().toUpperCase(),
-      if (info['tls'] == true) 'TLS',
-      if (info['udp'] == true) 'UDP',
-      if (info['xudp'] == true) 'XUDP',
-      if (info['smux'] == true) 'MUX',
-    ];
-    final source = provider ?? info['provider-name']?.toString();
+    final label = details.chain.length > 1
+        ? details.chain.take(2).join(' → ')
+        : details.name;
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
@@ -926,27 +901,14 @@ class _SelectedNodeDetails extends StatelessWidget {
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SelectableText(
-            details.name.isEmpty ? '未选择节点' : details.name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text([...features, _delayLabel(delay) ?? '未测速'].join(' · '),
-              style: TextStyle(color: colors.onSurfaceVariant)),
-          if (server != null)
-            SelectableText('服务器：$server${port == null ? '' : ':$port'}'),
-          if (source != null && source.isNotEmpty) Text('来源：$source'),
-          if (details.selectionPath.length > 1)
-            SelectableText('选择路径：${details.selectionPath.join(' → ')}'),
-          if (details.chain.length > 1)
-            SelectableText('连接链路：${details.chain.join(' → ')}'),
-          if (details.incomplete) const Text('链路存在循环，无法完整展开'),
-        ],
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }

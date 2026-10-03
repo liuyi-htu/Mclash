@@ -129,7 +129,8 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  testWidgets('expanded selector shows full node details and live chain',
+  testWidgets(
+      'expanded selector shows only one line for chain or selected node',
       (tester) async {
     await tester.pumpWidget(
         const MaterialApp(home: ProxyPanelPage(proxyRunning: true)));
@@ -137,15 +138,20 @@ void main() {
     await tester.tap(find.text('Test group'));
     await tester.pumpAndSettle();
     expect(find.text('SELECT · 1/2'), findsOneWidget);
-    expect(find.text('服务器：exit.example:443'), findsOneWidget);
-    expect(find.text('连接链路：Front → Node A'), findsOneWidget);
-    expect(find.byType(SelectableText), findsWidgets);
+    expect(find.text('Front → Node A'), findsOneWidget);
+    expect(tester.widget<Text>(find.text('Front → Node A')).maxLines, 1);
+    expect(find.textContaining('服务器：'), findsNothing);
+    expect(find.textContaining('来源：'), findsNothing);
+    expect(find.textContaining('选择路径：'), findsNothing);
     expect(find.textContaining('private-credential'), findsNothing);
     await tester.tap(find.text('Node B').last);
     await tester.pumpAndSettle();
     expect(find.text('SELECT · 2/2'), findsOneWidget);
-    expect(find.text('连接链路：Front → Node A'), findsNothing);
-    expect(find.text('服务器：other.example:80'), findsOneWidget);
+    expect(find.text('Front → Node A'), findsNothing);
+    expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('Node B')),
+        findsNWidgets(2));
+    expect(find.textContaining('服务器：'), findsNothing);
     expect(controller.writes.single['body'], {'name': 'Node B'});
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
