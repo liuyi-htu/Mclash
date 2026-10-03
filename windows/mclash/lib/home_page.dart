@@ -714,8 +714,6 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _coreUpdateCard(dialogContext, CoreType.mihomo, 'mihomo'),
-                const SizedBox(height: 14),
-                const Text('更新会先完成下载，再自动停止代理、替换内核并恢复运行。'),
               ],
             ),
           ),
