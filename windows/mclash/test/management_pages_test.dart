@@ -23,7 +23,8 @@ void main() {
     expect(find.byType(TextField), findsNothing);
     final position = tester.getCenter(find.byType(AddActionButton));
     expect(position.dx, greaterThan(700));
-    expect(position.dy, greaterThan(500));
+    // Align with the configuration tab button above its navigation bar.
+    expect(position.dy, closeTo(475, 1));
     await tester.tap(find.byTooltip('添加节点'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'bad');

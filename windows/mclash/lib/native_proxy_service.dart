@@ -6,7 +6,11 @@ class NativeProxyService implements ProxyPlatformService {
   NativeProxyService._() : _delegate = WindowsProxyPlatformService();
 
   static final NativeProxyService instance = NativeProxyService._();
-  final ProxyPlatformService _delegate;
+  final WindowsProxyPlatformService _delegate;
+
+  Future<String> getDelayResults() => _delegate.getDelayResults();
+  Future<void> setDelayResults(String json) => _delegate.setDelayResults(json);
+  Future<List<String>> getProxyGroupOrder() => _delegate.getProxyGroupOrder();
 
   @override
   Future<bool> isRunning() => _delegate.isRunning();

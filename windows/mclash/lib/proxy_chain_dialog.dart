@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 Future<List<String>?> _selectNodes(BuildContext context, String title,
-    List<String> nodes, List<String> initial) async {
+    List<String> nodes, List<String> initial, String clearLabel) async {
   final selected = initial.toSet();
   var query = '';
   return showDialog<List<String>>(
@@ -39,8 +39,8 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                   child: const Text('全选'),
                 ),
                 TextButton(
-                  onPressed: () => setState(selected.clear),
-                  child: const Text('清空选择'),
+                  onPressed: () => Navigator.of(context).pop(<String>[]),
+                  child: Text(clearLabel),
                 ),
               ]),
               SizedBox(
@@ -198,7 +198,8 @@ Future<bool> showProxyChainDialog({
                                         .where(
                                             (name) => !current.contains(name))
                                         .toList(),
-                                    other);
+                                    other,
+                                    prepend ? '清空选择' : '清除后置代理');
                                 if (values != null && context.mounted) {
                                   setDialogState(() {
                                     other = values;
@@ -281,8 +282,8 @@ Future<bool> showProxyChainDialog({
                                         !other.contains(name) &&
                                         !excludedTargets.contains(name))
                                     .toList();
-                                final values = await _selectNodes(
-                                    context, '选择作用节点', eligible, current);
+                                final values = await _selectNodes(context,
+                                    '选择作用节点', eligible, current, '清空选择');
                                 if (values != null && context.mounted) {
                                   setDialogState(() {
                                     current = values;
@@ -331,28 +332,30 @@ Future<bool> showProxyChainDialog({
                         saving ? null : () => Navigator.of(context).pop(false),
                     child: const Text('取消')),
                 FilledButton(
-                  onPressed:
-                      saving || other.isEmpty || other.length == nodes.length
-                          ? null
-                          : () async {
+                  onPressed: saving ||
+                          (other.isEmpty && initialNodes.isEmpty) ||
+                          (other.isNotEmpty && current.isEmpty) ||
+                          other.length == nodes.length
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            saving = true;
+                            error = null;
+                          });
+                          try {
+                            await onSave(current, other);
+                            if (context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          } catch (failure) {
+                            if (context.mounted) {
                               setDialogState(() {
-                                saving = true;
-                                error = null;
+                                saving = false;
+                                error = failure.toString();
                               });
-                              try {
-                                await onSave(current, other);
-                                if (context.mounted) {
-                                  Navigator.of(context).pop(true);
-                                }
-                              } catch (failure) {
-                                if (context.mounted) {
-                                  setDialogState(() {
-                                    saving = false;
-                                    error = failure.toString();
-                                  });
-                                }
-                              }
-                            },
+                            }
+                          }
+                        },
                   child: Text(saving ? '保存中…' : '保存'),
                 ),
               ],

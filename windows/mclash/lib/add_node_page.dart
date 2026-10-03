@@ -109,7 +109,7 @@ class _AddNodePageState extends State<AddNodePage> {
               tooltip: '添加节点', onPressed: _saving ? null : _add),
           body: ManagementBody(
               child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 168),
             children: [
               if (_saving) const LinearProgressIndicator(),
               if (_error != null)

@@ -132,7 +132,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                     absorbing: _saving,
                     child: mode == ConfigManagementMode.rules
                         ? ReorderableListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
                             itemCount: rules.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
@@ -181,7 +181,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                                       Icon(Icons.drag_handle))),
                                         ]))))
                         : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
                             itemCount: groups.length,
                             itemBuilder: (context, index) {
                               final group = groups[index];

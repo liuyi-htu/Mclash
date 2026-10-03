@@ -15,12 +15,15 @@ import 'subscription_host_dialog.dart';
 import 'app_notice.dart';
 import 'models.dart';
 import 'native_proxy_service.dart';
+import 'proxy_platform_service.dart';
 import 'config_editor_page.dart';
 
 enum _AddConfigAction { local, subscription }
 
 class ConfigPage extends StatefulWidget {
-  const ConfigPage({super.key, required this.proxyRunning});
+  const ConfigPage({super.key, required this.proxyRunning, this.service});
+
+  final ProxyPlatformService? service;
 
   final bool proxyRunning;
 
@@ -29,7 +32,8 @@ class ConfigPage extends StatefulWidget {
 }
 
 class _ConfigPageState extends State<ConfigPage> {
-  final _service = NativeProxyService.instance;
+  late final ProxyPlatformService _service =
+      widget.service ?? NativeProxyService.instance;
 
   List<ConfigProfile> _profiles = const [];
   bool _loading = true;
@@ -1019,44 +1023,6 @@ class _ConfigPageState extends State<ConfigPage> {
     final colors = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('配置文件'),
-      ),
-      floatingActionButton: PopupMenuButton<_AddConfigAction>(
-        enabled: !_working && !widget.proxyRunning,
-        tooltip: widget.proxyRunning ? '请先停止代理' : '添加配置',
-        onSelected: _handleAdd,
-        constraints: const BoxConstraints(minWidth: 190, maxWidth: 230),
-        child: AddActionIcon(enabled: !_working && !widget.proxyRunning),
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: _AddConfigAction.local,
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.file_open_outlined),
-                const SizedBox(width: 12),
-                Text('导入 mihomo YAML'),
-              ],
-            ),
-          ),
-          const PopupMenuItem(
-            value: _AddConfigAction.subscription,
-            height: 48,
-            padding: EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.cloud_download_outlined),
-                SizedBox(width: 12),
-                Text('添加机场订阅'),
-              ],
-            ),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           if (_working) const LinearProgressIndicator(minHeight: 3),
@@ -1069,40 +1035,24 @@ class _ConfigPageState extends State<ConfigPage> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
                       children: [
-                        if (widget.proxyRunning) ...[
-                          Container(
-                            padding: const EdgeInsets.all(15),
-                            decoration: BoxDecoration(
-                              color: colors.tertiaryContainer,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.info_outline,
-                                  color: colors.onTertiaryContainer,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    '代理运行期间只能查看配置，停止代理后才能修改。',
-                                    style: TextStyle(
-                                      color: colors.onTertiaryContainer,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
                         Container(
                           padding: const EdgeInsets.all(18),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Color(0xFF356AE6), Color(0xFF5B8CFF)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF3167F4), Color(0xFF4938EE)],
                             ),
-                            borderRadius: BorderRadius.circular(24),
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF356AE6,
+                                ).withValues(alpha: 0.20),
+                                blurRadius: 26,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
                           ),
                           child: Row(
                             children: [
@@ -1180,7 +1130,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                   ),
                                   const SizedBox(height: 7),
                                   Text(
-                                    '点击右上角“＋”导入 mihomo YAML\n或添加机场订阅',
+                                    '点击右下角“＋”导入 YAML\n或添加机场订阅',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: colors.onSurfaceVariant,
@@ -1208,22 +1158,20 @@ class _ConfigPageState extends State<ConfigPage> {
                                       },
                                 onLongPress: _working
                                     ? null
-                                    : () {
-                                        _showActions(profile);
-                                      },
+                                    : () => _showActions(profile),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(15),
+                                  padding: const EdgeInsets.all(18),
                                   child: Row(
                                     children: [
                                       Container(
-                                        width: 50,
-                                        height: 50,
+                                        width: 48,
+                                        height: 48,
                                         decoration: BoxDecoration(
                                           color: profile.active
                                               ? colors.primaryContainer
                                               : colors.surfaceContainerHighest,
                                           borderRadius: BorderRadius.circular(
-                                            16,
+                                            15,
                                           ),
                                         ),
                                         child: Icon(
@@ -1235,7 +1183,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                               : colors.onSurfaceVariant,
                                         ),
                                       ),
-                                      const SizedBox(width: 14),
+                                      const SizedBox(width: 15),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:
@@ -1252,7 +1200,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                                     style: const TextStyle(
                                                       fontWeight:
                                                           FontWeight.w800,
-                                                      fontSize: 15.5,
+                                                      fontSize: 18,
                                                     ),
                                                   ),
                                                 ),
@@ -1288,8 +1236,8 @@ class _ConfigPageState extends State<ConfigPage> {
                                             Text(
                                               widget.proxyRunning
                                                   ? (profile.isSubscription
-                                                      ? '机场订阅 · 点击查看'
-                                                      : '本地 YAML · 点击查看')
+                                                      ? '机场订阅 · 长按更新或修改'
+                                                      : '本地 YAML · 长按修改内容')
                                                   : (profile.isSubscription
                                                       ? '机场订阅 · 长按管理'
                                                       : '本地 YAML · 长按管理'),
@@ -1301,15 +1249,13 @@ class _ConfigPageState extends State<ConfigPage> {
                                           ],
                                         ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Icon(
-                                        profile.active
-                                            ? Icons.check_circle_rounded
-                                            : Icons.chevron_right_rounded,
-                                        color: profile.active
-                                            ? colors.primary
-                                            : colors.outline,
-                                      ),
+                                      if (profile.active) ...[
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          color: colors.primary,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -1322,6 +1268,39 @@ class _ConfigPageState extends State<ConfigPage> {
                   ),
           ),
         ],
+      ),
+      floatingActionButton: PopupMenuButton<_AddConfigAction>(
+        enabled: !_working,
+        tooltip: '添加配置',
+        onSelected: _handleAdd,
+        offset: const Offset(0, -128),
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _AddConfigAction.local,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.file_open_outlined, size: 21),
+                SizedBox(width: 11),
+                Text('导入本地 YAML'),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: _AddConfigAction.subscription,
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_download_outlined, size: 21),
+                SizedBox(width: 11),
+                Text('添加机场订阅'),
+              ],
+            ),
+          ),
+        ],
+        child: AddActionIcon(enabled: !_working),
       ),
     );
   }

@@ -95,7 +95,7 @@ class _SubscriptionManagementPageState
               ),
             Expanded(
               child: ReorderableListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
                 buildDefaultDragHandles: false,
                 // Keep compatibility with the Flutter 3.32 CI toolchain.
                 // ignore: deprecated_member_use
