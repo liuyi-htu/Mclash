@@ -1171,7 +1171,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             onCoreUpdate: () async {
               await showDialog<void>(
                 context: context,
-                barrierDismissible: false,
                 builder: (_) => CoreUpdateDialog(proxyStatus: _proxyStatus),
               );
               await _refresh();
