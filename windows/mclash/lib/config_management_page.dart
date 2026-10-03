@@ -147,7 +147,15 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                 key: ValueKey('$index:${rules[index]}'),
                                 child: ListTile(
                                     key: ValueKey('$index:${rules[index]}'),
-                                    title: Text(rules[index]),
+                                    title: ScrollConfiguration(
+                                      behavior: ScrollConfiguration.of(context)
+                                          .copyWith(scrollbars: false),
+                                      child: SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Text(rules[index],
+                                            maxLines: 1, softWrap: false),
+                                      ),
+                                    ),
                                     leading: Text('${index + 1}',
                                         style: TextStyle(
                                             color: Theme.of(context)
@@ -237,6 +245,16 @@ const _ruleTypes = [
   'MATCH'
 ];
 
+InputDecoration _managementFieldDecoration(String label) => InputDecoration(
+      labelText: label,
+      filled: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+    );
+
 Future<String?> _ruleDialog(
     BuildContext context, String? initial, List<String> policies) async {
   final parts = initial?.split(',') ?? [];
@@ -258,68 +276,82 @@ Future<String?> _ruleDialog(
         builder: (context) => StatefulBuilder(
             builder: (context, update) => AlertDialog(
                   title: Text(initial == null ? '新增规则' : '编辑规则'),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                   content: SizedBox(
                       width: 480,
                       child: SingleChildScrollView(
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                        SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('编辑完整单条规则'),
-                            value: advanced,
-                            onChanged: (value) =>
-                                update(() => advanced = value)),
-                        if (advanced)
-                          TextField(
-                              controller: raw,
-                              minLines: 2,
-                              maxLines: 6,
-                              decoration: const InputDecoration(
-                                  labelText: 'Mihomo 规则',
-                                  helperText: '支持 AND、OR、NOT、SUB-RULE 等复杂规则'))
-                        else ...[
-                          DropdownButtonFormField<String>(
-                              value: type,
-                              decoration:
-                                  const InputDecoration(labelText: '规则类型'),
-                              items: [
-                                for (final item in _ruleTypes)
-                                  DropdownMenuItem(
-                                      value: item, child: Text(item))
-                              ],
-                              onChanged: (value) =>
-                                  update(() => type = value!)),
-                          if (type != 'MATCH')
-                            TextField(
-                                controller: expression,
-                                decoration:
-                                    const InputDecoration(labelText: '匹配内容')),
-                          DropdownButtonFormField<String>(
-                              value: target,
-                              isExpanded: true,
-                              decoration:
-                                  const InputDecoration(labelText: '目标策略'),
-                              items: [
-                                for (final policy in policies)
-                                  DropdownMenuItem(
-                                      value: policy,
-                                      child: Text(policy,
-                                          overflow: TextOverflow.ellipsis))
-                              ],
-                              onChanged: (value) => target = value!),
-                          if (['GEOIP', 'IP-CIDR', 'IP-CIDR6', 'RULE-SET']
-                              .contains(type))
-                            CheckboxListTile(
-                                title: const Text('不触发 DNS 解析（no-resolve）'),
-                                value: noResolve,
+                          child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                            SwitchListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('编辑完整单条规则'),
+                                value: advanced,
                                 onChanged: (value) =>
-                                    update(() => noResolve = value!)),
-                        ],
-                        if (error != null)
-                          Text(error!,
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error)),
-                      ]))),
+                                    update(() => advanced = value)),
+                            const SizedBox(height: 12),
+                            if (advanced)
+                              TextField(
+                                  controller: raw,
+                                  minLines: 2,
+                                  maxLines: 6,
+                                  decoration: _managementFieldDecoration(
+                                          'Mihomo 规则')
+                                      .copyWith(
+                                          helperText:
+                                              '支持 AND、OR、NOT、SUB-RULE 等复杂规则'))
+                            else ...[
+                              DropdownButtonFormField<String>(
+                                  value: type,
+                                  isExpanded: true,
+                                  decoration:
+                                      _managementFieldDecoration('规则类型'),
+                                  items: [
+                                    for (final item in _ruleTypes)
+                                      DropdownMenuItem(
+                                          value: item,
+                                          child: Text(item,
+                                              overflow: TextOverflow.ellipsis))
+                                  ],
+                                  onChanged: (value) =>
+                                      update(() => type = value!)),
+                              if (type != 'MATCH') ...[
+                                const SizedBox(height: 12),
+                                TextField(
+                                    controller: expression,
+                                    decoration:
+                                        _managementFieldDecoration('匹配内容')),
+                              ],
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                  value: target,
+                                  isExpanded: true,
+                                  decoration:
+                                      _managementFieldDecoration('目标策略'),
+                                  items: [
+                                    for (final policy in policies)
+                                      DropdownMenuItem(
+                                          value: policy,
+                                          child: Text(policy,
+                                              overflow: TextOverflow.ellipsis))
+                                  ],
+                                  onChanged: (value) => target = value!),
+                              if (['GEOIP', 'IP-CIDR', 'IP-CIDR6', 'RULE-SET']
+                                  .contains(type))
+                                CheckboxListTile(
+                                    title: const Text('不触发 DNS 解析（no-resolve）'),
+                                    value: noResolve,
+                                    onChanged: (value) =>
+                                        update(() => noResolve = value!)),
+                            ],
+                            if (error != null)
+                              Text(error!,
+                                  style: TextStyle(
+                                      color:
+                                          Theme.of(context).colorScheme.error)),
+                          ]))),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -393,55 +425,100 @@ Future<String?> _groupDialog(
         builder: (context) => StatefulBuilder(
             builder: (context, update) => AlertDialog(
                   title: Text(initial == null ? '新增代理组' : '编辑代理组'),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                   content: SizedBox(
                       width: 480,
                       child: SingleChildScrollView(
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                        TextField(
-                            controller: name,
-                            enabled: !isProtectedConfigGroup(
-                                initial?['name'] as String?),
-                            decoration: const InputDecoration(labelText: '名称')),
-                        DropdownButtonFormField<String>(
-                            value: type,
-                            decoration: const InputDecoration(labelText: '类型'),
-                            items: [
-                              for (final item in types)
-                                DropdownMenuItem(value: item, child: Text(item))
+                          child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                            TextField(
+                                controller: name,
+                                enabled: !isProtectedConfigGroup(
+                                    initial?['name'] as String?),
+                                decoration: _managementFieldDecoration('名称')),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                                value: type,
+                                decoration: _managementFieldDecoration('类型'),
+                                items: [
+                                  for (final item in types)
+                                    DropdownMenuItem(
+                                        value: item,
+                                        child: Text(item,
+                                            overflow: TextOverflow.ellipsis))
+                                ],
+                                onChanged: (value) =>
+                                    update(() => type = value!)),
+                            if (type != 'select') ...[
+                              const SizedBox(height: 12),
+                              TextField(
+                                  controller: url,
+                                  decoration:
+                                      _managementFieldDecoration('测速地址')),
+                              const SizedBox(height: 12),
+                              TextField(
+                                  controller: interval,
+                                  keyboardType: TextInputType.number,
+                                  decoration:
+                                      _managementFieldDecoration('检测间隔（秒）')),
                             ],
-                            onChanged: (value) => update(() => type = value!)),
-                        if (type != 'select') ...[
-                          TextField(
-                              controller: url,
-                              decoration:
-                                  const InputDecoration(labelText: '测速地址')),
-                          TextField(
-                              controller: interval,
-                              keyboardType: TextInputType.number,
-                              decoration:
-                                  const InputDecoration(labelText: '检测间隔（秒）')),
-                        ],
-                        TextField(
-                            controller: filter,
-                            minLines: 1,
-                            maxLines: 4,
-                            decoration:
-                                const InputDecoration(labelText: '正则表达式')),
-                        Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text('当前成员（${selected.length}）：保存正则后重新匹配')),
-                        if (error != null)
-                          Text(error!,
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error)),
-                        SizedBox(
-                            height: 240,
-                            child: ListView(children: [
-                              for (final member in selected)
-                                ListTile(dense: true, title: Text(member)),
-                            ])),
-                      ]))),
+                            const SizedBox(height: 12),
+                            TextField(
+                                controller: filter,
+                                minLines: 1,
+                                maxLines: 4,
+                                decoration:
+                                    _managementFieldDecoration('正则表达式')),
+                            const SizedBox(height: 12),
+                            if (error != null)
+                              Text(error!,
+                                  style: TextStyle(
+                                      color:
+                                          Theme.of(context).colorScheme.error)),
+                            Container(
+                              constraints: BoxConstraints(
+                                maxHeight:
+                                    (MediaQuery.sizeOf(context).height * 0.32)
+                                        .clamp(96.0, 240.0),
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outlineVariant),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: ListView.builder(
+                                primary: false,
+                                shrinkWrap: true,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4),
+                                itemCount: selected.length,
+                                itemBuilder: (context, index) => ListTile(
+                                  minTileHeight: 48,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 14),
+                                  title: ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(scrollbars: false),
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Text(selected[index],
+                                          maxLines: 1,
+                                          softWrap: false,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ]))),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(context),

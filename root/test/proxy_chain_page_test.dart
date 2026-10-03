@@ -36,7 +36,7 @@ void main() {
     expect(find.text('链式节点 1'), findsOneWidget);
     await tester.tap(find.text('链式节点 1'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('清空选择'));
     await tester.pumpAndSettle();

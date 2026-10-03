@@ -34,6 +34,53 @@ rules: ["MATCH,DIRECT"]
   });
 
   testWidgets(
+      'adding a subscription uses a scrollable dialog without ordering notes',
+      (tester) async {
+    Map<Object?, Object?>? saved;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'addSubscription') {
+        saved = Map<Object?, Object?>.from(call.arguments as Map);
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    tester.view.physicalSize = const Size(390, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('添加配置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加机场订阅'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('拖动调整机场顺序'), findsNothing);
+    await tester.enterText(find.widgetWithText(TextField, '配置名称'), '测试配置');
+    await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '机场甲');
+    await tester.enterText(
+        find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/a');
+    tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('添加并下载'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(saved, {
+      'name': '测试配置',
+      'url': 'https://example.org/a',
+      'subscriptionNames': {'https://example.org/a': '机场甲'},
+    });
+    expect(find.text('订阅已添加'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'configuration menu follows YAML section order and handles unreadable files',
       (tester) async {
     const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '规则管理'];
@@ -461,14 +508,14 @@ rules: ["MATCH,DIRECT"]
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNull);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KR').last);
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
     expect(find.textContaining('选择当前节点'), findsNothing);
     expect(find.textContaining('本机 →'), findsNothing);
-    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.tap(find.byTooltip('选择作用节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('上海'));
     await tester.tap(find.text('确定'));
@@ -486,9 +533,9 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.text('链式节点 1'));
     await tester.pumpAndSettle();
-    expect(find.text('选择前置节点（已选 1 个）'), findsOneWidget);
+    expect(find.text('前置节点（1）'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     expect(
         tester
@@ -541,12 +588,12 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.byTooltip('新增链式节点'));
     await tester.pumpAndSettle();
     expect(find.text('链式节点 2'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('front2'));
     await tester.tap(find.text('确定'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.tap(find.byTooltip('选择作用节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('KR'));
     await tester.tap(find.text('确定'));
@@ -800,7 +847,7 @@ rules: ["MATCH,DIRECT"]
                 child: const Text('打开')))));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('全选'));
     await tester.pumpAndSettle();
@@ -811,8 +858,8 @@ rules: ["MATCH,DIRECT"]
         isTrue);
     await tester.tap(find.text('清空选择'));
     await tester.pumpAndSettle();
-    expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
-    await tester.tap(find.textContaining('选择前置节点（已选'));
+    expect(find.text('前置节点（0）'), findsOneWidget);
+    await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNWidgets(4));
     expect(
@@ -829,7 +876,7 @@ rules: ["MATCH,DIRECT"]
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNull);
-    await tester.tap(find.textContaining('选择作用节点（已选'));
+    await tester.tap(find.byTooltip('选择作用节点'));
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNWidgets(2));
     expect(
@@ -866,18 +913,21 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpAndSettle();
       expect(
           tester
-              .widgetList<ListTile>(find.byType(ListTile))
-              .map((tile) => (tile.title as Text).data),
+              .widgetList<ListTile>(find.descendant(
+                  of: find.byType(ReorderableListView),
+                  matching: find.byType(ListTile)))
+              .map((tile) => (tile.key as ValueKey<String>).value),
           ['D', 'C']);
-      await tester
-          .tap(find.textContaining(prepend ? '选择前置节点（已选' : '选择后置节点（已选'));
+      await tester.tap(find.byTooltip(prepend ? '选择前置节点' : '选择后置节点'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('确定'));
       await tester.pumpAndSettle();
       expect(
           tester
-              .widgetList<ListTile>(find.byType(ListTile))
-              .map((tile) => (tile.title as Text).data),
+              .widgetList<ListTile>(find.descendant(
+                  of: find.byType(ReorderableListView),
+                  matching: find.byType(ListTile)))
+              .map((tile) => (tile.key as ValueKey<String>).value),
           ['D', 'C']);
       final handle = find.byType(ReorderableDragStartListener).last;
       final gesture = await tester.startGesture(tester.getCenter(handle));
@@ -914,7 +964,7 @@ rules: ["MATCH,DIRECT"]
                 ))));
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('选择后置节点（已选'));
+    await tester.tap(find.byTooltip('选择后置节点'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('B').last);
     await tester.tap(find.text('确定'));
