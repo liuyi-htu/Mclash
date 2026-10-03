@@ -19,7 +19,6 @@ const _configActionSections = {
   'host': 'proxies',
   'prependProxy': 'proxies',
   'groups': 'proxy-groups',
-  'filters': 'proxy-groups',
   'rules': 'rules',
 };
 
@@ -135,7 +134,7 @@ void _validateGraph(String content) {
 }
 
 String updateConfigGroup(String content, Map<String, dynamic> group,
-    {String? oldName}) {
+    {String? oldName, String? filter}) {
   final name = (group['name'] as String).trim();
   if (isProtectedConfigGroup(oldName) && name != oldName) {
     throw const FormatException('国内和国外代理组的名称不可修改');
@@ -163,7 +162,7 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
             .asMap()
             .entries
             .any((entry) => entry.value != members[entry.key])) {
-      throw const FormatException('代理组成员只能通过正则设置修改');
+      throw const FormatException('代理组成员只能通过节点匹配正则修改');
     }
   }
   if (members.contains(name) ||
@@ -216,7 +215,8 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
     filters[name] = filters.remove(oldName)!;
   }
   if (index < 0) filters[name] = '';
-  final result = writeSubscriptionFilters(editor.toString(), filters);
+  var result = writeSubscriptionFilters(editor.toString(), filters);
+  if (filter != null) result = editSubscriptionFilter(result, name, filter);
   _validateGraph(result);
   return result;
 }
@@ -268,7 +268,7 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
     }
     if (line.startsWith('# Mclash 节点链路: ')) return 'prependProxy';
     if (line.startsWith('# Mclash 链路代理组: ')) return 'groups';
-    if (line.startsWith(groupFilterPrefix)) return 'filters';
+    if (line.startsWith(groupFilterPrefix)) return 'groups';
     return null;
   }
 
@@ -278,6 +278,9 @@ String orderRuntimeMetadata(String content, {String? profileContent}) {
         (index, lines[index].trimRight())
   ];
   num rank(String line) {
+    if (line.startsWith(groupFilterPrefix)) {
+      return actions.indexOf('groups') + 0.1;
+    }
     if (line.startsWith(backChainPrefix)) {
       return actions.indexOf("prependProxy") + 0.5;
     }

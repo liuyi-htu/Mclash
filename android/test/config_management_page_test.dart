@@ -66,7 +66,7 @@ void main() {
     expect(find.byType(CheckboxListTile), findsNothing);
     expect(find.text('JP'), findsOneWidget);
     expect(find.text('北京'), findsNothing);
-    expect(find.textContaining('通过正则设置修改'), findsWidgets);
+    expect(find.textContaining('保存正则后重新匹配'), findsWidgets);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -106,20 +106,46 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         home: ConfigManagementPage(
             content: source,
-            mode: ConfigManagementMode.filters,
+            mode: ConfigManagementMode.groups,
             onSave: (value) async {
               saved = value;
             })));
     await tester.tap(find.text('自选'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '^北');
+    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '^北');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(readSubscriptionFilters(saved!)['自选'], '^北');
     expect(loadYaml(saved!)['proxy-groups'][1]['proxies'], ['北京']);
-    expect(find.text('^北'), findsOneWidget);
+    expect(find.text('编辑代理组'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('invalid regex stays in the edit dialog without saving',
+      (tester) async {
+    var saves = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {
+              saves++;
+            })));
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '[');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    expect(find.text('编辑代理组'), findsOneWidget);
+    expect(find.textContaining('FormatException'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '^JP');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(find.text('编辑代理组'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('failed save keeps the existing configuration', (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: ConfigManagementPage(

@@ -43,6 +43,18 @@ void main() {
     tester.binding.handleMetricsChanged();
     await tester.pumpAndSettle();
     expect(observed!.padding.top, 12);
+    // Native layout can settle after Flutter's resize notification.
+    inset = 0;
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'mclash/window',
+      const StandardMethodCodec().encodeMethodCall(
+        const MethodCall('windowChanged'),
+      ),
+      (_) {},
+    );
+    await tester.pumpAndSettle();
+    expect(observed!.padding.top, 0);
+    expect(observed!.viewPadding.top, 0);
     // Exiting the small window restores the original fullscreen safe area.
     inset = null;
     tester.binding.handleMetricsChanged();

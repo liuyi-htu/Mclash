@@ -172,6 +172,22 @@ void main() {
             oldName: '自选'),
         throwsFormatException);
   });
+  test('group rename and regex edit save together', () {
+    final edited = updateConfigGroup(
+        source,
+        {
+          'name': '更名',
+          'type': 'select',
+          'proxies': ['JP']
+        },
+        oldName: '自选',
+        filter: '^北');
+    expect(readSubscriptionFilters(edited)['更名'], '^北');
+    expect(readSubscriptionFilters(edited).containsKey('自选'), isFalse);
+    expect(configGroups(edited)[1]['proxies'], ['北京']);
+    expect(configRules(edited).first, contains('更名'));
+  });
+
   test('members can only change through regex and group edits preserve filters',
       () {
     final filtered = editSubscriptionFilter(source, '自选', '^北');

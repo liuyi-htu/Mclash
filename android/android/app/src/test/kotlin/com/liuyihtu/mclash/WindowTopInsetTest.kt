@@ -12,7 +12,13 @@ class WindowTopInsetTest {
     }
     @Test fun overlappingCaptionAndCutoutRemainProtected() {
         assertEquals(32, requiredWindowTopInset(24, 32, 0, 200, 0))
-        assertEquals(40, requiredWindowTopInset(24, 32, 40, 200, 0))
+        assertEquals(32, requiredWindowTopInset(24, 32, 40, 200, 0))
+        assertEquals(40, requiredWindowTopInset(24, 0, 40, 0, 0))
+    }
+    @Test fun movingBelowTheCutoutRemovesItsOldWhiteSpace() {
+        assertEquals(40, requiredWindowTopInset(24, 0, 40, 0, 0))
+        assertEquals(0, requiredWindowTopInset(24, 0, 40, 200, 0))
+        assertEquals(0, requiredWindowTopInset(24, 0, 40, 40, 0))
     }
     @Test fun topSplitScreenStillProtectsVisibleStatusBar() {
         assertEquals(24, requiredWindowTopInset(24, 0, 0, 0, 0))

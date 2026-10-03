@@ -1,12 +1,13 @@
+import 'add_action_button.dart';
 import 'config_management.dart' show configActionOrder;
 import 'config_management_page.dart';
 import 'subscription_links.dart';
-import 'subscription_usage.dart';
+import 'subscription_management_page.dart';
 import 'package:flutter/material.dart';
 import 'proxy_chain.dart';
-import 'proxy_chain_dialog.dart';
+import 'proxy_chain_page.dart';
 import 'node_link.dart';
-import 'add_node_dialog.dart';
+import 'add_node_page.dart';
 import 'subscription_host.dart';
 import 'subscription_host_dialog.dart';
 
@@ -121,13 +122,12 @@ class _ConfigPageState extends State<ConfigPage> {
         urlControllers.map((controller) => controller.text).join('\n');
     String? validationMessage;
 
-    final route = DialogRoute<bool>(
-      context: context,
-      barrierDismissible: !_working,
+    final route = MaterialPageRoute<bool>(
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
-          content: SingleChildScrollView(
+        builder: (dialogContext, setDialogState) => Scaffold(
+          appBar: AppBar(title: Text(existing == null ? '添加机场订阅' : '修改机场订阅')),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -218,17 +218,6 @@ class _ConfigPageState extends State<ConfigPage> {
                     ],
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => setDialogState(() {
-                      urlControllers.add(TextEditingController());
-                      airportNameControllers.add(TextEditingController());
-                    }),
-                    icon: const Icon(Icons.add),
-                    label: const Text('添加订阅链接'),
-                  ),
-                ),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text('拖动调整机场顺序；多个机场的节点按序号加前缀，如 1-香港'),
@@ -248,44 +237,57 @@ class _ConfigPageState extends State<ConfigPage> {
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (nameController.text.isEmpty) {
-                  setDialogState(() => validationMessage = '请输入名称');
-                  return;
-                }
-                for (var i = 0; i < urlControllers.length; i++) {
-                  if (airportNameControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的名称');
-                    return;
-                  }
-                  if (urlControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
-                    return;
-                  }
-                }
-                try {
-                  final links = subscriptionLinks(enteredUrls());
-                  if (links.length != urlControllers.length) {
-                    setDialogState(() => validationMessage = '订阅链接重复，请删除重复项');
-                    return;
-                  }
-                } on FormatException catch (error) {
-                  setDialogState(() => validationMessage = error.message);
-                  return;
-                }
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: Text(existing == null ? '添加并下载' : '保存并更新'),
-            ),
-          ],
+          floatingActionButton: AddActionButton(
+            tooltip: '添加订阅链接',
+            onPressed: () => setDialogState(() {
+              urlControllers.add(TextEditingController());
+              airportNameControllers.add(TextEditingController());
+            }),
+          ),
+          bottomNavigationBar: SafeArea(
+              child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child:
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('取消'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        if (nameController.text.isEmpty) {
+                          setDialogState(() => validationMessage = '请输入名称');
+                          return;
+                        }
+                        for (var i = 0; i < urlControllers.length; i++) {
+                          if (airportNameControllers[i].text.trim().isEmpty) {
+                            setDialogState(
+                                () => validationMessage = '请输入机场 ${i + 1} 的名称');
+                            return;
+                          }
+                          if (urlControllers[i].text.trim().isEmpty) {
+                            setDialogState(() =>
+                                validationMessage = '请输入机场 ${i + 1} 的订阅链接');
+                            return;
+                          }
+                        }
+                        try {
+                          final links = subscriptionLinks(enteredUrls());
+                          if (links.length != urlControllers.length) {
+                            setDialogState(
+                                () => validationMessage = '订阅链接重复，请删除重复项');
+                            return;
+                          }
+                        } on FormatException catch (error) {
+                          setDialogState(
+                              () => validationMessage = error.message);
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(true);
+                      },
+                      child: Text(existing == null ? '添加并下载' : '保存并更新'),
+                    ),
+                  ]))),
         ),
       ),
     );
@@ -612,24 +614,24 @@ class _ConfigPageState extends State<ConfigPage> {
       final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
       setState(() => _working = false);
-      final saved = await showAddNodeDialog(
-        context: context,
-        nodes: savedManualNodeNames(content),
-        onDelete: (name) async {
-          final latest = await _service.getConfigContent(profile.id);
-          final updated = deleteManualNode(latest, name);
-          await _service.saveConfigContent(id: profile.id, content: updated);
-          return savedManualNodeNames(updated);
-        },
-        onSave: (link) async {
-          final content = await _service.getConfigContent(profile.id);
-          await _service.saveConfigContent(
-            id: profile.id,
-            content: addNodeLink(content, link),
-          );
-        },
-      );
-      if (saved && mounted) await _load();
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => AddNodePage(
+          nodes: savedManualNodeNames(content),
+          onDelete: (name) async {
+            final latest = await _service.getConfigContent(profile.id);
+            final updated = deleteManualNode(latest, name);
+            await _service.saveConfigContent(id: profile.id, content: updated);
+            return savedManualNodeNames(updated);
+          },
+          onSave: (link) async {
+            final content = await _service.getConfigContent(profile.id);
+            final updated = addNodeLink(content, link);
+            await _service.saveConfigContent(id: profile.id, content: updated);
+            return savedManualNodeNames(updated);
+          },
+        ),
+      ));
+      if (mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -638,75 +640,24 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _editProxyChain(ConfigProfile profile) async {
-    const prepend = true;
     if (!_ensureStopped()) return;
     try {
       setState(() => _working = true);
       final content = await _service.getConfigContent(profile.id);
-      final nodes = savedProxyNodeNames(content);
-      if (nodes.length < 2) throw const FormatException('请先保存至少两个节点');
+      if (savedProxyNodeNames(content).length < 2) {
+        throw const FormatException('请先保存至少两个节点');
+      }
       if (!mounted) return;
       setState(() => _working = false);
-      final sets = readProxyChainSets(content);
-      const role = 'front';
-      final existing = sets.entries
-          .where((entry) => (entry.value[role] ?? []).isNotEmpty)
-          .toList();
-      String? id;
-      if (existing.isNotEmpty) {
-        id = await showModalBottomSheet<String>(
-          context: context,
-          showDragHandle: true,
-          builder: (sheetContext) => SafeArea(
-              child: ListView(
-            shrinkWrap: true,
-            children: [
-              for (final entry in existing)
-                ListTile(
-                  title: Text('链式节点 ${entry.key}'),
-                  subtitle: Text(
-                      '${entry.value[role]!.join(' → ')}\n作用节点：${(entry.value['${role}Targets'] ?? []).join('、')}'),
-                  isThreeLine: true,
-                  onTap: () => Navigator.of(sheetContext).pop(entry.key),
-                ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('新增链式节点'),
-                onTap: () => Navigator.of(sheetContext).pop('new'),
-              ),
-            ],
-          )),
-        );
-        if (id == null || !mounted) return;
-      }
-      final chainId =
-          id == null || id == 'new' ? nextProxyChainSetId(content) : id;
-      final initial = sets[chainId] ?? const <String, List<String>>{};
-      final saved = await showProxyChainDialog(
-        context: context,
-        nodes: nodes,
-        prepend: prepend,
-        chainLabel: '链式节点 $chainId',
-        initialNodes: initial[role] ?? const [],
-        initialTargets: initial['${role}Targets'] ?? const [],
-        excludedTargets: [
-          for (final entry in sets.entries)
-            if (entry.key != chainId) ...[
-              ...entry.value['front'] ?? <String>[],
-              ...entry.value['back'] ?? <String>[]
-            ]
-        ],
-        onSave: (current, other) async {
-          final latest = await _service.getConfigContent(profile.id);
-          await _service.saveConfigContent(
-            id: profile.id,
-            content: setProxyChainSet(latest, chainId, other,
-                prepend: prepend, targets: current),
-          );
-        },
-      );
-      if (saved && mounted) await _load();
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ProxyChainPage(
+                content: content,
+                onSave: (next) async {
+                  await _service.saveConfigContent(
+                      id: profile.id, content: next);
+                },
+              )));
+      if (mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -853,77 +804,27 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showSubscriptionActions(ConfigProfile profile) async {
-    var current = profile;
-    while (mounted) {
-      final links = subscriptionLinks(current.url ?? '');
-      List<String>? reordered;
-      final choice = await showModalBottomSheet<String>(
-        context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(
-            child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
-          child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SizedBox(
-              width: double.maxFinite,
-              height: links.length * 88.0,
-              child: ReorderableListView(
-                shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-                buildDefaultDragHandles: false,
-                // ignore: deprecated_member_use
-                onReorder: (oldIndex, newIndex) {
-                  if (widget.proxyRunning) return;
-                  if (newIndex > oldIndex) newIndex--;
-                  if (newIndex == oldIndex) return;
-                  reordered = [...links];
-                  reordered!.insert(newIndex, reordered!.removeAt(oldIndex));
-                  Navigator.of(sheetContext).pop('reorder');
-                },
-                children: [
-                  for (var i = 0; i < links.length; i++)
-                    ListTile(
-                        key: ValueKey(links[i]),
-                        isThreeLine: true,
-                        leading: ReorderableDragStartListener(
-                            index: i,
-                            enabled: !widget.proxyRunning,
-                            child: const Icon(Icons.drag_handle)),
-                        title: Text(
-                            '${i + 1} · ${current.subscriptionNameFor(links[i], i)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                        subtitle: Text(subscriptionUsageSummary(
-                            current.subscriptionInfoFor(links[i]))),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.of(sheetContext).pop(links[i])),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('添加机场'),
-                enabled: !widget.proxyRunning,
-                onTap: () => Navigator.of(sheetContext).pop('add')),
-          ])),
-        )),
-      );
-      if (choice == null || !mounted) return;
-      if (choice == 'reorder') {
-        await _applyAirportChange(() =>
-            _service.editSubscriptionAirport(current.id, order: reordered));
-      } else {
-        await _showAirportDialog(current,
-            link: choice == 'add' ? null : choice);
+    ConfigProfile? latestProfile() {
+      for (final current in _profiles) {
+        if (current.id == profile.id) return current;
       }
-      if (!mounted) return;
-      final updated = _profiles.where((entry) => entry.id == current.id);
-      if (updated.isEmpty) return;
-      current = updated.first;
+      return null;
     }
+
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+        builder: (_) => SubscriptionManagementPage(
+              profile: profile,
+              proxyRunning: widget.proxyRunning,
+              onEdit: (current, link) async {
+                await _showAirportDialog(current, link: link);
+                return latestProfile();
+              },
+              onReorder: (current, order) async {
+                await _applyAirportChange(() =>
+                    _service.editSubscriptionAirport(current.id, order: order));
+                return latestProfile();
+              },
+            )));
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
@@ -944,7 +845,6 @@ class _ConfigPageState extends State<ConfigPage> {
       'host': ('修改 Host', Icons.dns_outlined),
       'prependProxy': ('链式节点', Icons.link),
       'groups': ('代理组管理', Icons.account_tree_outlined),
-      'filters': ('正则设置', Icons.filter_alt_outlined),
       'rules': ('规则管理', Icons.rule),
     };
     final action = await showModalBottomSheet<String>(
@@ -1022,14 +922,11 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
       case 'rules':
       case 'groups':
-      case 'filters':
         await _manageConfiguration(
             profile,
             action == 'rules'
                 ? ConfigManagementMode.rules
-                : action == 'groups'
-                    ? ConfigManagementMode.groups
-                    : ConfigManagementMode.filters);
+                : ConfigManagementMode.groups);
         await _returnToActions(profile);
         return;
 
@@ -1087,53 +984,37 @@ class _ConfigPageState extends State<ConfigPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('配置文件'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: PopupMenuButton<_AddConfigAction>(
-              enabled: !_working && !widget.proxyRunning,
-              tooltip: widget.proxyRunning ? '请先停止代理' : '添加配置',
-              onSelected: _handleAdd,
-              constraints: const BoxConstraints(minWidth: 190, maxWidth: 230),
-              icon: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.add_rounded,
-                  color: colors.onPrimaryContainer,
-                ),
-              ),
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: _AddConfigAction.local,
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.file_open_outlined),
-                      const SizedBox(width: 12),
-                      Text('导入 mihomo YAML'),
-                    ],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: _AddConfigAction.subscription,
-                  height: 48,
-                  padding: EdgeInsets.symmetric(horizontal: 14),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.cloud_download_outlined),
-                      SizedBox(width: 12),
-                      Text('添加机场订阅'),
-                    ],
-                  ),
-                ),
+      ),
+      floatingActionButton: PopupMenuButton<_AddConfigAction>(
+        enabled: !_working && !widget.proxyRunning,
+        tooltip: widget.proxyRunning ? '请先停止代理' : '添加配置',
+        onSelected: _handleAdd,
+        constraints: const BoxConstraints(minWidth: 190, maxWidth: 230),
+        child: AddActionIcon(enabled: !_working && !widget.proxyRunning),
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: _AddConfigAction.local,
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.file_open_outlined),
+                const SizedBox(width: 12),
+                Text('导入 mihomo YAML'),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: _AddConfigAction.subscription,
+            height: 48,
+            padding: EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cloud_download_outlined),
+                SizedBox(width: 12),
+                Text('添加机场订阅'),
               ],
             ),
           ),
@@ -1149,7 +1030,7 @@ class _ConfigPageState extends State<ConfigPage> {
                     onRefresh: _load,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
                       children: [
                         if (widget.proxyRunning) ...[
                           Container(

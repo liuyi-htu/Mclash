@@ -1,3 +1,4 @@
+import 'add_action_button.dart';
 // Keep these APIs compatible with the Flutter 3.32 CI toolchain.
 // ignore_for_file: deprecated_member_use
 
@@ -5,9 +6,8 @@ import 'package:flutter/material.dart';
 import 'config_management.dart';
 import 'proxy_chain.dart';
 import 'subscription_filter.dart';
-import 'subscription_filter_dialog.dart';
 
-enum ConfigManagementMode { rules, groups, filters }
+enum ConfigManagementMode { rules, groups }
 
 class ConfigManagementPage extends StatefulWidget {
   const ConfigManagementPage(
@@ -70,8 +70,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
   Future<void> _group([Map<String, dynamic>? group]) async {
     final result = await _groupDialog(context, _content, group);
     if (result == null || !mounted) return;
-    await _change(() => updateConfigGroup(_content, result,
-        oldName: group?['name'] as String?));
+    await _change(() => result);
   }
 
   Future<void> _deleteGroup(String name) async {
@@ -99,28 +98,20 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
     final rules = configRules(_content);
     final groups = configGroups(_content);
     final managed = readProxyChainGroups(_content);
-    final filters = readSubscriptionFilters(_content);
     return PopScope(
         canPop: !_saving,
         child: Scaffold(
           appBar: AppBar(
               title: Text(switch (mode) {
-                ConfigManagementMode.rules => '规则管理',
-                ConfigManagementMode.groups => '代理组管理',
-                ConfigManagementMode.filters => '正则设置',
-              }),
-              actions: [
-                if (mode != ConfigManagementMode.filters)
-                  IconButton(
-                      tooltip:
-                          mode == ConfigManagementMode.rules ? '新增规则' : '新增代理组',
-                      onPressed: _saving
-                          ? null
-                          : () => mode == ConfigManagementMode.rules
-                              ? _rule()
-                              : _group(),
-                      icon: const Icon(Icons.add))
-              ]),
+            ConfigManagementMode.rules => '规则管理',
+            ConfigManagementMode.groups => '代理组管理',
+          })),
+          floatingActionButton: AddActionButton(
+              tooltip: mode == ConfigManagementMode.rules ? '新增规则' : '新增代理组',
+              onPressed: _saving
+                  ? null
+                  : () =>
+                      mode == ConfigManagementMode.rules ? _rule() : _group()),
           body: Column(children: [
             if (_saving) const LinearProgressIndicator(),
             if (_error != null)
@@ -134,15 +125,14 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Text(switch (mode) {
                   ConfigManagementMode.rules => '规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。',
-                  ConfigManagementMode.groups => '这里只显示当前成员，请通过正则设置调整。',
-                  ConfigManagementMode.filters =>
-                    '选择任意代理组设置正则。留空匹配全部节点；更新订阅时自动重新匹配。',
+                  ConfigManagementMode.groups => '点击代理组编辑名称、类型和节点匹配正则。',
                 })),
             Expanded(
                 child: AbsorbPointer(
                     absorbing: _saving,
                     child: mode == ConfigManagementMode.rules
                         ? ReorderableListView.builder(
+                            padding: const EdgeInsets.only(bottom: 88),
                             itemCount: rules.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
@@ -177,6 +167,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                               child: Icon(Icons.drag_handle))),
                                     ])))
                         : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 88),
                             itemCount: groups.length,
                             itemBuilder: (context, index) {
                               final group = groups[index];
@@ -186,27 +177,9 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                   title: Text(name),
                                   subtitle: Text(locked
                                       ? '由链式节点管理'
-                                      : mode == ConfigManagementMode.filters
-                                          ? filters.containsKey(name)
-                                              ? (filters[name]!.isEmpty
-                                                  ? '匹配全部节点'
-                                                  : filters[name]!)
-                                              : '当前成员，尚未设置正则'
-                                          : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
+                                      : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
                                   enabled: !locked,
-                                  onTap: () async {
-                                    if (mode == ConfigManagementMode.groups) {
-                                      await _group(group);
-                                      return;
-                                    }
-                                    await showSubscriptionFilterDialog(
-                                        context: context,
-                                        groupName: name,
-                                        initialFilter: filters[name] ?? '',
-                                        onSave: (filter) => _save(
-                                            editSubscriptionFilter(
-                                                _content, name, filter)));
-                                  },
+                                  onTap: () => _group(group),
                                   trailing: mode ==
                                               ConfigManagementMode.groups &&
                                           !locked &&
@@ -373,8 +346,11 @@ Future<String?> _ruleDialog(
   }
 }
 
-Future<Map<String, dynamic>?> _groupDialog(
+Future<String?> _groupDialog(
     BuildContext context, String content, Map<String, dynamic>? initial) async {
+  final initialFilter =
+      readSubscriptionFilters(content)[initial?['name']] ?? '';
+  final filter = TextEditingController(text: initialFilter);
   final name = TextEditingController(text: initial?['name'] as String? ?? '');
   final url = TextEditingController(
       text:
@@ -395,7 +371,7 @@ Future<Map<String, dynamic>?> _groupDialog(
   if (selected.isEmpty) selected.add('DIRECT');
   String? error;
   try {
-    return await showDialog<Map<String, dynamic>>(
+    return await showDialog<String>(
         context: context,
         builder: (context) => StatefulBuilder(
             builder: (context, update) => AlertDialog(
@@ -429,10 +405,17 @@ Future<Map<String, dynamic>?> _groupDialog(
                               decoration:
                                   const InputDecoration(labelText: '检测间隔（秒）')),
                         ],
+                        TextField(
+                            controller: filter,
+                            minLines: 1,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                                labelText: '节点名称匹配规则',
+                                helperText: '留空匹配全部节点；更新订阅时自动重新匹配。',
+                                helperMaxLines: 2)),
                         Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text('当前成员（${selected.length}）：通过正则设置修改')),
-                        if (initial == null) const Text('新建组默认使用空正则，匹配全部节点。'),
+                            child: Text('当前成员（${selected.length}）：保存正则后重新匹配')),
                         if (error != null)
                           Text(error!,
                               style: TextStyle(
@@ -498,13 +481,24 @@ Future<Map<String, dynamic>?> _groupDialog(
                             }
                           }
                           if (type != 'load-balance') group.remove('strategy');
-                          Navigator.pop(context, group);
+                          try {
+                            final next = updateConfigGroup(content, group,
+                                oldName: initial?['name'] as String?,
+                                filter: initial == null ||
+                                        filter.text.trim() != initialFilter
+                                    ? filter.text.trim()
+                                    : null);
+                            Navigator.pop(context, next);
+                          } catch (failure) {
+                            update(() => error = failure.toString());
+                          }
                         },
                         child: const Text('保存'))
                   ],
                 )));
   } finally {
     await Future<void>.delayed(const Duration(milliseconds: 300));
+    filter.dispose();
     name.dispose();
     url.dispose();
     interval.dispose();

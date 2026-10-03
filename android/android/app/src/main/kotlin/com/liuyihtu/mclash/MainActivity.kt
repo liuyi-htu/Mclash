@@ -9,6 +9,7 @@ import android.net.VpnService
 import android.net.TrafficStats
 import android.os.Build
 import android.view.Gravity
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +21,14 @@ import java.net.InetAddress
 
 class MainActivity : FlutterActivity() {
     private var windowChannel: MethodChannel? = null
+    private var lastWindowTopInset: Double? = null
+    private val windowLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+        val inset = smallWindowTopInset()
+        if (inset != lastWindowTopInset) {
+            lastWindowTopInset = inset
+            windowChannel?.invokeMethod("windowChanged", null)
+        }
+    }
     private lateinit var preferences: AppPreferences
     private lateinit var configStore: ConfigStore
     private var pendingConfigResult: MethodChannel.Result? = null
@@ -36,12 +45,20 @@ class MainActivity : FlutterActivity() {
                 else result.notImplemented()
             }
         }
+        window.decorView.viewTreeObserver.addOnGlobalLayoutListener(windowLayoutListener)
         preferences = AppPreferences(this)
         configStore = ConfigStore(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler(
             ::handleMethodCall,
         )
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        window.decorView.viewTreeObserver.removeOnGlobalLayoutListener(windowLayoutListener)
+        windowChannel?.setMethodCallHandler(null)
+        windowChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {

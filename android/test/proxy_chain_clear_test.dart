@@ -77,6 +77,9 @@ void main() {
       expect(saves, 1);
       expect(loadYaml(saved), loadYaml(source));
       expect(readProxyChainSets(saved), isEmpty);
+      expect(find.text('链式节点 1'), findsNothing);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       expect(find.text('订阅管理'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());

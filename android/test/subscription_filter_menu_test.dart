@@ -36,7 +36,7 @@ rules: ["MATCH,DIRECT"]
   testWidgets(
       'configuration menu follows YAML section order and handles unreadable files',
       (tester) async {
-    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '正则设置', '规则管理'];
+    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '规则管理'];
     final cases = <String?>[
       content,
       '# proxies: comment only\nrules: ["MATCH,DIRECT"]\nproxy-groups: []\nproxies: []\n',
@@ -59,15 +59,15 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpAndSettle();
       await tester.longPress(find.text('Airport'));
       await tester.pumpAndSettle();
-      final expected = index == 1
-          ? ['规则管理', '代理组管理', '正则设置', '添加节点', '修改 Host', '链式节点']
-          : defaults;
+      final expected =
+          index == 1 ? ['规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点'] : defaults;
       for (var position = 1; position < expected.length; position++) {
         expect(
             tester.getTopLeft(find.text(expected[position])).dy,
             greaterThan(
                 tester.getTopLeft(find.text(expected[position - 1])).dy));
       }
+      expect(find.text('正则设置'), findsNothing);
       expect(tester.takeException(), isNull);
     }
   });
@@ -165,7 +165,6 @@ rules: ["MATCH,DIRECT"]
     for (final name in [
       '规则管理',
       '代理组管理',
-      '正则设置',
       '修改 Host',
       '添加节点',
       '链式节点',
@@ -197,14 +196,18 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
-    await tester.ensureVisible(find.text('正则设置'));
-    await tester.tap(find.text('正则设置'));
+    await tester.ensureVisible(find.text('代理组管理'));
+    await tester.tap(find.text('代理组管理'));
     await tester.pumpAndSettle();
     for (final title in ['🚀 国内', '🌍 国外']) {
       await tester.ensureVisible(find.text(title));
       await tester.tap(find.text(title));
       await tester.pumpAndSettle();
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      expect(
+          tester
+              .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+              .controller!
+              .text,
           isEmpty);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -239,14 +242,18 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
-    await tester.ensureVisible(find.text('正则设置'));
-    await tester.tap(find.text('正则设置'));
+    await tester.ensureVisible(find.text('代理组管理'));
+    await tester.tap(find.text('代理组管理'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('🚀 国内'));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+    expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+            .controller!
+            .text,
         '上海');
-    await tester.enterText(find.byType(TextField), '上海|广州');
+    await tester.enterText(find.widgetWithText(TextField, '节点名称匹配规则'), '上海|广州');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     final yaml = loadYaml(saved!);
@@ -255,10 +262,14 @@ rules: ["MATCH,DIRECT"]
     expect(saved, contains('上海|广州'));
     expect(yaml['rules'], loadYaml(content)['rules']);
     expect(saves, 1);
-    expect(find.text('正则设置'), findsOneWidget);
+    expect(find.text('代理组管理'), findsOneWidget);
     await tester.tap(find.text('🌍 国外'));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+    expect(
+        tester
+            .widget<TextField>(find.widgetWithText(TextField, '节点名称匹配规则'))
+            .controller!
+            .text,
         'KR');
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
@@ -354,7 +365,7 @@ rules: ["MATCH,DIRECT"]
     expect(deletes, 1);
     expect(loadYaml(saved)['proxies'].length, 1);
     expect(loadYaml(saved)['proxies'][0]['name'], 'KR机场');
-    await tester.tap(find.text('关闭'));
+    await tester.pageBack();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -383,6 +394,9 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(find.byTooltip('添加节点'));
+    await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('手动添加的节点（0）'), findsOneWidget);
     expect(find.text('上海'), findsNothing);
@@ -406,6 +420,9 @@ rules: ["MATCH,DIRECT"]
     expect(
         config['proxies'][0]['ws-opts']['headers']['Host'], 'preset.example');
     expect(config['proxy-groups'][0]['proxies'], ['DIRECT', '上海手动', '上海']);
+    expect(find.text('上海手动'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('订阅管理'), findsOneWidget);
     expect(find.text('订阅管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -435,6 +452,10 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('链式节点'));
     await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byTooltip('新增链式节点'), findsOneWidget);
+    await tester.tap(find.byTooltip('新增链式节点'));
+    await tester.pumpAndSettle();
     expect(
         tester
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
@@ -456,6 +477,9 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['proxies'][0]['dialer-proxy'], 'KR');
     expect(saves, 1);
+    expect(find.text('链式节点 1'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('订阅管理'), findsOneWidget);
     await tester.ensureVisible(find.text('链式节点'));
     await tester.tap(find.text('链式节点'));
@@ -475,6 +499,9 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('取消').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('链式节点 1'), findsOneWidget);
+    await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('订阅管理'), findsOneWidget);
     expect(saves, 1);
@@ -511,7 +538,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('链式节点'));
     await tester.pumpAndSettle();
     expect(find.text('链式节点 1'), findsOneWidget);
-    await tester.tap(find.text('新增链式节点'));
+    await tester.tap(find.byTooltip('新增链式节点'));
     await tester.pumpAndSettle();
     expect(find.text('链式节点 2'), findsOneWidget);
     await tester.tap(find.textContaining('选择前置节点（已选'));
@@ -528,9 +555,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(saves, 1);
     expect(readProxyChains(saved), {'上海': 'wap', 'KR': 'front2'});
-    await tester.ensureVisible(find.text('链式节点'));
-    await tester.tap(find.text('链式节点'));
-    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('链式节点 1'), findsOneWidget);
     expect(find.text('链式节点 2'), findsOneWidget);
     await tester.tap(find.text('链式节点 2'));
@@ -551,6 +576,8 @@ rules: ["MATCH,DIRECT"]
     await tester.ensureVisible(find.text('订阅管理'));
     await tester.tap(find.text('订阅管理'));
     await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byTooltip('添加机场'), findsOneWidget);
   }
 
   Future<void> confirmAirportUpdate(WidgetTester tester) async {
