@@ -1,5 +1,5 @@
-import 'add_action_button.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,22 +9,25 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_notice.dart';
 import 'config_page.dart';
+import 'proxy_panel_page.dart';
 import 'models.dart';
 import 'native_proxy_service.dart';
-
-enum _HomeMenuAction { config, generalSettings }
+import 'proxy_platform_service.dart';
 
 enum _RunModeChoice { mihomoTun, mihomoProxy }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.service});
+
+  final ProxyPlatformService? service;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final _service = NativeProxyService.instance;
+  late final ProxyPlatformService _service =
+      widget.service ?? NativeProxyService.instance;
 
   ProxyStatus _status = ProxyStatus.stopped;
   ConfigInfo _config = const ConfigInfo(exists: false);
@@ -37,6 +40,13 @@ class _HomePageState extends State<HomePage> {
   bool _switchingMode = false;
   bool _operationDialogOpen = false;
   Timer? _statusTimer;
+  Timer? _trafficTimer;
+  bool _samplingTraffic = false;
+  int _selectedHomeTab = 0;
+  double _downloadBytesPerSecond = 0;
+  double _uploadBytesPerSecond = 0;
+  String _proxyMode = 'rule';
+  bool _changingProxyMode = false;
 
   @override
   void initState() {
@@ -44,6 +54,9 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _showUsageNoticeIfNeeded();
       await _refresh();
+      if (!mounted) return;
+      _trafficTimer = Timer.periodic(
+          const Duration(seconds: 1), (_) => _updateTrafficSpeed());
     });
     _statusTimer = Timer.periodic(
       const Duration(seconds: 3),
@@ -62,7 +75,10 @@ class _HomePageState extends State<HomePage> {
       final next = running ? ProxyStatus.running : ProxyStatus.stopped;
       if (_status != next) {
         if (!running) await _service.syncSystemProxy();
-        if (mounted) setState(() => _status = next);
+        if (mounted) {
+          setState(() => _status = next);
+          if (running) unawaited(_loadProxyMode());
+        }
       }
     } catch (_) {
       // Transient SCM/controller failures are reported by explicit actions.
@@ -72,6 +88,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _statusTimer?.cancel();
+    _trafficTimer?.cancel();
     super.dispose();
   }
 
@@ -233,46 +250,252 @@ class _HomePageState extends State<HomePage> {
         _networkMode = networkMode;
         _coreType = coreType;
       });
+      if (running) await _loadProxyMode();
     } catch (error) {
       if (!mounted) return;
       _showError(error);
     }
   }
 
-  Future<void> _openConfigPage() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) =>
-            ConfigPage(proxyRunning: _status != ProxyStatus.stopped),
-      ),
-    );
+  Future<void> _openProxyPanel() async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) =>
+          ProxyPanelPage(proxyRunning: _status == ProxyStatus.running),
+    ));
     await _refresh();
   }
 
-  Future<void> _openProxyBoard() async {
-    const url = 'https://board.zash.run.place/#/proxies';
+  Future<void> _updateTrafficSpeed() async {
+    if (_samplingTraffic || !mounted) return;
+    if (_status != ProxyStatus.running) {
+      if (_downloadBytesPerSecond != 0 || _uploadBytesPerSecond != 0) {
+        setState(() {
+          _downloadBytesPerSecond = 0;
+          _uploadBytesPerSecond = 0;
+        });
+      }
+      return;
+    }
+    _samplingTraffic = true;
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 3)
+      ..findProxy = (_) => 'DIRECT';
     try {
-      await Process.start(
-          'explorer.exe',
-          const [
-            url,
-          ],
-          mode: ProcessStartMode.detached);
-    } catch (error) {
-      if (mounted) _showError('打开代理面板失败：$error');
+      final request =
+          await client.getUrl(Uri.parse('http://127.0.0.1:9090/traffic'));
+      final response =
+          await request.close().timeout(const Duration(seconds: 3));
+      if (response.statusCode != 200) return;
+      final line = await response
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .first
+          .timeout(const Duration(seconds: 3));
+      final stats = jsonDecode(line) as Map;
+      if (!mounted || _status != ProxyStatus.running) return;
+      setState(() {
+        _downloadBytesPerSecond = (stats['down'] as num? ?? 0).toDouble();
+        _uploadBytesPerSecond = (stats['up'] as num? ?? 0).toDouble();
+      });
+    } catch (_) {
+      // The controller may be unavailable while the service is restarting.
+    } finally {
+      client.close(force: true);
+      _samplingTraffic = false;
     }
   }
 
-  Future<void> _handleMenuAction(_HomeMenuAction action) async {
-    switch (action) {
-      case _HomeMenuAction.config:
-        await _openConfigPage();
-        return;
-      case _HomeMenuAction.generalSettings:
-        await _showGeneralSettings();
-        return;
+  String _formatSpeed(double bytesPerSecond) {
+    if (bytesPerSecond >= 1024 * 1024) {
+      return '${(bytesPerSecond / (1024 * 1024)).toStringAsFixed(1)} MB/s';
+    }
+    if (bytesPerSecond >= 1024) {
+      return '${(bytesPerSecond / 1024).toStringAsFixed(1)} KB/s';
+    }
+    return '${bytesPerSecond.toStringAsFixed(0)} B/s';
+  }
+
+  Future<Map<String, dynamic>> _proxyControllerRequest(
+    String method, {
+    Map<String, Object>? body,
+  }) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5)
+      ..findProxy = (_) => 'DIRECT';
+    try {
+      final request = await client.openUrl(
+        method,
+        Uri.parse('http://127.0.0.1:9090/configs'),
+      );
+      request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
+      if (body != null) {
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(body));
+      }
+      final response = await request.close().timeout(
+            const Duration(seconds: 8),
+          );
+      final text = await utf8.decodeStream(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Controller ${response.statusCode}: ${text.trim()}');
+      }
+      if (text.trim().isEmpty) return const <String, dynamic>{};
+      final decoded = jsonDecode(text);
+      return decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : const <String, dynamic>{};
+    } finally {
+      client.close(force: true);
     }
   }
+
+  Future<void> _loadProxyMode() async {
+    try {
+      final configs = await _proxyControllerRequest('GET');
+      final mode = configs['mode']?.toString().toLowerCase();
+      if (!mounted || mode == null) return;
+      setState(() => _proxyMode = _normalProxyMode(mode));
+    } catch (_) {
+      // Keep the last known mode while mihomo is still becoming available.
+    }
+  }
+
+  Future<void> _setProxyMode(String mode) async {
+    if (_changingProxyMode || mode == _proxyMode) return;
+    final previous = _proxyMode;
+    setState(() {
+      _changingProxyMode = true;
+      _proxyMode = mode;
+    });
+    try {
+      await _proxyControllerRequest(
+        'PATCH',
+        body: <String, Object>{'mode': mode},
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _proxyMode = previous);
+      _showError(error);
+    } finally {
+      if (mounted) setState(() => _changingProxyMode = false);
+    }
+  }
+
+  Future<void> _showProxyModeDialog() async {
+    if (_changingProxyMode || _status != ProxyStatus.running) return;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+
+        Widget modeOption({
+          required String value,
+          required String title,
+          required IconData icon,
+        }) {
+          final selected = value == _proxyMode;
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Material(
+              color: selected
+                  ? colors.primary.withValues(alpha: 0.12)
+                  : colors.surfaceContainerHighest.withValues(alpha: 0.52),
+              borderRadius: BorderRadius.circular(18),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => Navigator.of(dialogContext).pop(value),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 17,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: colors.primary.withValues(alpha: 0.11),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(icon, color: colors.primary, size: 23),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        Icon(Icons.check_circle_rounded, color: colors.primary),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 24,
+            vertical: 32,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 430),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '选择运行模式',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  ),
+                  modeOption(
+                    value: 'rule',
+                    title: '规则模式',
+                    icon: Icons.route_outlined,
+                  ),
+                  modeOption(
+                    value: 'global',
+                    title: '全局模式',
+                    icon: Icons.public_rounded,
+                  ),
+                  modeOption(
+                    value: 'direct',
+                    title: '直连模式',
+                    icon: Icons.link_rounded,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (selected != null) await _setProxyMode(selected);
+  }
+
+  String _normalProxyMode(String mode) => switch (mode) {
+        'global' => 'global',
+        'direct' => 'direct',
+        _ => 'rule',
+      };
+
+  String get _proxyModeLabel => switch (_proxyMode) {
+        'global' => '全局',
+        'direct' => '直连',
+        _ => '规则',
+      };
 
   Future<void> _switchRunMode(CoreType core, NetworkMode target) async {
     if (_switchingMode ||
@@ -822,6 +1045,7 @@ class _HomePageState extends State<HomePage> {
       }
       if (!mounted) return;
       setState(() => _status = ProxyStatus.running);
+      unawaited(_loadProxyMode());
     } catch (error) {
       _closeOperationWaitDialog();
       if (!mounted) return;
@@ -1038,53 +1262,18 @@ class _HomePageState extends State<HomePage> {
         ProxyStatus.stopping => '正在停止',
       };
 
-  String get _buttonText => switch (_status) {
-        ProxyStatus.stopped => '启动代理',
-        ProxyStatus.starting => '正在启动',
-        ProxyStatus.running => '停止代理',
-        ProxyStatus.stopping => '正在停止',
-      };
-
-  PopupMenuItem<_HomeMenuAction> _menuItem({
-    required _HomeMenuAction value,
-    required IconData icon,
-    required String title,
-    bool enabled = true,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return PopupMenuItem<_HomeMenuAction>(
-      value: value,
-      enabled: enabled,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: colors.primaryContainer.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 21, color: colors.onPrimaryContainer),
-            ),
-            const SizedBox(width: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final busy =
         _status == ProxyStatus.starting || _status == ProxyStatus.stopping;
     final colors = Theme.of(context).colorScheme;
     final running = _status == ProxyStatus.running;
+
+    void handleDestination(int index) {
+      if (index == _selectedHomeTab) return;
+      setState(() => _selectedHomeTab = index);
+      if (index == 0) _refresh();
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -1097,183 +1286,340 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      floatingActionButton: PopupMenuButton<_HomeMenuAction>(
-        tooltip: '更多功能',
-        onSelected: _handleMenuAction,
-        offset: const Offset(0, 10),
-        constraints: const BoxConstraints(minWidth: 150, maxWidth: 180),
-        child: const AddActionIcon(),
-        itemBuilder: (context) => [
-          _menuItem(
-            value: _HomeMenuAction.config,
-            icon: Icons.description_outlined,
-            title: '配置文件',
+      body: IndexedStack(
+        index: _selectedHomeTab,
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 18, 18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: running
+                          ? const [Color(0xFF3167F4), Color(0xFF4938EE)]
+                          : const [Color(0xFF51627E), Color(0xFF303B55)],
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (running
+                                ? const Color(0xFF356AE6)
+                                : const Color(0xFF202B45))
+                            .withValues(alpha: 0.20),
+                        blurRadius: 26,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Icon(
+                                  running
+                                      ? Icons.verified_user_rounded
+                                      : Icons.shield_outlined,
+                                  color: Colors.white,
+                                  size: 29,
+                                ),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      running ? '已连接' : _statusText,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _config.exists
+                                          ? (_config.fileName ?? '未命名配置')
+                                          : '尚未选择配置',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (busy)
+                                const SizedBox.square(
+                                  dimension: 26,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              else
+                                Switch(
+                                  value: running,
+                                  onChanged: (_) => _toggle(),
+                                  activeThumbColor: const Color(0xFF315FE8),
+                                  activeTrackColor: Colors.white,
+                                  inactiveThumbColor: Colors.white,
+                                  inactiveTrackColor: Colors.white.withValues(
+                                    alpha: 0.28,
+                                  ),
+                                  trackOutlineColor:
+                                      const WidgetStatePropertyAll(
+                                    Colors.transparent,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 19),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 11,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _TrafficSpeed(
+                                    icon: Icons.arrow_downward_rounded,
+                                    value: _formatSpeed(
+                                      _downloadBytesPerSecond,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 26,
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                ),
+                                Expanded(
+                                  child: _TrafficSpeed(
+                                    icon: Icons.arrow_upward_rounded,
+                                    value: _formatSpeed(_uploadBytesPerSecond),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    children: [
+                      _HomeActionTile(
+                        icon: Icons.hub_outlined,
+                        title: '代理面板',
+                        onTap: _openProxyPanel,
+                      ),
+                      const Divider(height: 1, indent: 64),
+                      _HomeActionTile(
+                        icon: Icons.route_outlined,
+                        title: '代理规则',
+                        trailing: _changingProxyMode
+                            ? const SizedBox.square(
+                                dimension: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                running ? '$_proxyModeLabel模式' : '启动代理后可切换',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                        onTap: running && !_changingProxyMode
+                            ? _showProxyModeDialog
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          _menuItem(
-            value: _HomeMenuAction.generalSettings,
-            icon: Icons.settings_outlined,
-            title: '常规设置',
+          ConfigPage(
+              proxyRunning: _status != ProxyStatus.stopped, service: _service),
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+            children: [
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(children: [
+                  _HomeActionTile(
+                      icon: Icons.tune_rounded,
+                      title: '常规设置',
+                      onTap: _showGeneralSettings),
+                  const Divider(height: 1, indent: 64),
+                  _HomeActionTile(
+                      icon: Icons.swap_horiz_rounded,
+                      title: '运行模式',
+                      trailing: Text(
+                          _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'),
+                      onTap:
+                          busy || _switchingMode ? null : _showRunModeDialog),
+                  const Divider(height: 1, indent: 64),
+                  _HomeActionTile(
+                      icon: Icons.article_outlined,
+                      title: '调试日志',
+                      onTap: _showDebugLogSettings),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(children: [
+                  _HomeActionTile(
+                      icon: Icons.system_update_alt_rounded,
+                      title: '更新内核',
+                      onTap: _showCoreUpdate),
+                  const Divider(height: 1, indent: 64),
+                  _HomeActionTile(
+                      icon: Icons.info_outline_rounded,
+                      title: '关于 Mclash',
+                      onTap: _showAbout),
+                ]),
+              ),
+            ],
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 88),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedHomeTab,
+        onDestinationSelected: handleDestination,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: '首页',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            label: '配置',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            label: '设置',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrafficSpeed extends StatelessWidget {
+  const _TrafficSpeed({required this.icon, required this.value});
+
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 17, color: Colors.white.withValues(alpha: 0.76)),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HomeActionTile extends StatelessWidget {
+  const _HomeActionTile({
+    this.icon,
+    this.leading,
+    required this.title,
+    this.trailing,
+    this.onTap,
+  }) : assert(icon != null || leading != null);
+
+  final IconData? icon;
+  final Widget? leading;
+  final String title;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 15, 18),
+        child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: running
-                      ? const [Color(0xFF356AE6), Color(0xFF5B8CFF)]
-                      : const [Color(0xFF202B45), Color(0xFF42506D)],
+            leading ??
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Icon(icon, color: colors.primary, size: 25),
                 ),
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: (running
-                            ? const Color(0xFF356AE6)
-                            : const Color(0xFF202B45))
-                        .withValues(alpha: 0.20),
-                    blurRadius: 26,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-              ),
+            const SizedBox(width: 15),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 86,
-                    height: 86,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.24),
-                      ),
-                    ),
-                    child: Icon(
-                      running ? Icons.shield_rounded : Icons.shield_outlined,
-                      size: 46,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
                   Text(
-                    _statusText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 25,
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 11,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.16),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.description_outlined,
-                          size: 18,
-                          color: Colors.white.withValues(alpha: 0.82),
-                        ),
-                        const SizedBox(width: 9),
-                        Text(
-                          '当前配置',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.72),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            _config.exists
-                                ? (_config.fileName ?? '未命名配置')
-                                : '未选择',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: FilledButton.icon(
-                      onPressed: busy ? null : _toggle,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor:
-                            running ? colors.error : const Color(0xFF2859C5),
-                        disabledBackgroundColor: Colors.white.withValues(
-                          alpha: 0.72,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      icon: busy
-                          ? const SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Icon(
-                              running
-                                  ? Icons.stop_circle_outlined
-                                  : Icons.play_circle_outline_rounded,
-                            ),
-                      label: Text(_buttonText),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: _openProxyBoard,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.38),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      icon: const Icon(Icons.account_tree_outlined),
-                      label: const Text('代理面板'),
                     ),
                   ),
                 ],
               ),
             ),
+            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
           ],
         ),
       ),

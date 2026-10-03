@@ -176,6 +176,21 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
   @override
   Future<bool> isRunning() async => (await _status())['state'] == 'running';
 
+  Future<String> getDelayResults() async =>
+      (await _readSettings())['delayResults'] as String? ?? '{}';
+
+  Future<void> setDelayResults(String json) =>
+      _updateSettings({'delayResults': json});
+
+  Future<List<String>> getProxyGroupOrder() async {
+    final config = loadYaml(await getRuntimeConfigContent());
+    if (config is! Map || config['proxy-groups'] is! List) return [];
+    return [
+      for (final group in config['proxy-groups'] as List)
+        if (group is Map && group['name'] != null) group['name'].toString(),
+    ];
+  }
+
   Future<void> _prepareDashboard() async {
     await installBundledDashboard(Directory('$_dataDir\\dashboard'));
     final config = File(_configPath);

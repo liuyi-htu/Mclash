@@ -112,7 +112,7 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
               ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
                 children: [
                   for (final entry in existing)
                     ManagementCard(
