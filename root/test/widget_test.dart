@@ -12,6 +12,7 @@ void main() {
   var developerModeEnabled = false;
   var registrationReads = 0;
   var registrationExports = 0;
+  bool? savedBypassLan;
 
   setUp(() {
     running = false;
@@ -20,6 +21,7 @@ void main() {
     developerModeEnabled = false;
     registrationReads = 0;
     registrationExports = 0;
+    savedBypassLan = null;
     PackageInfo.setMockInitialValues(
       appName: 'Mclash Root',
       packageName: 'com.liuyihtu.mclash.root',
@@ -31,6 +33,10 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'isRunning' && rejectLegacyStatus) {
         throw StateError('Status snapshots must not wait for restoration');
+      }
+      if (call.method == 'saveRootSettings') {
+        savedBypassLan = (call.arguments as Map)['bypassLan'] as bool;
+        return {'bypassLan': savedBypassLan};
       }
       if (call.method == 'getDeviceRegistration') {
         registrationReads++;
@@ -240,7 +246,13 @@ void main() {
     expect(find.byType(EditableText), findsNothing);
     expect(find.text('VPN MTU'), findsNothing);
     expect(find.text('启用 IPv6'), findsNothing);
-    await tester.tap(find.text('保存'));
+    expect(find.text('保存'), findsNothing);
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    expect(savedBypassLan, false);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        false);
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
