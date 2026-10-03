@@ -776,6 +776,7 @@ class _ProxyTab extends StatelessWidget {
                     context,
                     constraints.crossAxisExtent,
                     spacing: 12,
+                    extraHeight: 8,
                   ),
                   itemBuilder: (context, index) {
                     final group = groups[index];
@@ -798,6 +799,7 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
   BuildContext context,
   double width, {
   required double spacing,
+  double extraHeight = 0,
 }) {
   final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
@@ -807,7 +809,7 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
     crossAxisCount: columns,
     mainAxisSpacing: spacing,
     crossAxisSpacing: spacing,
-    mainAxisExtent: 24 + 40 * textScale,
+    mainAxisExtent: 24 + 40 * textScale + extraHeight,
   );
 }
 

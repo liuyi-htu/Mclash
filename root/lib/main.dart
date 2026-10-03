@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 
 import 'pages/home_page.dart';
+import 'shared/window_safe_area.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -148,6 +149,7 @@ class MclashApp extends StatelessWidget {
       themeMode: ThemeMode.system,
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
+      builder: (context, child) => WindowSafeArea(child: child!),
       home: const HomePage(),
     );
   }

@@ -1,6 +1,7 @@
 package com.liuyihtu.mclash
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
@@ -18,6 +19,7 @@ import java.net.Inet4Address
 import java.net.InetAddress
 
 class MainActivity : FlutterActivity() {
+    private var windowChannel: MethodChannel? = null
     private lateinit var preferences: AppPreferences
     private lateinit var configStore: ConfigStore
     private var pendingConfigResult: MethodChannel.Result? = null
@@ -28,12 +30,23 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        windowChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mclash/window").apply {
+            setMethodCallHandler { call, result ->
+                if (call.method == "getTopInset") result.success(smallWindowTopInset())
+                else result.notImplemented()
+            }
+        }
         preferences = AppPreferences(this)
         configStore = ConfigStore(this)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler(
             ::handleMethodCall,
         )
+    }
+
+    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
+        super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
+        windowChannel?.invokeMethod("windowChanged", null)
     }
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
