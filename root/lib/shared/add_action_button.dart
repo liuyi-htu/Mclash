@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class AddActionIcon extends StatelessWidget {
@@ -57,4 +58,26 @@ class AddActionButton extends StatelessWidget {
           ),
         ),
       );
+}
+
+FloatingActionButtonLocation managementAddButtonLocation(
+        BuildContext context) =>
+    _ConfigAlignedAddButtonLocation(
+        NavigationBarTheme.of(context).height ?? 80);
+
+class _ConfigAlignedAddButtonLocation extends FloatingActionButtonLocation {
+  const _ConfigAlignedAddButtonLocation(this.navigationBarHeight);
+  final double navigationBarHeight;
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry geometry) {
+    final offset = FloatingActionButtonLocation.endFloat.getOffset(geometry);
+    if (geometry.minInsets.bottom > 0) return offset;
+    final alignedTop = geometry.scaffoldSize.height -
+        geometry.minViewPadding.bottom -
+        navigationBarHeight -
+        kFloatingActionButtonMargin -
+        geometry.floatingActionButtonSize.height;
+    return Offset(offset.dx, math.min(offset.dy, math.max(0, alignedTop)));
+  }
 }

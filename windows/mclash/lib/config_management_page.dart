@@ -1,3 +1,4 @@
+import 'management_style.dart';
 import 'add_action_button.dart';
 // Keep these APIs compatible with the Flutter 3.32 CI toolchain.
 // ignore_for_file: deprecated_member_use
@@ -82,7 +83,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                 TextButton(
                     onPressed: () => Navigator.pop(context, false),
                     child: const Text('取消')),
-                FilledButton(
+                DestructiveActionButton(
                     onPressed: () => Navigator.pop(context, true),
                     child: const Text('删除'))
               ],
@@ -106,13 +107,15 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
             ConfigManagementMode.rules => '规则管理',
             ConfigManagementMode.groups => '代理组管理',
           })),
+          floatingActionButtonLocation: managementAddButtonLocation(context),
           floatingActionButton: AddActionButton(
               tooltip: mode == ConfigManagementMode.rules ? '新增规则' : '新增代理组',
               onPressed: _saving
                   ? null
                   : () =>
                       mode == ConfigManagementMode.rules ? _rule() : _group()),
-          body: Column(children: [
+          body: ManagementBody(
+              child: Column(children: [
             if (_saving) const LinearProgressIndicator(),
             if (_error != null)
               Padding(
@@ -120,19 +123,16 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                   child: Text(_error!,
                       style: TextStyle(
                           color: Theme.of(context).colorScheme.error))),
-            Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(switch (mode) {
-                  ConfigManagementMode.rules => '规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。',
-                  ConfigManagementMode.groups => '点击代理组编辑名称、类型和节点匹配正则。',
-                })),
+            if (mode == ConfigManagementMode.rules)
+              const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text('规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。')),
             Expanded(
                 child: AbsorbPointer(
                     absorbing: _saving,
                     child: mode == ConfigManagementMode.rules
                         ? ReorderableListView.builder(
-                            padding: const EdgeInsets.only(bottom: 88),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                             itemCount: rules.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
@@ -143,60 +143,77 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                               _change(
                                   () => updateConfigRules(_content, reordered));
                             },
-                            itemBuilder: (context, index) => ListTile(
+                            itemBuilder: (context, index) => ManagementCard(
                                 key: ValueKey('$index:${rules[index]}'),
-                                title: Text(rules[index]),
-                                leading: Text('${index + 1}'),
-                                onTap: () => _rule(index),
-                                trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                          tooltip: '删除规则',
-                                          icon:
-                                              const Icon(Icons.delete_outline),
-                                          onPressed: () => _change(() =>
-                                              updateConfigRules(
-                                                  _content,
-                                                  [...rules]
-                                                    ..removeAt(index)))),
-                                      ReorderableDragStartListener(
-                                          index: index,
-                                          child: const Padding(
-                                              padding: EdgeInsets.all(12),
-                                              child: Icon(Icons.drag_handle))),
-                                    ])))
+                                child: ListTile(
+                                    key: ValueKey('$index:${rules[index]}'),
+                                    title: Text(rules[index]),
+                                    leading: Text('${index + 1}',
+                                        style: TextStyle(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            fontSize: 12)),
+                                    onTap: () => _rule(index),
+                                    trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          ManagementDeleteButton(
+                                              tooltip: '删除规则',
+                                              onPressed: () => _change(() =>
+                                                  updateConfigRules(
+                                                      _content,
+                                                      [...rules]
+                                                        ..removeAt(index)))),
+                                          ReorderableDragStartListener(
+                                              index: index,
+                                              child: const Padding(
+                                                  padding: EdgeInsets.all(12),
+                                                  child:
+                                                      Icon(Icons.drag_handle))),
+                                        ]))))
                         : ListView.builder(
-                            padding: const EdgeInsets.only(bottom: 88),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
                             itemCount: groups.length,
                             itemBuilder: (context, index) {
                               final group = groups[index];
                               final name = group['name'] as String;
                               final locked = managed.containsKey(name);
-                              return ListTile(
-                                  title: Text(name),
-                                  subtitle: Text(locked
-                                      ? '由链式节点管理'
-                                      : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
-                                  enabled: !locked,
-                                  onTap: () => _group(group),
-                                  trailing: mode ==
-                                              ConfigManagementMode.groups &&
-                                          !locked &&
-                                          !isProtectedConfigGroup(name)
-                                      ? IconButton(
-                                          tooltip: '删除代理组',
-                                          icon:
-                                              const Icon(Icons.delete_outline),
-                                          onPressed: () => _deleteGroup(name))
-                                      : mode == ConfigManagementMode.groups &&
-                                              isProtectedConfigGroup(name)
-                                          ? const Tooltip(
-                                              message: '固定代理组，不可删除或改名',
-                                              child: Icon(Icons.lock_outline))
-                                          : const Icon(Icons.chevron_right));
+                              return ManagementCard(
+                                  child: ListTile(
+                                      title: Text(name),
+                                      subtitle: Text(locked
+                                          ? '由链式节点管理'
+                                          : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
+                                      enabled: !locked,
+                                      onTap: () => _group(group),
+                                      trailing: SizedBox(
+                                          width: 48,
+                                          height: 48,
+                                          child: mode ==
+                                                      ConfigManagementMode
+                                                          .groups &&
+                                                  !locked &&
+                                                  !isProtectedConfigGroup(name)
+                                              ? ManagementDeleteButton(
+                                                  tooltip: '删除代理组',
+                                                  onPressed: () =>
+                                                      _deleteGroup(name))
+                                              : mode ==
+                                                          ConfigManagementMode
+                                                              .groups &&
+                                                      isProtectedConfigGroup(
+                                                          name)
+                                                  ? const Tooltip(
+                                                      message: '固定代理组，不可删除或改名',
+                                                      child: Center(
+                                                          child: Icon(Icons
+                                                              .lock_outline)))
+                                                  : const Center(
+                                                      child: Icon(Icons
+                                                          .chevron_right)))));
                             }))),
-          ]),
+          ])),
         ));
   }
 }
@@ -409,10 +426,8 @@ Future<String?> _groupDialog(
                             controller: filter,
                             minLines: 1,
                             maxLines: 4,
-                            decoration: const InputDecoration(
-                                labelText: '节点名称匹配规则',
-                                helperText: '留空匹配全部节点；更新订阅时自动重新匹配。',
-                                helperMaxLines: 2)),
+                            decoration:
+                                const InputDecoration(labelText: '正则表达式')),
                         Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Text('当前成员（${selected.length}）：保存正则后重新匹配')),

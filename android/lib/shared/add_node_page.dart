@@ -1,3 +1,4 @@
+import 'management_style.dart';
 import 'add_action_button.dart';
 import 'package:flutter/material.dart';
 
@@ -102,34 +103,33 @@ class _AddNodePageState extends State<AddNodePage> {
   Widget build(BuildContext context) => PopScope(
         canPop: !_saving,
         child: Scaffold(
-          appBar: AppBar(title: const Text('添加节点')),
+          appBar: AppBar(title: Text('添加节点（${_nodes.length}）')),
+          floatingActionButtonLocation: managementAddButtonLocation(context),
           floatingActionButton: AddActionButton(
               tooltip: '添加节点', onPressed: _saving ? null : _add),
-          body: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+          body: ManagementBody(
+              child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 168),
             children: [
               if (_saving) const LinearProgressIndicator(),
               if (_error != null)
                 Text(_error!,
                     style:
                         TextStyle(color: Theme.of(context).colorScheme.error)),
-              Text('手动添加的节点（${_nodes.length}）'),
-              const SizedBox(height: 8),
               if (_nodes.isEmpty) const Text('暂无手动节点'),
               for (final name in _nodes)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
+                ManagementCard(
+                    child: ListTile(
                   title: Text(name),
-                  trailing: IconButton(
+                  trailing: ManagementDeleteButton(
                     tooltip: '删除手动节点',
-                    icon: const Icon(Icons.delete_outline),
                     onPressed: _saving
                         ? null
                         : () => _change(() => widget.onDelete(name)),
                   ),
-                ),
+                )),
             ],
-          ),
+          )),
         ),
       );
 }

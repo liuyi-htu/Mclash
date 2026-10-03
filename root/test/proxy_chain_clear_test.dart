@@ -63,7 +63,7 @@ void main() {
       await tester.tap(find.text('选择前置节点（已选 1 个）'));
       await tester.pumpAndSettle();
       expect(find.text('清空'), findsNothing);
-      await tester.tap(find.text('清除链式节点'));
+      await tester.tap(find.text('清空选择'));
       await tester.pumpAndSettle();
       expect(find.text('选择前置节点（已选 0 个）'), findsOneWidget);
       expect(saves, 0);

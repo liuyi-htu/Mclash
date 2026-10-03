@@ -114,7 +114,7 @@ Future<bool> showProxyChainDialog({
                                       .where((name) => !current.contains(name))
                                       .toList(),
                                   other,
-                                  prepend ? '清除链式节点' : '清除后置代理');
+                                  prepend ? '清空选择' : '清除后置代理');
                               if (values != null && context.mounted) {
                                 setDialogState(() {
                                   other = values;
