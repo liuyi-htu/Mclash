@@ -24,6 +24,15 @@ class _Controller extends HttpOverrides {
     if (url.path == '/proxies') {
       return {
         'proxies': {
+          'Node A': {
+            'type': 'VMess',
+            'server': 'exit.example',
+            'port': 443,
+            'dialer-proxy': 'Front',
+            'uuid': 'private-credential'
+          },
+          'Node B': {'type': 'Http', 'server': 'other.example', 'port': 80},
+          'Front': {'type': 'Socks5'},
           'Test group': {
             'type': 'Selector',
             'now': 'Node A',
@@ -120,6 +129,28 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  testWidgets('expanded selector shows full node details and live chain',
+      (tester) async {
+    await tester.pumpWidget(
+        const MaterialApp(home: ProxyPanelPage(proxyRunning: true)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test group'));
+    await tester.pumpAndSettle();
+    expect(find.text('SELECT · 1/2'), findsOneWidget);
+    expect(find.text('服务器：exit.example:443'), findsOneWidget);
+    expect(find.text('连接链路：Front → Node A'), findsOneWidget);
+    expect(find.byType(SelectableText), findsWidgets);
+    expect(find.textContaining('private-credential'), findsNothing);
+    await tester.tap(find.text('Node B').last);
+    await tester.pumpAndSettle();
+    expect(find.text('SELECT · 2/2'), findsOneWidget);
+    expect(find.text('连接链路：Front → Node A'), findsNothing);
+    expect(find.text('服务器：other.example:80'), findsOneWidget);
+    expect(controller.writes.single['body'], {'name': 'Node B'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
       'proxy panel adapts to tablet rotation, split screen and large text',
       (tester) async {
@@ -161,7 +192,7 @@ void main() {
             .crossAxisCount,
         1);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Node B'));
+    await tester.tap(find.text('Node B').last);
     await tester.pumpAndSettle();
     expect(controller.writes.last['body'], {'name': 'Node B'});
     await tester.pumpWidget(const SizedBox());
@@ -204,7 +235,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Test group'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Node B'));
+    await tester.tap(find.text('Node B').last);
     await tester.pumpAndSettle();
     expect(controller.writes, [
       {
