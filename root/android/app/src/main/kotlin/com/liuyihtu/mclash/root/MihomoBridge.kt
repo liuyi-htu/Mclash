@@ -35,15 +35,19 @@ internal object MihomoProcess {
         return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled)
     }
 
-    fun validateConfig(context: Context, source: File) {
+    fun validateConfig(context: Context, source: File) = validateWithBinary(context, source, binary(context))
+
+    fun validateWithBinary(context: Context, source: File, core: File) {
         val directory = prepare(context)
         val config = File.createTempFile("validate-", ".yaml", directory)
         val log = File.createTempFile("validate-", ".log", directory)
         var validator: Process? = null
         try {
             config.writeText(previewConfig(context, source))
-            validator = ProcessBuilder(binary(context).absolutePath, "-t", "-d", directory.absolutePath, "-f", config.absolutePath)
-                .redirectErrorStream(true).redirectOutput(log).start()
+            validator = if (core.parentFile?.absolutePath == context.applicationInfo.nativeLibraryDir) {
+                ProcessBuilder(core.absolutePath, "-t", "-d", directory.absolutePath, "-f", config.absolutePath)
+                    .redirectErrorStream(true).redirectOutput(log).start()
+            } else RootShell.start("${RootShell.quote(core.absolutePath)} -t -d ${RootShell.quote(directory.absolutePath)} -f ${RootShell.quote(config.absolutePath)} > ${RootShell.quote(log.absolutePath)} 2>&1")
             check(validator.waitFor(30, TimeUnit.SECONDS)) { "配置校验超时" }
             check(validator.exitValue() == 0) { "运行配置校验失败：\n${log.readText().takeLast(16384)}" }
         } finally {
@@ -202,7 +206,11 @@ internal object MihomoProcess {
             [ "${'$'}name" = libmihomo.so ] || continue
             args=${'$'}(tr '\000' '\n' < "${'$'}entry" 2>/dev/null) || continue
             printf '%s\n' "${'$'}args" | grep -F -x ${RootShell.quote(directory.absolutePath)} >/dev/null || continue
-            printf '%s\n' "${'$'}args" | grep -E '^/data/app/.*/lib/[^/]+/libmihomo\.so${'$'}' >/dev/null || continue
+            executable=${'$'}(printf '%s\n' "${'$'}args" | sed -n '1p')
+            case "${'$'}executable" in
+                ${RootShell.quote(File(directory, "core").absolutePath)}/core-*/libmihomo.so) ;;
+                *) printf '%s\n' "${'$'}executable" | grep -E '^/data/app/.*/lib/[^/]+/libmihomo\.so${'$'}' >/dev/null || continue ;;
+            esac
             pid=${'$'}{entry#/proc/}; pid=${'$'}{pid%/cmdline}
             kill "${'$'}pid" 2>/dev/null || true
             n=0
@@ -223,9 +231,7 @@ internal object MihomoProcess {
 
     fun clearDebugLog(context: Context) { File(context.filesDir, "mihomo/mihomo.log").writeText("") }
 
-    private fun binary(context: Context): File = File(context.applicationInfo.nativeLibraryDir, "libmihomo.so").also {
-        require(it.isFile && it.canExecute()) { "APK 中缺少可执行的当前架构 Mihomo 内核" }
-    }
+    private fun binary(context: Context): File = CoreUpdater.binary(context)
     private fun canConnect(port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 200) }; true
     }.getOrDefault(false)
