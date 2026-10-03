@@ -6,6 +6,7 @@ import 'package:mclash/proxy_platform_service.dart';
 import 'package:mclash/proxy_panel_page.dart';
 
 class _Service implements ProxyPlatformService {
+  bool running = false;
   @override
   Future<bool> getUsageNoticeAccepted() async => true;
   @override
@@ -13,7 +14,7 @@ class _Service implements ProxyPlatformService {
   @override
   Future<List<ConfigProfile>> getConfigs() async => [];
   @override
-  Future<bool> isRunning() async => false;
+  Future<bool> isRunning() async => running;
   @override
   Future<bool> getDebugLoggingEnabled() async => false;
   @override
@@ -33,6 +34,37 @@ class _Service implements ProxyPlatformService {
 }
 
 void main() {
+  testWidgets(
+      'core update buttons follow connection changes while dialog is open',
+      (tester) async {
+    final service = _Service();
+    await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新内核'));
+    await tester.pumpAndSettle();
+    void expectEnabled(bool enabled) {
+      expect(
+          tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+          enabled ? isNotNull : isNull);
+      expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+          enabled ? isNotNull : isNull);
+    }
+
+    expectEnabled(false);
+    service.running = true;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expectEnabled(true);
+    service.running = false;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+    expectEnabled(false);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
   for (final width in [360.0, 900.0]) {
     for (final brightness in Brightness.values) {
       testWidgets('Windows navigation at $width in $brightness',
@@ -84,6 +116,13 @@ void main() {
         expect(find.byType(BottomSheet), findsNothing);
         expect(tester.getCenter(find.byType(AlertDialog)).dy, closeTo(400, 1));
         expect(find.text('检测版本'), findsOneWidget);
+        expect(
+            tester
+                .widget<OutlinedButton>(find.byType(OutlinedButton))
+                .onPressed,
+            isNull);
+        expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+            isNull);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();

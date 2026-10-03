@@ -29,7 +29,9 @@ class _HomePageState extends State<HomePage> {
   late final ProxyPlatformService _service =
       widget.service ?? NativeProxyService.instance;
 
-  ProxyStatus _status = ProxyStatus.stopped;
+  final _statusNotifier = ValueNotifier(ProxyStatus.stopped);
+  ProxyStatus get _status => _statusNotifier.value;
+  set _status(ProxyStatus value) => _statusNotifier.value = value;
   ConfigInfo _config = const ConfigInfo(exists: false);
   bool _debugLoggingEnabled = false;
   bool _serviceAutoStartEnabled = false;
@@ -89,6 +91,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _statusTimer?.cancel();
     _trafficTimer?.cancel();
+    _statusNotifier.dispose();
     super.dispose();
   }
 
@@ -732,97 +735,101 @@ class _HomePageState extends State<HomePage> {
     CoreUpdateInfo? info;
     var busy = false;
     var updating = false;
-    return StatefulBuilder(
-      builder: (context, setCardState) {
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
+    return ValueListenableBuilder<ProxyStatus>(
+      valueListenable: _statusNotifier,
+      builder: (context, status, _) => StatefulBuilder(
+        builder: (context, setCardState) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  info == null
-                      ? '尚未检测版本'
-                      : '当前 ${info!.currentVersion} / 官方 ${info!.latestVersion}',
-                ),
-                if (updating) ...[
-                  const SizedBox(height: 14),
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 8),
-                  const Text('正在下载并更新内核，请勿关闭应用…'),
-                ],
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: busy
-                            ? null
-                            : () async {
-                                setCardState(() => busy = true);
-                                try {
-                                  info = await _service.checkCoreUpdate(core);
-                                } catch (error) {
-                                  if (mounted) _showError(error);
-                                }
-                                if (context.mounted) {
-                                  setCardState(() => busy = false);
-                                }
-                              },
-                        child: const Text('检测版本'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: busy ||
-                                _status == ProxyStatus.starting ||
-                                _status == ProxyStatus.stopping
-                            ? null
-                            : () async {
-                                setCardState(() {
-                                  busy = true;
-                                  updating = true;
-                                });
-                                try {
-                                  info ??= await _service.checkCoreUpdate(core);
-                                  await _service.updateCore(core);
-                                  if (mounted) {
-                                    AppNotice.show(
-                                      this.context,
-                                      '$name 内核更新完成',
-                                    );
-                                  }
-                                } catch (error) {
-                                  if (mounted) {
-                                    await _showCoreUpdateFailure(name, error);
-                                  }
-                                }
-                                if (context.mounted) {
-                                  setCardState(() {
-                                    busy = false;
-                                    updating = false;
-                                  });
-                                }
-                              },
-                        child: Text(updating ? '正在更新…' : '更新内核'),
-                      ),
-                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    info == null
+                        ? '尚未检测版本'
+                        : '当前 ${info!.currentVersion} / 官方 ${info!.latestVersion}',
+                  ),
+                  if (updating) ...[
+                    const SizedBox(height: 14),
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 8),
+                    const Text('正在下载并更新内核，请勿关闭应用…'),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: busy || status != ProxyStatus.running
+                              ? null
+                              : () async {
+                                  if (_status != ProxyStatus.running) return;
+                                  setCardState(() => busy = true);
+                                  try {
+                                    info = await _service.checkCoreUpdate(core);
+                                  } catch (error) {
+                                    if (mounted) _showError(error);
+                                  }
+                                  if (context.mounted) {
+                                    setCardState(() => busy = false);
+                                  }
+                                },
+                          child: const Text('检测版本'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: busy || status != ProxyStatus.running
+                              ? null
+                              : () async {
+                                  if (_status != ProxyStatus.running) return;
+                                  setCardState(() {
+                                    busy = true;
+                                    updating = true;
+                                  });
+                                  try {
+                                    info ??=
+                                        await _service.checkCoreUpdate(core);
+                                    await _service.updateCore(core);
+                                    if (mounted) {
+                                      AppNotice.show(
+                                        this.context,
+                                        '$name 内核更新完成',
+                                      );
+                                    }
+                                  } catch (error) {
+                                    if (mounted) {
+                                      await _showCoreUpdateFailure(name, error);
+                                    }
+                                  }
+                                  if (context.mounted) {
+                                    setCardState(() {
+                                      busy = false;
+                                      updating = false;
+                                    });
+                                  }
+                                },
+                          child: Text(updating ? '正在更新…' : '更新内核'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
