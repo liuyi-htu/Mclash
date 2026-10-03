@@ -12,8 +12,8 @@ internal fun requiredWindowTopInset(
     statusTop: Int, captionTop: Int, cutoutTop: Int,
     contentScreenTop: Int, contentWindowTop: Int,
 ): Int = max(
-    max(0, statusTop - contentScreenTop),
-    max(0, max(captionTop, cutoutTop) - contentWindowTop),
+    max(0, max(statusTop, cutoutTop) - contentScreenTop),
+    max(0, captionTop - contentWindowTop),
 )
 
 internal fun Activity.smallWindowTopInset(): Double? {
@@ -50,8 +50,14 @@ internal fun Activity.smallWindowTopInset(): Double? {
             insets.displayCutout?.safeInsetTop ?: 0
         } else 0
     }
+    // Window bounds locate the content on the display even when an OEM
+    // reports view coordinates relative to the floating window.
+    val contentWindowTop = contentPosition[1] - decorPosition[1]
+    val contentScreenTop = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        windowManager.currentWindowMetrics.bounds.top + contentWindowTop
+    } else contentPosition[1]
     return requiredWindowTopInset(
         statusTop, captionTop, cutoutTop,
-        contentPosition[1], contentPosition[1] - decorPosition[1],
+        contentScreenTop, contentWindowTop,
     ) / resources.displayMetrics.density.toDouble()
 }

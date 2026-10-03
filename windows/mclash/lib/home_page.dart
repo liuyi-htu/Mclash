@@ -1,3 +1,4 @@
+import 'add_action_button.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -1095,39 +1096,23 @@ class _HomePageState extends State<HomePage> {
             letterSpacing: -0.6,
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: PopupMenuButton<_HomeMenuAction>(
-              tooltip: '更多功能',
-              onSelected: _handleMenuAction,
-              offset: const Offset(0, 10),
-              constraints: const BoxConstraints(minWidth: 150, maxWidth: 180),
-              icon: Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.add_rounded,
-                  color: colors.onPrimaryContainer,
-                ),
-              ),
-              itemBuilder: (context) => [
-                _menuItem(
-                  value: _HomeMenuAction.config,
-                  icon: Icons.description_outlined,
-                  title: '配置文件',
-                ),
-                _menuItem(
-                  value: _HomeMenuAction.generalSettings,
-                  icon: Icons.settings_outlined,
-                  title: '常规设置',
-                ),
-              ],
-            ),
+      ),
+      floatingActionButton: PopupMenuButton<_HomeMenuAction>(
+        tooltip: '更多功能',
+        onSelected: _handleMenuAction,
+        offset: const Offset(0, 10),
+        constraints: const BoxConstraints(minWidth: 150, maxWidth: 180),
+        child: const AddActionIcon(),
+        itemBuilder: (context) => [
+          _menuItem(
+            value: _HomeMenuAction.config,
+            icon: Icons.description_outlined,
+            title: '配置文件',
+          ),
+          _menuItem(
+            value: _HomeMenuAction.generalSettings,
+            icon: Icons.settings_outlined,
+            title: '常规设置',
           ),
         ],
       ),
@@ -1135,7 +1120,7 @@ class _HomePageState extends State<HomePage> {
         onRefresh: _refresh,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 10, 18, 32),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 88),
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
