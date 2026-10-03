@@ -26,7 +26,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _service = NativeProxyService.instance;
 
-  ProxyStatus _status = ProxyStatus.starting;
+  final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
+  ProxyStatus get _status => _proxyStatus.value;
+  set _status(ProxyStatus status) => _proxyStatus.value = status;
   bool _toggling = false;
   int _transitionGeneration = 0;
   bool _refreshInProgress = false;
@@ -60,6 +62,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _trafficTimer?.cancel();
+    _proxyStatus.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -1169,7 +1172,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               await showDialog<void>(
                 context: context,
                 barrierDismissible: false,
-                builder: (_) => const CoreUpdateDialog(),
+                builder: (_) => CoreUpdateDialog(proxyStatus: _proxyStatus),
               );
               await _refresh();
             },

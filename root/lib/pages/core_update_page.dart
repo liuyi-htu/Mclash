@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
 
 class CoreUpdateDialog extends StatefulWidget {
-  const CoreUpdateDialog({super.key});
+  const CoreUpdateDialog({super.key, required this.proxyStatus});
+
+  final ValueListenable<ProxyStatus> proxyStatus;
 
   @override
   State<CoreUpdateDialog> createState() => _CoreUpdateDialogState();
@@ -16,6 +19,8 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
   bool _busy = false;
   bool _updating = false;
   String? _message;
+
+  bool get _proxyEnabled => widget.proxyStatus.value == ProxyStatus.running;
 
   Future<void> _check() async {
     setState(() => _busy = true);
@@ -41,8 +46,9 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
       _message = null;
     });
     try {
-      if (await _service.getProxyStatus() != ProxyStatus.stopped) {
-        throw StateError('请先停止代理再更新内核');
+      final status = await _service.getProxyStatus();
+      if (status != ProxyStatus.running) {
+        throw StateError('请先开启代理再更新内核');
       }
       final info = await _service.updateCore();
       if (!mounted) return;
@@ -51,8 +57,7 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
           'currentVersion': info['version'],
           'latestVersion': info['version']
         };
-        _message =
-            info['updated'] == true ? 'mihomo 内核更新完成，下次启动代理时生效' : '当前已是最新稳定版';
+        _message = info['updated'] == true ? 'mihomo 内核更新完成' : '当前已是最新稳定版';
       });
     } catch (error) {
       if (mounted) setState(() => _message = 'mihomo 内核更新失败：$error');
@@ -67,67 +72,86 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-        canPop: !_busy,
-        child: AlertDialog(
-          title: const Text('更新内核'),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('mihomo',
-                              style: TextStyle(
-                                  fontSize: 17, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Text(_info == null
-                              ? '尚未检测版本'
-                              : '当前 ${_info!['currentVersion']} / 官方 ${_info!['latestVersion']}'),
-                          if (_updating) ...[
-                            const SizedBox(height: 14),
-                            const LinearProgressIndicator(),
-                            const SizedBox(height: 8),
-                            const Text('正在下载并更新内核，请勿关闭应用…'),
+  Widget build(BuildContext context) => ValueListenableBuilder<ProxyStatus>(
+        valueListenable: widget.proxyStatus,
+        builder: (context, status, _) => PopScope(
+          canPop: !_busy,
+          child: AlertDialog(
+            title: const Text('更新内核'),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('mihomo',
+                                style: TextStyle(
+                                    fontSize: 17, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 6),
+                            Text(_info == null
+                                ? '尚未检测版本'
+                                : '当前 ${_info!['currentVersion']} / 官方 ${_info!['latestVersion']}'),
+                            if (_updating) ...[
+                              const SizedBox(height: 14),
+                              const LinearProgressIndicator(),
+                              const SizedBox(height: 8),
+                              const Text('正在下载并更新内核，请勿关闭应用…'),
+                            ],
+                            const SizedBox(height: 16),
+                            Row(children: [
+                              Expanded(
+                                  child: OutlinedButton(
+                                      onPressed: _busy || !_proxyEnabled
+                                          ? null
+                                          : _check,
+                                      style: OutlinedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8)),
+                                      child: const FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text('检测版本',
+                                              maxLines: 1, softWrap: false)))),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: FilledButton(
+                                      onPressed: _busy || !_proxyEnabled
+                                          ? null
+                                          : _update,
+                                      style: FilledButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8)),
+                                      child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                              _updating ? '正在更新…' : '更新内核',
+                                              maxLines: 1,
+                                              softWrap: false)))),
+                            ]),
+                            if (_message != null) ...[
+                              const SizedBox(height: 14),
+                              Text(_message!),
+                            ],
                           ],
-                          const SizedBox(height: 16),
-                          Row(children: [
-                            Expanded(
-                                child: OutlinedButton(
-                                    onPressed: _busy ? null : _check,
-                                    child: const Text('检测版本'))),
-                            const SizedBox(width: 12),
-                            Expanded(
-                                child: FilledButton(
-                                    onPressed: _busy ? null : _update,
-                                    child: Text(_updating ? '正在更新…' : '更新内核'))),
-                          ]),
-                          if (_message != null) ...[
-                            const SizedBox(height: 14),
-                            Text(_message!),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('请先停止代理。更新会下载官方稳定版，校验后切换内核；失败时保留原内核。'),
-                ],
+                  ],
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                  child: const Text('关闭'))
+            ],
           ),
-          actions: [
-            TextButton(
-                onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                child: const Text('关闭'))
-          ],
         ),
       );
 }

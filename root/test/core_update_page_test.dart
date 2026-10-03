@@ -4,23 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pages/core_update_page.dart';
+import 'package:mclash/core/models.dart';
 
 void main() {
   const channel = MethodChannel('mclash/native');
-  var status = 'stopped';
+  var status = 'running';
   var updates = 0;
+  var checks = 0;
+  late ValueNotifier<ProxyStatus> sharedStatus;
   var fail = false;
   Completer<Map<String, Object>>? pending;
 
   setUp(() {
-    status = 'stopped';
+    status = 'running';
     updates = 0;
+    checks = 0;
     fail = false;
     pending = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       switch (call.method) {
         case 'checkCoreUpdate':
+          checks++;
           return {'currentVersion': 'v1.19.31', 'latestVersion': 'v1.19.32'};
         case 'getProxyStatus':
           return status;
@@ -41,9 +46,15 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  Future<void> open(WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: CoreUpdateDialog()));
+  Future<void> open(WidgetTester tester, {bool check = true}) async {
+    sharedStatus = ValueNotifier<ProxyStatus>(
+        status == 'running' ? ProxyStatus.running : ProxyStatus.stopped);
+    addTearDown(sharedStatus.dispose);
+    addTearDown(() => tester.pumpWidget(const SizedBox()));
+    await tester.pumpWidget(
+        MaterialApp(home: CoreUpdateDialog(proxyStatus: sharedStatus)));
     await tester.pumpAndSettle();
+    if (!check) return;
     await tester.tap(find.text('检测版本'));
     await tester.pumpAndSettle();
     expect(find.text('当前 v1.19.31 / 官方 v1.19.32'), findsOneWidget);
@@ -63,16 +74,55 @@ void main() {
         .complete({'version': 'v1.19.32', 'installed': true, 'updated': true});
     await tester.pumpAndSettle();
     expect(find.text('当前 v1.19.32 / 官方 v1.19.32'), findsOneWidget);
-    expect(find.text('mihomo 内核更新完成，下次启动代理时生效'), findsOneWidget);
+    expect(find.text('mihomo 内核更新完成'), findsOneWidget);
   });
 
-  testWidgets('running proxy blocks download', (tester) async {
+  testWidgets(
+      'stopped proxy disables both buttons and enables them after start',
+      (tester) async {
+    status = 'stopped';
+    await open(tester, check: false);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull);
+    expect(tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        isNull);
+    expect(updates, 0);
+    expect(checks, 0);
+    status = 'running';
+    sharedStatus.value = ProxyStatus.running;
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull);
+    expect(tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+        isNotNull);
+  });
+
+  testWidgets('button labels stay on one line on a narrow phone',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await open(tester, check: false);
+    for (final label in ['检测版本', '更新内核']) {
+      final button =
+          find.descendant(of: find.byType(Row), matching: find.text(label));
+      expect(tester.widget<Text>(button).maxLines, 1);
+      expect(tester.widget<Text>(button).softWrap, false);
+    }
+    expect(find.textContaining('请先停止代理。'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('running proxy can download before native replacement',
+      (tester) async {
     status = 'running';
     await open(tester);
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
-    expect(updates, 0);
-    expect(find.textContaining('请先停止代理再更新内核'), findsOneWidget);
+    expect(updates, 1);
+    expect(find.text('mihomo 内核更新完成'), findsOneWidget);
   });
 
   testWidgets('failed update retains version and allows retry', (tester) async {

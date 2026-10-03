@@ -130,11 +130,7 @@ class MainActivity : FlutterActivity() {
                 "saveAppFilter" -> saveAppFilter(call, result)
                 "checkCoreUpdate" -> runAsync(result, "root-core-check") { CoreUpdater.checkUpdate(this) }
                 "getCoreInfo" -> runAsync(result, "root-core-info") { CoreUpdater.info(this) }
-                "updateCore" -> runAsync(result, "root-core-update") {
-                    RuntimeEdits.edit(::requireProxyStopped) {
-                        CoreUpdater.update(this, configStore.configFile.takeIf { configStore.exists() })
-                    }
-                }
+                "updateCore" -> updateCore(result)
                 "prepareRoot" -> runAsync(result, "root-authorization") { RootShell.requireRoot(); true }
                 "start" -> startProxy(result)
                 "stop" -> {
@@ -193,6 +189,63 @@ class MainActivity : FlutterActivity() {
         } catch (error: Throwable) {
             result.error("native_error", error.message, null)
         }
+    }
+
+    private fun updateCore(result: MethodChannel.Result) = runAsync(result, "root-core-update") {
+        var resume = false
+        var switched = false
+        var previous: String? = null
+        try {
+            RuntimeEdits.edit({
+                check(ProxyTProxyService.running && !ProxyTProxyService.starting && !ProxyTProxyService.restoring) { "请先开启代理再更新内核" }
+                resume = true
+                previous = CoreUpdater.selectionName(this)
+            }) {
+                val info = CoreUpdater.update(this, configStore.configFile.takeIf { configStore.exists() }, ::pauseForCoreUpdate)
+                switched = info["updated"] == true
+                info
+            }
+        } finally {
+            if (resume && !ProxyTProxyService.running) {
+                try {
+                    resumeAfterCoreUpdate()
+                } catch (failure: Exception) {
+                    if (!switched) throw failure
+                    RuntimeEdits.edit({}) {
+                        pauseForCoreUpdate()
+                        CoreUpdater.restoreSelection(this, previous)
+                    }
+                    try { resumeAfterCoreUpdate() }
+                    catch (restoreFailure: Exception) {
+                        throw IllegalStateException("新内核启动失败，已恢复原内核，但恢复代理失败：${restoreFailure.message}", failure)
+                    }
+                    throw IllegalStateException("新内核启动失败，已恢复原内核并重新启动代理", failure)
+                }
+            }
+        }
+    }
+
+    private fun pauseForCoreUpdate() {
+        if (ProxyTProxyService.running || ProxyTProxyService.starting || MihomoProcess.isRunning()) {
+            ProxyTProxyService.stop(this)
+            val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
+            while ((ProxyTProxyService.running || ProxyTProxyService.starting || MihomoProcess.isRunning()) &&
+                System.currentTimeMillis() < deadline) Thread.sleep(100)
+        }
+        requireProxyStopped()
+    }
+
+    private fun resumeAfterCoreUpdate() {
+        if (!ProxyTProxyService.starting) {
+            ProxyTProxyService.clearLastError()
+            ProxyTProxyService.start(this)
+        }
+        val deadline = System.currentTimeMillis() + START_TIMEOUT_MS
+        while (!ProxyTProxyService.running && System.currentTimeMillis() < deadline) {
+            ProxyTProxyService.lastError?.let { error("恢复代理失败：$it") }
+            Thread.sleep(100)
+        }
+        check(ProxyTProxyService.running) { "内核处理完成，但恢复代理超时" }
     }
 
     private fun configInfo(): Map<String, Any?> {
@@ -660,7 +713,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private val MUTATING_METHODS = setOf(
             "enableDeveloperMode", "disableDeveloperMode", "saveAppFilter",
-            "saveRootSettings", "setDebugLoggingEnabled", "clearDebugLogs", "updateCore",
+            "saveRootSettings", "setDebugLoggingEnabled", "clearDebugLogs",
             "importConfigs", "addSubscription", "updateSubscription", "editSubscriptionAirport", "refreshSubscription",
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
         )
