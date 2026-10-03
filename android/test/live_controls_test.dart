@@ -120,6 +120,53 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
+  testWidgets(
+      'proxy panel adapts to tablet rotation, split screen and large text',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data:
+            MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(1.5)),
+        child: child!,
+      ),
+      home: const ProxyPanelPage(proxyRunning: true),
+    ));
+    await tester.pumpAndSettle();
+    final groups = tester.widget<SliverGrid>(find.byType(SliverGrid));
+    expect(
+        (groups.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+            .crossAxisCount,
+        greaterThan(2));
+    await tester.tap(find.text('Test group'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(Dialog)).width, greaterThan(520));
+    var nodes = tester.widget<GridView>(find.byType(GridView));
+    expect(
+        (nodes.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+            .crossAxisCount,
+        greaterThan(2));
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(800, 1200);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    tester.view.physicalSize = const Size(360, 800);
+    await tester.pumpAndSettle();
+    nodes = tester.widget<GridView>(find.byType(GridView));
+    expect(
+        (nodes.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+            .crossAxisCount,
+        1);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Node B'));
+    await tester.pumpAndSettle();
+    expect(controller.writes.last['body'], {'name': 'Node B'});
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('running proxy can switch global, direct and rule modes',
       (tester) async {
     await tester.pumpWidget(const MclashApp());
