@@ -630,36 +630,44 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final current = await _service.getRootSettings();
       if (!mounted) return;
       var bypassLan = current.bypassLan;
-      final save = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => StatefulBuilder(
-                builder: (dialogContext, setDialogState) => AlertDialog(
-                  title: const Text('TProxy 参数'),
-                  content: SingleChildScrollView(
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('绕过局域网'),
-                            value: bypassLan,
-                            onChanged: (value) =>
-                                setDialogState(() => bypassLan = value)),
-                      ])),
-                  actions: [
-                    FilledButton(
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(true);
+      var saving = false;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => PopScope(
+            canPop: !saving,
+            child: AlertDialog(
+              title: const Text('TProxy 参数'),
+              content: SingleChildScrollView(
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('绕过局域网'),
+                  value: bypassLan,
+                  onChanged: saving
+                      ? null
+                      : (value) async {
+                          final previous = bypassLan;
+                          setDialogState(() {
+                            bypassLan = value;
+                            saving = true;
+                          });
+                          try {
+                            await _service.saveRootSettings(bypassLan: value);
+                          } catch (error) {
+                            bypassLan = previous;
+                            if (mounted) _showError(error);
+                          } finally {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => saving = false);
+                            }
+                          }
                         },
-                        child: const Text('保存')),
-                  ],
                 ),
-              ));
-      if (save != true) return;
-      await _service.saveRootSettings(bypassLan: bypassLan);
-      if (!mounted) return;
-      showTopSnackBar(context, const SnackBar(content: Text('TProxy 参数已保存')));
+              ),
+            ),
+          ),
+        ),
+      );
     } catch (error) {
       if (mounted) _showError(error);
     }
