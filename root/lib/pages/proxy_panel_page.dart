@@ -591,7 +591,6 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                   context,
                                   constraints.maxWidth,
                                   spacing: 10,
-                                  compact: true,
                                 ),
                                 itemBuilder: (context, index) {
                                   final liveGroup = _groups.firstWhere(
@@ -799,7 +798,6 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
   BuildContext context,
   double width, {
   required double spacing,
-  bool compact = false,
 }) {
   final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
@@ -809,7 +807,7 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
     crossAxisCount: columns,
     mainAxisSpacing: spacing,
     crossAxisSpacing: spacing,
-    mainAxisExtent: compact ? 24 + 40 * textScale : 32 + 56 * textScale,
+    mainAxisExtent: 24 + 40 * textScale,
   );
 }
 
@@ -901,14 +899,19 @@ class _SelectedNodeDetails extends StatelessWidget {
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        label,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+        ),
       ),
     );
   }
