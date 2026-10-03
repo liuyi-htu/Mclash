@@ -16,8 +16,25 @@ internal fun requiredWindowTopInset(
     max(0, captionTop - contentWindowTop),
 )
 
+internal fun isCompactAppWindow(
+    multiWindow: Boolean, captionTop: Int,
+    windowWidth: Int, windowHeight: Int,
+    maximumWidth: Int, maximumHeight: Int,
+): Boolean = multiWindow || captionTop > 0 || (
+    windowWidth > 0 && windowHeight > 0 && maximumWidth > 0 && maximumHeight > 0 &&
+        (windowWidth < maximumWidth - 1 || windowHeight < maximumHeight - 1)
+    )
+
+internal fun isFloatingAppWindow(
+    captionTop: Int, windowWidth: Int, windowHeight: Int,
+    maximumWidth: Int, maximumHeight: Int,
+): Boolean = captionTop > 0 || (
+    windowWidth > 0 && windowHeight > 0 && maximumWidth > 0 && maximumHeight > 0 &&
+        windowWidth < maximumWidth - 1 && windowHeight < maximumHeight - 1
+    )
+
 internal fun Activity.smallWindowTopInset(): Double? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInMultiWindowMode) return null
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return null
     fun findFlutter(view: View): FlutterView? {
         if (view is FlutterView) return view
         if (view is ViewGroup) {
@@ -50,6 +67,36 @@ internal fun Activity.smallWindowTopInset(): Double? {
             insets.displayCutout?.safeInsetTop ?: 0
         } else 0
     }
+    val compactWindow = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val bounds = windowManager.currentWindowMetrics.bounds
+        val maximumBounds = windowManager.maximumWindowMetrics.bounds
+        if (isFloatingAppWindow(
+                captionTop, bounds.width(), bounds.height(),
+                maximumBounds.width(), maximumBounds.height(),
+            )) return 0.0
+        isCompactAppWindow(
+            isInMultiWindowMode, captionTop,
+            bounds.width(), bounds.height(), maximumBounds.width(), maximumBounds.height(),
+        )
+    } else {
+        // Older Android versions have no window metrics. Width is unaffected by
+        // IME resize, so it can detect a floating window without treating the
+        // fullscreen keyboard as a window-mode change.
+        val displaySize = android.graphics.Point()
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealSize(displaySize)
+        @Suppress("DEPRECATION")
+        val bottomInset = insets.systemWindowInsetBottom
+        if (isFloatingAppWindow(
+                captionTop, decor.width, decor.height + max(statusTop, cutoutTop) + bottomInset,
+                displaySize.x, displaySize.y,
+            )) return 0.0
+        isCompactAppWindow(
+            isInMultiWindowMode, captionTop,
+            decor.width, displaySize.y, displaySize.x, displaySize.y,
+        )
+    }
+    if (!compactWindow) return null
     // Window bounds locate the content on the display even when an OEM
     // reports view coordinates relative to the floating window.
     val contentWindowTop = contentPosition[1] - decorPosition[1]
