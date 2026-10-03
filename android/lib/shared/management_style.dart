@@ -35,10 +35,10 @@ class ManagementCard extends StatelessWidget {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
           titleTextStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
-          subtitleTextStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+          subtitleTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colors.onSurfaceVariant,
                 height: 1.5,
               ),
@@ -106,7 +106,7 @@ class ManagementMenuTile extends StatelessWidget {
       ),
       title: Text(title,
           style: TextStyle(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
               color: enabled && destructive ? colors.error : null)),
       enabled: enabled,
