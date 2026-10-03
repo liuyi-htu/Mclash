@@ -13,6 +13,88 @@ void main() {
       active: true,
       exists: true,
       updatedAt: 0);
+  testWidgets('runtime viewer hides line numbers, jumps, searches and copies',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 540);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final content =
+        'mode: rule\n# ${'long ' * 100}needle\nrules:\n  - MATCH,DIRECT\n';
+    var copied = '';
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = call.arguments['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getProxyStatus') return null;
+      if (call.method == 'isRunning') return true;
+      if (call.method == 'getRuntimeConfigContent') return content;
+      throw StateError('Unexpected mutation: ${call.method}');
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    await tester.pumpWidget(const MaterialApp(
+        home: ConfigEditorPage(
+            profile: profile, runtimeView: true, proxyRunning: true)));
+    await tester.pumpAndSettle();
+    final editor = find
+        .byWidgetPredicate((widget) => widget is TextField && widget.readOnly);
+    final controller = tester.widget<TextField>(editor).controller!;
+    final numbers = find.byKey(const ValueKey('config-line-numbers'));
+    expect(numbers, findsNothing);
+    expect(find.text('保存'), findsNothing);
+    expect(tester.getCenter(find.byTooltip('显示行号')).dx,
+        lessThan(tester.getCenter(find.byTooltip('跳转到行')).dx));
+    await tester.tap(find.byTooltip('显示行号'));
+    await tester.pumpAndSettle();
+    expect(numbers, findsOneWidget);
+    await tester.tap(find.byTooltip('隐藏行号'));
+    await tester.pumpAndSettle();
+    expect(numbers, findsNothing);
+    await tester.tap(find.byTooltip('跳转到行'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '行号'), '3');
+    await tester.tap(find.text('跳转'));
+    await tester.pumpAndSettle();
+    expect(controller.selection.start, content.indexOf('rules:'));
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('搜索配置'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '搜索配置'), 'NEEDLE');
+    await tester.pumpAndSettle();
+    expect(controller.selection.textInside(controller.text), 'needle');
+    expect(find.text('1/1'), findsOneWidget);
+    final horizontal = tester.state<ScrollableState>(find.ancestor(
+        of: editor,
+        matching: find.byWidgetPredicate((widget) =>
+            widget is Scrollable &&
+            widget.axisDirection == AxisDirection.right)));
+    expect(horizontal.position.pixels, greaterThan(0));
+    await tester.enterText(find.widgetWithText(TextField, '搜索配置'), 'missing');
+    await tester.pumpAndSettle();
+    expect(find.text('0/0'), findsOneWidget);
+    await tester.tap(find.byTooltip('关闭搜索'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('更多操作'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制全文'));
+    await tester.pumpAndSettle();
+    expect(copied, content);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('subscription config stays read-only even when proxy is stopped',
       (tester) async {
     const subscription = ConfigProfile(
@@ -77,7 +159,7 @@ void main() {
     var field = tester.widget<TextField>(find.byType(TextField));
     expect(field.readOnly, isTrue);
     expect(field.controller!.text, 'mixed-port: 7890\n');
-    expect(find.text('当前运行配置（只读）'), findsOneWidget);
+    expect(find.text('当前运行配置'), findsOneWidget);
     expect(find.text('保存'), findsNothing);
     running = false;
     await tester.pump(const Duration(seconds: 1));

@@ -731,6 +731,8 @@ class _ConfigPageState extends State<ConfigPage> {
         builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(
                 title: Text(link == null ? '添加机场' : '编辑机场'),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
                 content: SizedBox(
                     width: 480,
                     child: SingleChildScrollView(
@@ -742,12 +744,15 @@ class _ConfigPageState extends State<ConfigPage> {
                           decoration: InputDecoration(
                             labelText: '机场名称',
                             filled: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 16),
                             fillColor: Theme.of(dialogContext)
                                 .colorScheme
                                 .surfaceContainerHighest
                                 .withValues(alpha: 0.45),
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14)),
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none),
                           )),
                       const SizedBox(height: 12),
                       TextField(
@@ -756,12 +761,15 @@ class _ConfigPageState extends State<ConfigPage> {
                           decoration: InputDecoration(
                               labelText: '订阅链接',
                               filled: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 16),
                               fillColor: Theme.of(dialogContext)
                                   .colorScheme
                                   .surfaceContainerHighest
                                   .withValues(alpha: 0.45),
                               border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14)),
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none),
                               hintText: 'https://...',
                               errorText: error),
                           keyboardType: TextInputType.url,

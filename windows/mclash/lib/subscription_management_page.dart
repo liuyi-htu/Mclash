@@ -38,10 +38,13 @@ class _SubscriptionManagementPageState
   late ConfigProfile _profile = widget.profile;
   bool _working = false;
   String? _error;
+  String? _updatingLink;
 
-  Future<void> _change(Future<ConfigProfile?> Function() action) async {
+  Future<void> _change(Future<ConfigProfile?> Function() action,
+      {String? updatingLink}) async {
     setState(() {
       _working = true;
+      _updatingLink = updatingLink;
       _error = null;
     });
     try {
@@ -56,7 +59,12 @@ class _SubscriptionManagementPageState
     } catch (failure) {
       if (mounted) setState(() => _error = failure.toString());
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _updatingLink = null;
+        });
+      }
     }
   }
 
@@ -102,49 +110,110 @@ class _SubscriptionManagementPageState
                 children: [
                   for (var i = 0; i < links.length; i++)
                     ManagementCard(
-                        key: ValueKey(links[i]),
-                        child: ListTile(
-                          key: ValueKey(links[i]),
-                          isThreeLine: true,
-                          leading: ReorderableDragStartListener(
-                            index: i,
-                            enabled: editable,
-                            child: const Icon(Icons.drag_handle),
-                          ),
-                          title: Text(
-                              '${i + 1} · ${_profile.subscriptionNameFor(links[i], i)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
-                          subtitle: Text(subscriptionUsageSummary(
-                              _profile.subscriptionInfoFor(links[i]))),
-                          trailing:
-                              Row(mainAxisSize: MainAxisSize.min, children: [
-                            SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: IconButton(
-                                  tooltip: '更新机场',
-                                  color: Theme.of(context).colorScheme.primary,
-                                  icon: const Icon(Icons.refresh_rounded,
-                                      size: 22),
-                                  onPressed: editable && widget.onUpdate != null
+                      key: ValueKey(links[i]),
+                      child: InkWell(
+                        onTap: _working
+                            ? null
+                            : () => _change(
+                                () => widget.onEdit(_profile, links[i])),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 4, 8, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(children: [
+                                Expanded(
+                                  child: ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(scrollbars: false),
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Text(
+                                          '${i + 1} · ${_profile.subscriptionNameFor(links[i], i)}',
+                                          maxLines: 1,
+                                          softWrap: false,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600)),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: IconButton(
+                                    tooltip: '更新机场',
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    icon: _updatingLink == links[i]
+                                        ? TickerMode(
+                                            enabled: ModalRoute.of(context)
+                                                    ?.isCurrent ??
+                                                true,
+                                            child: const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2)),
+                                          )
+                                        : const Icon(Icons.refresh_rounded,
+                                            size: 22),
+                                    onPressed:
+                                        editable && widget.onUpdate != null
+                                            ? () => _change(
+                                                () => widget.onUpdate!(
+                                                    _profile, links[i]),
+                                                updatingLink: links[i])
+                                            : null,
+                                  ),
+                                ),
+                                ManagementDeleteButton(
+                                  tooltip: '删除机场',
+                                  onPressed: editable && widget.onDelete != null
                                       ? () => _change(() =>
-                                          widget.onUpdate!(_profile, links[i]))
+                                          widget.onDelete!(_profile, links[i]))
                                       : null,
-                                )),
-                            ManagementDeleteButton(
-                              tooltip: '删除机场',
-                              onPressed: editable && widget.onDelete != null
-                                  ? () => _change(() =>
-                                      widget.onDelete!(_profile, links[i]))
-                                  : null,
-                            ),
-                          ]),
-                          onTap: _working
-                              ? null
-                              : () => _change(
-                                  () => widget.onEdit(_profile, links[i])),
-                        )),
+                                ),
+                              ]),
+                              Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ReorderableDragStartListener(
+                                      index: i,
+                                      enabled: editable,
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            0, 6, 12, 6),
+                                        child: Icon(Icons.drag_handle,
+                                            size: 22,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                          subscriptionUsageSummary(_profile
+                                              .subscriptionInfoFor(links[i])),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  height: 1.5)),
+                                    ),
+                                  ]),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
