@@ -674,7 +674,7 @@ class _HomePageState extends State<HomePage> {
                   : Icons.radio_button_unchecked),
               onTap: () =>
                   Navigator.of(dialogContext).pop(_RunModeChoice.mihomoTun),
-              title: const Text('mihomo + TUN'),
+              title: const Text('TUN'),
             ),
             ListTile(
               leading: Icon(current == _RunModeChoice.mihomoProxy
@@ -682,7 +682,7 @@ class _HomePageState extends State<HomePage> {
                   : Icons.radio_button_unchecked),
               onTap: () =>
                   Navigator.of(dialogContext).pop(_RunModeChoice.mihomoProxy),
-              title: const Text('mihomo + 系统代理'),
+              title: const Text('系统代理'),
             ),
           ],
         ),
