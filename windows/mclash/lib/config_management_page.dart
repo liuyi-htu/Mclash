@@ -512,7 +512,7 @@ Future<String?> _groupDialog(
                                           softWrap: false,
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodyMedium),
+                                              .bodyLarge),
                                     ),
                                   ),
                                 ),

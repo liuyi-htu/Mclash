@@ -136,7 +136,7 @@ class _SubscriptionManagementPageState
                                               .textTheme
                                               .titleSmall
                                               ?.copyWith(
-                                                  fontSize: 15,
+                                                  fontSize: 16,
                                                   fontWeight: FontWeight.w600)),
                                     ),
                                   ),
@@ -201,7 +201,7 @@ class _SubscriptionManagementPageState
                                               .subscriptionInfoFor(links[i])),
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodySmall
+                                              .bodyMedium
                                               ?.copyWith(
                                                   color: Theme.of(context)
                                                       .colorScheme
