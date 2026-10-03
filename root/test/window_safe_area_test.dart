@@ -27,22 +27,31 @@ void main() {
       ),
       home: Builder(builder: (context) {
         observed = MediaQuery.of(context);
-        return const Scaffold(body: Text('内容'));
+        return Scaffold(
+            appBar: AppBar(title: const Text('页面标题')), body: const Text('内容'));
       }),
     ));
     await tester.pumpAndSettle();
     expect(observed!.padding.top, 30);
+    final fullscreenTitleTop = tester.getTopLeft(find.text('页面标题')).dy;
+    final fullscreenAppBarHeight = tester.getSize(find.byType(AppBar)).height;
     inset = 0;
     tester.binding.handleMetricsChanged();
     await tester.pumpAndSettle();
     expect(observed!.padding, const EdgeInsets.fromLTRB(8, 0, 8, 20));
     expect(observed!.viewPadding.top, 0);
     expect(observed!.viewInsets.bottom, 100);
+    expect(tester.getTopLeft(find.text('页面标题')).dy,
+        closeTo(fullscreenTitleTop - 30, 0.01));
+    expect(tester.getSize(find.byType(AppBar)).height,
+        closeTo(fullscreenAppBarHeight - 30, 0.01));
     // Preserve a real caption/cutout inset still overlapping the content.
     inset = 12;
     tester.binding.handleMetricsChanged();
     await tester.pumpAndSettle();
     expect(observed!.padding.top, 12);
+    expect(tester.getTopLeft(find.text('页面标题')).dy,
+        closeTo(fullscreenTitleTop - 18, 0.01));
     // Native layout can settle after Flutter's resize notification.
     inset = 0;
     await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
@@ -61,6 +70,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(observed!.padding.top, 30);
     expect(observed!.viewPadding.top, 30);
+    expect(tester.getTopLeft(find.text('页面标题')).dy,
+        closeTo(fullscreenTitleTop, 0.01));
     await tester.pumpWidget(const SizedBox());
   });
 }
