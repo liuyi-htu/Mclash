@@ -146,11 +146,6 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
                 ),
               ),
             ),
-            actions: [
-              TextButton(
-                  onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                  child: const Text('关闭'))
-            ],
           ),
         ),
       );

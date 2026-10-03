@@ -60,6 +60,44 @@ void main() {
     expect(find.text('当前 v1.19.31 / 官方 v1.19.32'), findsOneWidget);
   }
 
+  testWidgets('outside tap closes idle dialog and waits for an active update',
+      (tester) async {
+    sharedStatus = ValueNotifier(ProxyStatus.running);
+    addTearDown(sharedStatus.dispose);
+    addTearDown(() => tester.pumpWidget(const SizedBox()));
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+          builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => CoreUpdateDialog(proxyStatus: sharedStatus),
+                ),
+                child: const Text('打开'),
+              )),
+    ));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    expect(find.text('关闭'), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+
+    pending = Completer<Map<String, Object>>();
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FilledButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    pending!.complete({'version': 'v1.19.32', 'updated': true});
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
   testWidgets('updates version and prevents duplicate updates while busy',
       (tester) async {
     pending = Completer<Map<String, Object>>();
