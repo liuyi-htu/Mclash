@@ -265,6 +265,16 @@ class NativeProxyService {
     });
   }
 
+  Future<Map<String, dynamic>> checkCoreUpdate() async =>
+      Map<String, dynamic>.from(
+        await _channel.invokeMapMethod<String, dynamic>('checkCoreUpdate') ??
+            {},
+      );
+
+  Future<Map<String, dynamic>> updateCore() async => Map<String, dynamic>.from(
+        await _channel.invokeMapMethod<String, dynamic>('updateCore') ?? {},
+      );
+
   Future<bool> prepareRoot() async {
     return await _channel.invokeMethod<bool>('prepareRoot') ?? false;
   }

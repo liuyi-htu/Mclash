@@ -128,6 +128,13 @@ class MainActivity : FlutterActivity() {
                 "getMode" -> result.success(preferences.appProxyMode)
                 "getSelectedPackages" -> result.success(preferences.selectedPackages.toList())
                 "saveAppFilter" -> saveAppFilter(call, result)
+                "checkCoreUpdate" -> runAsync(result, "root-core-check") { CoreUpdater.checkUpdate(this) }
+                "getCoreInfo" -> runAsync(result, "root-core-info") { CoreUpdater.info(this) }
+                "updateCore" -> runAsync(result, "root-core-update") {
+                    RuntimeEdits.edit(::requireProxyStopped) {
+                        CoreUpdater.update(this, configStore.configFile.takeIf { configStore.exists() })
+                    }
+                }
                 "prepareRoot" -> runAsync(result, "root-authorization") { RootShell.requireRoot(); true }
                 "start" -> startProxy(result)
                 "stop" -> {
@@ -395,7 +402,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun startupDiagnostics(): String {
-        val binary = File(applicationInfo.nativeLibraryDir, "libmihomo.so")
+        val binary = runCatching { CoreUpdater.binary(this) }
+            .getOrElse { File(applicationInfo.nativeLibraryDir, "libmihomo.so") }
         val config = configStore.configFile
         val active = configStore.activeProfile()
         val home = File(filesDir, "mihomo")
@@ -652,7 +660,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private val MUTATING_METHODS = setOf(
             "enableDeveloperMode", "disableDeveloperMode", "saveAppFilter",
-            "saveRootSettings", "setDebugLoggingEnabled", "clearDebugLogs",
+            "saveRootSettings", "setDebugLoggingEnabled", "clearDebugLogs", "updateCore",
             "importConfigs", "addSubscription", "updateSubscription", "editSubscriptionAirport", "refreshSubscription",
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
         )

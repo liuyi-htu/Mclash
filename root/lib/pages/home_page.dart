@@ -12,6 +12,7 @@ import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
 import 'app_selector_page.dart';
 import 'config_page.dart';
+import 'core_update_page.dart';
 import 'device_registration_page.dart';
 import 'proxy_panel_page.dart';
 
@@ -1164,6 +1165,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             locked: _status != ProxyStatus.stopped,
             developerModeEnabled: _developerModeEnabled,
             onRootSettings: _showRootSettings,
+            onCoreUpdate: () async {
+              await showDialog<void>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const CoreUpdateDialog(),
+              );
+              await _refresh();
+            },
             onAppSelector: _openAppSelector,
             onDebugLogs: _showDebugLogSettings,
             onDeveloperSettings: _showDeveloperSettings,
@@ -1228,6 +1237,7 @@ class _SettingsPage extends StatelessWidget {
     required this.locked,
     required this.developerModeEnabled,
     required this.onRootSettings,
+    required this.onCoreUpdate,
     required this.onAppSelector,
     required this.onDebugLogs,
     required this.onDeveloperSettings,
@@ -1238,6 +1248,7 @@ class _SettingsPage extends StatelessWidget {
   final bool developerModeEnabled;
   final Future<void> Function() onDeveloperSettings;
   final Future<void> Function() onRootSettings;
+  final Future<void> Function() onCoreUpdate;
   final Future<void> Function() onAppSelector;
   final Future<void> Function() onDebugLogs;
   final Future<void> Function() onAbout;
@@ -1284,6 +1295,12 @@ class _SettingsPage extends StatelessWidget {
                 ),
                 const Divider(height: 1, indent: 64),
               ],
+              _SettingsActionTile(
+                icon: Icons.system_update_alt_rounded,
+                title: '更新内核',
+                onTap: onCoreUpdate,
+              ),
+              const Divider(height: 1, indent: 64),
               _SettingsActionTile(
                 icon: Icons.info_outline_rounded,
                 title: '关于 Mclash Root',

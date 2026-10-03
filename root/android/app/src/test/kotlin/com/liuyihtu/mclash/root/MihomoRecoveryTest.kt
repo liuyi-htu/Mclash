@@ -11,16 +11,18 @@ class MihomoRecoveryTest {
         try {
             val proc = File(temporary, "proc").apply { mkdirs() }
             val home = File(temporary, "app's data")
-            fun process(pid: Int, comm: String, directory: String): File {
+            fun process(pid: Int, comm: String, directory: String, binary: String = "/data/app/example/lib/arm64/libmihomo.so"): File {
                 val folder = File(proc, pid.toString()).apply { mkdirs() }
                 File(folder, "comm").writeText("$comm\n")
                 return File(folder, "cmdline").apply {
-                    writeText("/data/app/example/lib/arm64/libmihomo.so\u0000-d\u0000$directory\u0000-f\u0000runtime.yaml\u0000")
+                    writeText("$binary\u0000-d\u0000$directory\u0000-f\u0000runtime.yaml\u0000")
                 }
             }
             val owned = process(100, "libmihomo.so", home.absolutePath)
             val foreign = process(101, "libmihomo.so", "/another/app")
             val unrelated = process(102, "another-process", home.absolutePath)
+            val updated = process(103, "libmihomo.so", home.absolutePath, File(home, "core/core-123/libmihomo.so").absolutePath)
+            val foreignCore = process(104, "libmihomo.so", home.absolutePath, "/another/app/core/core-123/libmihomo.so")
             val killed = File(temporary, "killed")
             val script = """
                 kill() {
@@ -34,8 +36,10 @@ class MihomoRecoveryTest {
             val execution = ProcessBuilder("/bin/sh", "-c", script).redirectErrorStream(true).start()
             val output = execution.inputStream.bufferedReader().readText()
             assertEquals(output, 0, execution.waitFor())
-            assertEquals("100\n", killed.readText())
+            assertEquals("100\n103\n", killed.readText())
             assertEquals(0, owned.length())
+            assertEquals(0, updated.length())
+            assertTrue(foreignCore.length() > 0)
             assertTrue(foreign.length() > 0)
             assertTrue(unrelated.length() > 0)
         } finally {
