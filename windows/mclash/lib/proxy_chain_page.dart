@@ -1,3 +1,4 @@
+import 'proxy_edit_access.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +50,9 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
   }
 
   Future<void> _save(String next) async {
+    if (!ProxyEditAccess.allowed(context)) {
+      throw StateError('请先停止代理再修改配置');
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -64,17 +68,21 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
   Future<void> _delete(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('删除链式节点 $id？'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消')),
-          DestructiveActionButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('删除')),
-        ],
-      ),
+      builder: (_) => ProxyEditAccess.inherit(
+          context,
+          (context) => AlertDialog(
+                title: Text('删除链式节点 $id？'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('取消')),
+                  DestructiveActionButton(
+                      onPressed: !ProxyEditAccess.allowed(context)
+                          ? null
+                          : () => Navigator.of(context).pop(true),
+                      child: const Text('删除')),
+                ],
+              )),
     );
     if (confirmed != true || !mounted) return;
     try {
@@ -87,6 +95,7 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final editable = ProxyEditAccess.allowed(context);
     final existing = readProxyChainSets(_content)
         .entries
         .where((entry) => (entry.value['front'] ?? []).isNotEmpty);
@@ -97,7 +106,7 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
         floatingActionButtonLocation: managementAddButtonLocation(context),
         floatingActionButton: AddActionButton(
           tooltip: '新增链式节点',
-          onPressed: _saving ? null : () => _edit(),
+          onPressed: !editable || _saving ? null : () => _edit(),
         ),
         body: ManagementBody(
             child: Column(
@@ -123,10 +132,12 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
                       isThreeLine: true,
                       trailing: ManagementDeleteButton(
                         tooltip: '删除链式节点',
-                        onPressed: _saving ? null : () => _delete(entry.key),
+                        onPressed: !editable || _saving
+                            ? null
+                            : () => _delete(entry.key),
                       ),
-                      enabled: !_saving,
-                      onTap: () => _edit(entry.key),
+                      enabled: editable && !_saving,
+                      onTap: editable ? () => _edit(entry.key) : null,
                     )),
                   if (existing.isEmpty)
                     const Padding(

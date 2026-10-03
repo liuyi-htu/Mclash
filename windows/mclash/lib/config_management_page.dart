@@ -1,3 +1,4 @@
+import 'proxy_edit_access.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 // Keep these APIs compatible with the Flutter 3.32 CI toolchain.
@@ -29,6 +30,9 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
   String? _error;
 
   Future<void> _save(String next) async {
+    if (!ProxyEditAccess.allowed(context)) {
+      throw StateError('请先停止代理再修改配置');
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -77,17 +81,21 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
   Future<void> _deleteGroup(String name) async {
     final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-              title: Text('删除 $name？'),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('取消')),
-                DestructiveActionButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('删除'))
-              ],
-            ));
+        builder: (_) => ProxyEditAccess.inherit(
+            context,
+            (context) => AlertDialog(
+                  title: Text('删除 $name？'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('取消')),
+                    DestructiveActionButton(
+                        onPressed: !ProxyEditAccess.allowed(context)
+                            ? null
+                            : () => Navigator.pop(context, true),
+                        child: const Text('删除'))
+                  ],
+                )));
     if (confirmed == true && mounted) {
       await _change(() => deleteConfigGroup(_content, name));
     }
@@ -95,6 +103,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final editable = ProxyEditAccess.allowed(context);
     final mode = widget.mode;
     final rules = configRules(_content);
     final groups = configGroups(_content);
@@ -110,7 +119,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
           floatingActionButtonLocation: managementAddButtonLocation(context),
           floatingActionButton: AddActionButton(
               tooltip: mode == ConfigManagementMode.rules ? '新增规则' : '新增代理组',
-              onPressed: _saving
+              onPressed: !editable || _saving
                   ? null
                   : () =>
                       mode == ConfigManagementMode.rules ? _rule() : _group()),
@@ -136,6 +145,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                             itemCount: rules.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
+                              if (!editable) return;
                               if (newIndex > oldIndex) newIndex--;
                               final reordered = [...rules];
                               reordered.insert(
@@ -147,6 +157,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                 key: ValueKey('$index:${rules[index]}'),
                                 child: ListTile(
                                     key: ValueKey('$index:${rules[index]}'),
+                                    enabled: editable,
                                     title: ScrollConfiguration(
                                       behavior: ScrollConfiguration.of(context)
                                           .copyWith(scrollbars: false),
@@ -162,18 +173,22 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                                 .colorScheme
                                                 .onSurfaceVariant,
                                             fontSize: 12)),
-                                    onTap: () => _rule(index),
+                                    onTap: editable ? () => _rule(index) : null,
                                     trailing: Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           ManagementDeleteButton(
                                               tooltip: '删除规则',
-                                              onPressed: () => _change(() =>
-                                                  updateConfigRules(
-                                                      _content,
-                                                      [...rules]
-                                                        ..removeAt(index)))),
+                                              onPressed: !editable
+                                                  ? null
+                                                  : () => _change(() =>
+                                                      updateConfigRules(
+                                                          _content,
+                                                          [
+                                                            ...rules
+                                                          ]..removeAt(index)))),
                                           ReorderableDragStartListener(
+                                              enabled: editable,
                                               index: index,
                                               child: const Padding(
                                                   padding: EdgeInsets.all(12),
@@ -193,8 +208,9 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                       subtitle: Text(locked
                                           ? '由链式节点管理'
                                           : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
-                                      enabled: !locked,
-                                      onTap: () => _group(group),
+                                      enabled: editable && !locked,
+                                      onTap:
+                                          editable ? () => _group(group) : null,
                                       trailing: SizedBox(
                                           width: 48,
                                           height: 48,
@@ -205,8 +221,10 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                                   !isProtectedConfigGroup(name)
                                               ? ManagementDeleteButton(
                                                   tooltip: '删除代理组',
-                                                  onPressed: () =>
-                                                      _deleteGroup(name))
+                                                  onPressed: !editable
+                                                      ? null
+                                                      : () =>
+                                                          _deleteGroup(name))
                                               : mode ==
                                                           ConfigManagementMode
                                                               .groups &&
@@ -273,121 +291,149 @@ Future<String?> _ruleDialog(
   try {
     return await showDialog<String>(
         context: context,
-        builder: (context) => StatefulBuilder(
-            builder: (context, update) => AlertDialog(
-                  title: Text(initial == null ? '新增规则' : '编辑规则'),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  content: SizedBox(
-                      width: 480,
-                      child: SingleChildScrollView(
-                          child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                            SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('编辑完整单条规则'),
-                                value: advanced,
-                                onChanged: (value) =>
-                                    update(() => advanced = value)),
-                            const SizedBox(height: 12),
-                            if (advanced)
-                              TextField(
-                                  controller: raw,
-                                  minLines: 2,
-                                  maxLines: 6,
-                                  decoration: _managementFieldDecoration(
-                                          'Mihomo 规则')
-                                      .copyWith(
-                                          helperText:
-                                              '支持 AND、OR、NOT、SUB-RULE 等复杂规则'))
-                            else ...[
-                              DropdownButtonFormField<String>(
-                                  value: type,
-                                  isExpanded: true,
-                                  decoration:
-                                      _managementFieldDecoration('规则类型'),
-                                  items: [
-                                    for (final item in _ruleTypes)
-                                      DropdownMenuItem(
-                                          value: item,
-                                          child: Text(item,
-                                              overflow: TextOverflow.ellipsis))
-                                  ],
-                                  onChanged: (value) =>
-                                      update(() => type = value!)),
-                              if (type != 'MATCH') ...[
+        builder: (_) => ProxyEditAccess.inherit(
+            context,
+            (context) => StatefulBuilder(
+                builder: (context, update) => AlertDialog(
+                      title: Text(initial == null ? '新增规则' : '编辑规则'),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      content: SizedBox(
+                          width: 480,
+                          child: SingleChildScrollView(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                SwitchListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('编辑完整单条规则'),
+                                    value: advanced,
+                                    onChanged: !ProxyEditAccess.allowed(context)
+                                        ? null
+                                        : (value) =>
+                                            update(() => advanced = value)),
                                 const SizedBox(height: 12),
-                                TextField(
-                                    controller: expression,
-                                    decoration:
-                                        _managementFieldDecoration('匹配内容')),
-                              ],
-                              const SizedBox(height: 12),
-                              DropdownButtonFormField<String>(
-                                  value: target,
-                                  isExpanded: true,
-                                  decoration:
-                                      _managementFieldDecoration('目标策略'),
-                                  items: [
-                                    for (final policy in policies)
-                                      DropdownMenuItem(
-                                          value: policy,
-                                          child: Text(policy,
-                                              overflow: TextOverflow.ellipsis))
+                                if (advanced)
+                                  TextField(
+                                      enabled: ProxyEditAccess.allowed(context),
+                                      controller: raw,
+                                      minLines: 2,
+                                      maxLines: 6,
+                                      decoration: _managementFieldDecoration(
+                                              'Mihomo 规则')
+                                          .copyWith(
+                                              helperText:
+                                                  '支持 AND、OR、NOT、SUB-RULE 等复杂规则'))
+                                else ...[
+                                  DropdownButtonFormField<String>(
+                                      value: type,
+                                      isExpanded: true,
+                                      decoration:
+                                          _managementFieldDecoration('规则类型'),
+                                      items: [
+                                        for (final item in _ruleTypes)
+                                          DropdownMenuItem(
+                                              value: item,
+                                              child: Text(item,
+                                                  overflow:
+                                                      TextOverflow.ellipsis))
+                                      ],
+                                      onChanged:
+                                          !ProxyEditAccess.allowed(context)
+                                              ? null
+                                              : (value) =>
+                                                  update(() => type = value!)),
+                                  if (type != 'MATCH') ...[
+                                    const SizedBox(height: 12),
+                                    TextField(
+                                        enabled:
+                                            ProxyEditAccess.allowed(context),
+                                        controller: expression,
+                                        decoration:
+                                            _managementFieldDecoration('匹配内容')),
                                   ],
-                                  onChanged: (value) => target = value!),
-                              if (['GEOIP', 'IP-CIDR', 'IP-CIDR6', 'RULE-SET']
-                                  .contains(type))
-                                CheckboxListTile(
-                                    title: const Text('不触发 DNS 解析（no-resolve）'),
-                                    value: noResolve,
-                                    onChanged: (value) =>
-                                        update(() => noResolve = value!)),
-                            ],
-                            if (error != null)
-                              Text(error!,
-                                  style: TextStyle(
-                                      color:
-                                          Theme.of(context).colorScheme.error)),
-                          ]))),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('取消')),
-                    FilledButton(
-                        onPressed: () {
-                          if (!advanced &&
-                              type != 'MATCH' &&
-                              expression.text.trim().isEmpty) {
-                            update(() => error = '请填写匹配内容');
-                            return;
-                          }
-                          final rule = advanced
-                              ? raw.text.trim()
-                              : [
-                                  type,
-                                  if (type != 'MATCH') expression.text.trim(),
-                                  target,
-                                  if (noResolve &&
-                                      [
-                                        'GEOIP',
-                                        'IP-CIDR',
-                                        'IP-CIDR6',
-                                        'RULE-SET'
-                                      ].contains(type))
-                                    'no-resolve'
-                                ].join(',');
-                          if (rule.isEmpty) {
-                            update(() => error = '请填写规则');
-                            return;
-                          }
-                          Navigator.pop(context, rule);
-                        },
-                        child: const Text('保存'))
-                  ],
-                )));
+                                  const SizedBox(height: 12),
+                                  DropdownButtonFormField<String>(
+                                      value: target,
+                                      isExpanded: true,
+                                      decoration:
+                                          _managementFieldDecoration('目标策略'),
+                                      items: [
+                                        for (final policy in policies)
+                                          DropdownMenuItem(
+                                              value: policy,
+                                              child: Text(policy,
+                                                  overflow:
+                                                      TextOverflow.ellipsis))
+                                      ],
+                                      onChanged:
+                                          !ProxyEditAccess.allowed(context)
+                                              ? null
+                                              : (value) => target = value!),
+                                  if ([
+                                    'GEOIP',
+                                    'IP-CIDR',
+                                    'IP-CIDR6',
+                                    'RULE-SET'
+                                  ].contains(type))
+                                    CheckboxListTile(
+                                        title: const Text(
+                                            '不触发 DNS 解析（no-resolve）'),
+                                        value: noResolve,
+                                        onChanged:
+                                            !ProxyEditAccess.allowed(context)
+                                                ? null
+                                                : (value) => update(
+                                                    () => noResolve = value!)),
+                                ],
+                                if (error != null)
+                                  Text(error!,
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .error)),
+                              ]))),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('取消')),
+                        FilledButton(
+                            onPressed: !ProxyEditAccess.allowed(context)
+                                ? null
+                                : () {
+                                    if (!advanced &&
+                                        type != 'MATCH' &&
+                                        expression.text.trim().isEmpty) {
+                                      update(() => error = '请填写匹配内容');
+                                      return;
+                                    }
+                                    final rule = advanced
+                                        ? raw.text.trim()
+                                        : [
+                                            type,
+                                            if (type != 'MATCH')
+                                              expression.text.trim(),
+                                            target,
+                                            if (noResolve &&
+                                                [
+                                                  'GEOIP',
+                                                  'IP-CIDR',
+                                                  'IP-CIDR6',
+                                                  'RULE-SET'
+                                                ].contains(type))
+                                              'no-resolve'
+                                          ].join(',');
+                                    if (rule.isEmpty) {
+                                      update(() => error = '请填写规则');
+                                      return;
+                                    }
+                                    Navigator.pop(context, rule);
+                                  },
+                            child: const Text('保存'))
+                      ],
+                    ))));
   } finally {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expression.dispose();
@@ -422,172 +468,195 @@ Future<String?> _groupDialog(
   try {
     return await showDialog<String>(
         context: context,
-        builder: (context) => StatefulBuilder(
-            builder: (context, update) => AlertDialog(
-                  title: Text(initial == null ? '新增代理组' : '编辑代理组'),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  content: SizedBox(
-                      width: 480,
-                      child: SingleChildScrollView(
-                          child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                            TextField(
-                                controller: name,
-                                enabled: !isProtectedConfigGroup(
-                                    initial?['name'] as String?),
-                                decoration: _managementFieldDecoration('名称')),
-                            const SizedBox(height: 12),
-                            DropdownButtonFormField<String>(
-                                value: type,
-                                decoration: _managementFieldDecoration('类型'),
-                                items: [
-                                  for (final item in types)
-                                    DropdownMenuItem(
-                                        value: item,
-                                        child: Text(item,
-                                            overflow: TextOverflow.ellipsis))
+        builder: (_) => ProxyEditAccess.inherit(
+            context,
+            (context) => StatefulBuilder(
+                builder: (context, update) => AlertDialog(
+                      title: Text(initial == null ? '新增代理组' : '编辑代理组'),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      content: SizedBox(
+                          width: 480,
+                          child: SingleChildScrollView(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                TextField(
+                                    controller: name,
+                                    enabled: ProxyEditAccess.allowed(context) &&
+                                        !isProtectedConfigGroup(
+                                            initial?['name'] as String?),
+                                    decoration:
+                                        _managementFieldDecoration('名称')),
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                    value: type,
+                                    decoration:
+                                        _managementFieldDecoration('类型'),
+                                    items: [
+                                      for (final item in types)
+                                        DropdownMenuItem(
+                                            value: item,
+                                            child: Text(item,
+                                                overflow:
+                                                    TextOverflow.ellipsis))
+                                    ],
+                                    onChanged: !ProxyEditAccess.allowed(context)
+                                        ? null
+                                        : (value) =>
+                                            update(() => type = value!)),
+                                if (type != 'select') ...[
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                      enabled: ProxyEditAccess.allowed(context),
+                                      controller: url,
+                                      decoration:
+                                          _managementFieldDecoration('测速地址')),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                      enabled: ProxyEditAccess.allowed(context),
+                                      controller: interval,
+                                      keyboardType: TextInputType.number,
+                                      decoration: _managementFieldDecoration(
+                                          '检测间隔（秒）')),
                                 ],
-                                onChanged: (value) =>
-                                    update(() => type = value!)),
-                            if (type != 'select') ...[
-                              const SizedBox(height: 12),
-                              TextField(
-                                  controller: url,
-                                  decoration:
-                                      _managementFieldDecoration('测速地址')),
-                              const SizedBox(height: 12),
-                              TextField(
-                                  controller: interval,
-                                  keyboardType: TextInputType.number,
-                                  decoration:
-                                      _managementFieldDecoration('检测间隔（秒）')),
-                            ],
-                            const SizedBox(height: 12),
-                            TextField(
-                                controller: filter,
-                                minLines: 1,
-                                maxLines: 4,
-                                decoration:
-                                    _managementFieldDecoration('正则表达式')),
-                            const SizedBox(height: 12),
-                            if (error != null)
-                              Text(error!,
-                                  style: TextStyle(
-                                      color:
-                                          Theme.of(context).colorScheme.error)),
-                            Container(
-                              constraints: BoxConstraints(
-                                maxHeight:
-                                    (MediaQuery.sizeOf(context).height * 0.32)
-                                        .clamp(96.0, 240.0),
-                              ),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .outlineVariant),
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: ListView.builder(
-                                primary: false,
-                                shrinkWrap: true,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                itemCount: selected.length,
-                                itemBuilder: (context, index) => ListTile(
-                                  minTileHeight: 48,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14),
-                                  title: ScrollConfiguration(
-                                    behavior: ScrollConfiguration.of(context)
-                                        .copyWith(scrollbars: false),
-                                    child: SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Text(selected[index],
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge),
+                                const SizedBox(height: 12),
+                                TextField(
+                                    enabled: ProxyEditAccess.allowed(context),
+                                    controller: filter,
+                                    minLines: 1,
+                                    maxLines: 4,
+                                    decoration:
+                                        _managementFieldDecoration('正则表达式')),
+                                const SizedBox(height: 12),
+                                if (error != null)
+                                  Text(error!,
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .error)),
+                                Container(
+                                  constraints: BoxConstraints(
+                                    maxHeight:
+                                        (MediaQuery.sizeOf(context).height *
+                                                0.32)
+                                            .clamp(96.0, 240.0),
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outlineVariant),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: ListView.builder(
+                                    primary: false,
+                                    shrinkWrap: true,
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 4),
+                                    itemCount: selected.length,
+                                    itemBuilder: (context, index) => ListTile(
+                                      minTileHeight: 48,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 14),
+                                      title: ScrollConfiguration(
+                                        behavior:
+                                            ScrollConfiguration.of(context)
+                                                .copyWith(scrollbars: false),
+                                        child: SingleChildScrollView(
+                                          scrollDirection: Axis.horizontal,
+                                          child: Text(selected[index],
+                                              maxLines: 1,
+                                              softWrap: false,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyLarge),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          ]))),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('取消')),
-                    FilledButton(
-                        onPressed: () {
-                          final seconds = int.tryParse(interval.text);
-                          if (name.text.trim().isEmpty) {
-                            update(() => error = '请填写名称');
-                            return;
-                          }
-                          if (type != 'select' &&
-                              (seconds == null ||
-                                  seconds <= 0 ||
-                                  !(['http', 'https'].contains(
-                                          Uri.tryParse(url.text.trim())
-                                              ?.scheme) &&
-                                      (Uri.tryParse(url.text.trim())
-                                              ?.host
-                                              .isNotEmpty ??
-                                          false)))) {
-                            update(() => error = '请填写有效的测速地址和检测间隔');
-                            return;
-                          }
-                          final group = <String, dynamic>{
-                            ...?initial,
-                            'name': name.text.trim(),
-                            'type': type,
-                            'proxies': selected
-                          };
-                          for (final key in [
-                            'filter',
-                            'use',
-                            'include-all',
-                            'include-all-proxies',
-                            'include-all-providers',
-                            'empty-fallback'
-                          ]) {
-                            group.remove(key);
-                          }
-                          if (type != 'select') {
-                            group['url'] = url.text.trim();
-                            group['interval'] = seconds;
-                          } else {
-                            for (final key in [
-                              'url',
-                              'interval',
-                              'tolerance',
-                              'strategy'
-                            ]) {
-                              group.remove(key);
-                            }
-                          }
-                          if (type != 'load-balance') group.remove('strategy');
-                          try {
-                            final next = updateConfigGroup(content, group,
-                                oldName: initial?['name'] as String?,
-                                filter: initial == null ||
-                                        filter.text.trim() != initialFilter
-                                    ? filter.text.trim()
-                                    : null);
-                            Navigator.pop(context, next);
-                          } catch (failure) {
-                            update(() => error = failure.toString());
-                          }
-                        },
-                        child: const Text('保存'))
-                  ],
-                )));
+                              ]))),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('取消')),
+                        FilledButton(
+                            onPressed: !ProxyEditAccess.allowed(context)
+                                ? null
+                                : () {
+                                    final seconds = int.tryParse(interval.text);
+                                    if (name.text.trim().isEmpty) {
+                                      update(() => error = '请填写名称');
+                                      return;
+                                    }
+                                    if (type != 'select' &&
+                                        (seconds == null ||
+                                            seconds <= 0 ||
+                                            !(['http', 'https'].contains(
+                                                    Uri.tryParse(
+                                                            url.text.trim())
+                                                        ?.scheme) &&
+                                                (Uri.tryParse(url.text.trim())
+                                                        ?.host
+                                                        .isNotEmpty ??
+                                                    false)))) {
+                                      update(() => error = '请填写有效的测速地址和检测间隔');
+                                      return;
+                                    }
+                                    final group = <String, dynamic>{
+                                      ...?initial,
+                                      'name': name.text.trim(),
+                                      'type': type,
+                                      'proxies': selected
+                                    };
+                                    for (final key in [
+                                      'filter',
+                                      'use',
+                                      'include-all',
+                                      'include-all-proxies',
+                                      'include-all-providers',
+                                      'empty-fallback'
+                                    ]) {
+                                      group.remove(key);
+                                    }
+                                    if (type != 'select') {
+                                      group['url'] = url.text.trim();
+                                      group['interval'] = seconds;
+                                    } else {
+                                      for (final key in [
+                                        'url',
+                                        'interval',
+                                        'tolerance',
+                                        'strategy'
+                                      ]) {
+                                        group.remove(key);
+                                      }
+                                    }
+                                    if (type != 'load-balance') {
+                                      group.remove('strategy');
+                                    }
+                                    try {
+                                      final next = updateConfigGroup(
+                                          content, group,
+                                          oldName: initial?['name'] as String?,
+                                          filter: initial == null ||
+                                                  filter.text.trim() !=
+                                                      initialFilter
+                                              ? filter.text.trim()
+                                              : null);
+                                      Navigator.pop(context, next);
+                                    } catch (failure) {
+                                      update(() => error = failure.toString());
+                                    }
+                                  },
+                            child: const Text('保存'))
+                      ],
+                    ))));
   } finally {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     filter.dispose();

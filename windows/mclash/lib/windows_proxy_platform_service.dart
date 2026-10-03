@@ -618,9 +618,7 @@ public static class WinInetProxy {
 
   @override
   Future<List<ConfigProfile>> importConfigs() async {
-    if (await isRunning()) {
-      throw StateError('代理运行中，不能导入配置文件。');
-    }
+    await _requireConfigStopped();
     await _ensureDirectories();
     const script = r'''Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.OpenFileDialog
@@ -642,9 +640,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         .where((line) => line.isNotEmpty)
         .toList();
     if (paths.isEmpty) return getConfigs();
-    if (await isRunning()) {
-      throw StateError('代理已启动，配置文件未导入。请停止代理后重试。');
-    }
+    await _requireConfigStopped();
     final state = await _readSettings();
     final names = Map<String, dynamic>.from(
       state['profileNames'] is Map ? state['profileNames'] as Map : const {},
@@ -833,11 +829,13 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<ConfigInfo> selectConfig(String id) async {
+    await _requireConfigStopped();
     final source = File(_profilePath(id));
     if (!await source.exists()) {
       throw StateError('The selected profile no longer exists.');
     }
     final content = await source.readAsString();
+    await _requireConfigStopped();
     await File(
       _configPath,
     ).writeAsString(await _runtimeConfigForCurrentMode(content));

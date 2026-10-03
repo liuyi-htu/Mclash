@@ -39,7 +39,6 @@ class _HomePageState extends State<HomePage> {
   bool _bypassLanEnabled = true;
   NetworkMode _networkMode = NetworkMode.proxy;
   CoreType _coreType = CoreType.mihomo;
-  bool _switchingMode = false;
   bool _operationDialogOpen = false;
   Timer? _statusTimer;
   Timer? _trafficTimer;
@@ -57,9 +56,13 @@ class _HomePageState extends State<HomePage> {
   CoreUpdateInfo? _coreInfo;
   bool _coreUpdating = false;
   String? _coreMessage;
+  final _settingsBusy = ValueNotifier(false);
+  bool get _canEditSettings => _status == ProxyStatus.stopped && _canOperate;
+
   bool get _canOperate =>
+      !_changingProxyMode &&
+      !_settingsBusy.value &&
       !_coreBusy.value &&
-      !_switchingMode &&
       (_status == ProxyStatus.running || _status == ProxyStatus.stopped);
 
   @override
@@ -80,7 +83,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _pollStatus() {
     if (_statusPoll != null) return _statusPoll!;
-    if (_switchingMode || _operationDialogOpen) return Future.value();
+    if (_operationDialogOpen) return Future.value();
     final task = _detectStatus();
     _statusPoll = task;
     return task.whenComplete(() {
@@ -125,6 +128,7 @@ class _HomePageState extends State<HomePage> {
     _trafficTimer?.cancel();
     _statusNotifier.dispose();
     _coreBusy.dispose();
+    _settingsBusy.dispose();
     super.dispose();
   }
 
@@ -403,13 +407,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _setProxyMode(String mode) async {
-    if (_changingProxyMode || mode == _proxyMode) return;
+    if (!_canOperate || _status != ProxyStatus.running || mode == _proxyMode) {
+      return;
+    }
     final previous = _proxyMode;
     setState(() {
       _changingProxyMode = true;
       _proxyMode = mode;
     });
     try {
+      final status = await _service.getProxyStatus();
+      if (!mounted) return;
+      if (status != ProxyStatus.running) {
+        setState(() {
+          _status = status;
+          _proxyMode = previous;
+        });
+        return;
+      }
       await _proxyControllerRequest(
         'PATCH',
         body: <String, Object>{'mode': mode},
@@ -427,102 +442,110 @@ class _HomePageState extends State<HomePage> {
     if (_changingProxyMode || _status != ProxyStatus.running) return;
     final selected = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        final colors = Theme.of(dialogContext).colorScheme;
+      builder: (_) => AnimatedBuilder(
+        animation:
+            Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
+        builder: (dialogContext, child) {
+          final colors = Theme.of(dialogContext).colorScheme;
 
-        Widget modeOption({
-          required String value,
-          required String title,
-          required IconData icon,
-        }) {
-          final selected = value == _proxyMode;
-          return Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Material(
-              color: selected
-                  ? colors.primary.withValues(alpha: 0.12)
-                  : colors.surfaceContainerHighest.withValues(alpha: 0.52),
-              borderRadius: BorderRadius.circular(18),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => Navigator.of(dialogContext).pop(value),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 17,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: colors.primary.withValues(alpha: 0.11),
-                          borderRadius: BorderRadius.circular(14),
+          Widget modeOption({
+            required String value,
+            required String title,
+            required IconData icon,
+          }) {
+            final selected = value == _proxyMode;
+            return Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Material(
+                color: selected
+                    ? colors.primary.withValues(alpha: 0.12)
+                    : colors.surfaceContainerHighest.withValues(alpha: 0.52),
+                borderRadius: BorderRadius.circular(18),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: _status != ProxyStatus.running || !_canOperate
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(value),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 17,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: colors.primary.withValues(alpha: 0.11),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(icon, color: colors.primary, size: 23),
                         ),
-                        child: Icon(icon, color: colors.primary, size: 23),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      if (selected)
-                        Icon(Icons.check_circle_rounded, color: colors.primary),
-                    ],
+                        if (selected)
+                          Icon(Icons.check_circle_rounded,
+                              color: colors.primary),
+                      ],
+                    ),
                   ),
+                ),
+              ),
+            );
+          }
+
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 32,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '选择代理规则',
+                      style:
+                          TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                    ),
+                    modeOption(
+                      value: 'rule',
+                      title: '规则模式',
+                      icon: Icons.route_outlined,
+                    ),
+                    modeOption(
+                      value: 'global',
+                      title: '全局模式',
+                      icon: Icons.public_rounded,
+                    ),
+                    modeOption(
+                      value: 'direct',
+                      title: '直连模式',
+                      icon: Icons.link_rounded,
+                    ),
+                  ],
                 ),
               ),
             ),
           );
-        }
-
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 32,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(26),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '选择运行模式',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                  ),
-                  modeOption(
-                    value: 'rule',
-                    title: '规则模式',
-                    icon: Icons.route_outlined,
-                  ),
-                  modeOption(
-                    value: 'global',
-                    title: '全局模式',
-                    icon: Icons.public_rounded,
-                  ),
-                  modeOption(
-                    value: 'direct',
-                    title: '直连模式',
-                    icon: Icons.link_rounded,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+        },
+      ),
     );
     if (selected != null) await _setProxyMode(selected);
   }
@@ -539,207 +562,182 @@ class _HomePageState extends State<HomePage> {
         _ => '规则',
       };
 
-  Future<void> _switchRunMode(CoreType core, NetworkMode target) async {
-    if (!_canOperate ||
-        _switchingMode ||
-        _status == ProxyStatus.starting ||
-        _status == ProxyStatus.stopping) {
-      return;
-    }
-    if (target == _networkMode && core == _coreType) return;
-    final wasRunning = _status == ProxyStatus.running;
-    _operationGeneration++;
-    setState(() => _switchingMode = true);
-    if (wasRunning) {
-      _showOperationWaitDialog('正在切换运行模式', 8);
-    }
+  Future<bool> _confirmStopped() async {
+    late final ProxyStatus status;
     try {
+      status =
+          await _service.getProxyStatus().timeout(const Duration(seconds: 12));
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _status = ProxyStatus.failed;
+          _statusError = error.toString();
+        });
+      }
+      rethrow;
+    }
+    if (!mounted) return false;
+    setState(() => _status = status);
+    if (status == ProxyStatus.stopped) return true;
+    _showError('请先停止代理再修改设置');
+    return false;
+  }
+
+  Future<void> _changeSetting(Future<void> Function() action) async {
+    if (!_canEditSettings) return;
+    setState(() => _settingsBusy.value = true);
+    try {
+      if (!await _confirmStopped()) return;
+      await action();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _settingsBusy.value = false);
+    }
+  }
+
+  Future<void> _switchRunMode(CoreType core, NetworkMode target) async {
+    if (!_canEditSettings) return;
+    if (target == _networkMode && core == _coreType) return;
+    await _changeSetting(() async {
       await _service.setCoreType(core);
       await _service.setNetworkMode(target);
-      if (wasRunning) {
-        await _service.restart();
-      } else {
-        await _service.syncSystemProxy();
-      }
+      await _service.syncSystemProxy();
       if (!mounted) return;
       setState(() {
         _networkMode = target;
         _coreType = core;
-        _status = wasRunning ? ProxyStatus.running : _status;
       });
       AppNotice.show(
-        context,
-        '已切换到 mihomo + '
-        '${target == NetworkMode.tun ? 'TUN' : '系统代理'}',
-      );
-    } catch (error) {
-      if (!mounted) return;
-      _showError('切换模式失败：$error');
-    } finally {
-      if (wasRunning) {
-        _closeOperationWaitDialog();
-      }
-      if (mounted) {
-        setState(() => _switchingMode = false);
-        await _statusAfterOperation();
-      }
-    }
+          context, '已切换到 ${target == NetworkMode.tun ? 'TUN' : '系统代理'}');
+    });
   }
 
   Future<void> _showGeneralSettings() async {
-    if (_coreBusy.value) return;
-    var changingAutoStart = false;
-    var changingIpv6 = false;
-    var changingBypassLan = false;
+    if (!_canEditSettings) return;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('常规设置'),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+      barrierDismissible: false,
+      builder: (dialogContext) => AnimatedBuilder(
+        animation:
+            Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
+        builder: (_, child) => PopScope(
+          canPop: !_settingsBusy.value,
+          child: AlertDialog(
+            title: const Text('常规设置'),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.power_settings_new_rounded),
-                    title: const Text(
-                      '开机自启',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    title: const Text('开机自启',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                     value: _serviceAutoStartEnabled,
-                    onChanged: changingAutoStart
+                    onChanged: !_canEditSettings
                         ? null
-                        : (enabled) async {
-                            setDialogState(() => changingAutoStart = true);
-                            try {
+                        : (enabled) => _changeSetting(() async {
                               await _service
                                   .setServiceAutoStartEnabled(enabled);
                               if (mounted) {
                                 setState(
                                     () => _serviceAutoStartEnabled = enabled);
                               }
-                            } catch (error) {
-                              if (mounted) _showError('修改服务开机自启失败：$error');
-                            } finally {
-                              if (dialogContext.mounted) {
-                                setDialogState(() => changingAutoStart = false);
-                              }
-                            }
-                          },
+                            }),
                   ),
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.language_rounded),
-                    title: const Text(
-                      '启用 IPv6',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    title: const Text('启用 IPv6',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: const Text('允许代理内核使用 IPv6 网络'),
                     value: _ipv6Enabled,
-                    onChanged: changingIpv6
+                    onChanged: !_canEditSettings
                         ? null
-                        : (enabled) async {
-                            setDialogState(() => changingIpv6 = true);
-                            try {
+                        : (enabled) => _changeSetting(() async {
                               await _service.setIpv6Enabled(enabled);
-                              if (_status == ProxyStatus.running) {
-                                await _service.restart();
-                              }
                               if (mounted) {
                                 setState(() => _ipv6Enabled = enabled);
                               }
-                            } catch (error) {
-                              if (mounted) _showError('修改 IPv6 设置失败：$error');
-                            } finally {
-                              if (dialogContext.mounted) {
-                                setDialogState(() => changingIpv6 = false);
-                              }
-                            }
-                          },
+                            }),
                   ),
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.lan_outlined),
-                    title: const Text(
-                      '绕过局域网',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    title: const Text('绕过局域网',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: const Text('局域网和私有地址不经过代理'),
                     value: _bypassLanEnabled,
-                    onChanged: changingBypassLan
+                    onChanged: !_canEditSettings
                         ? null
-                        : (enabled) async {
-                            setDialogState(() => changingBypassLan = true);
-                            try {
+                        : (enabled) => _changeSetting(() async {
                               await _service.setBypassLanEnabled(enabled);
-                              if (_status == ProxyStatus.running) {
-                                await _service.restart();
-                              } else {
-                                await _service.syncSystemProxy();
-                              }
+                              await _service.syncSystemProxy();
                               if (mounted) {
                                 setState(() => _bypassLanEnabled = enabled);
                               }
-                            } catch (error) {
-                              if (mounted) _showError('修改局域网绕过设置失败：$error');
-                            } finally {
-                              if (dialogContext.mounted) {
-                                setDialogState(() => changingBypassLan = false);
-                              }
-                            }
-                          },
+                            }),
                   ),
-                ],
+                ]),
               ),
             ),
+            actions: [
+              FilledButton(
+                onPressed: _settingsBusy.value
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              )
+            ],
           ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭'),
-            ),
-          ],
         ),
       ),
     );
   }
 
   Future<void> _showRunModeDialog() async {
+    if (!_canEditSettings) return;
     final current = switch ((_coreType, _networkMode)) {
       (CoreType.mihomo, NetworkMode.tun) => _RunModeChoice.mihomoTun,
       (CoreType.mihomo, NetworkMode.proxy) => _RunModeChoice.mihomoProxy,
     };
     final selected = await showDialog<_RunModeChoice>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('选择运行模式'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(current == _RunModeChoice.mihomoTun
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              onTap: () =>
-                  Navigator.of(dialogContext).pop(_RunModeChoice.mihomoTun),
-              title: const Text('TUN'),
-            ),
-            ListTile(
-              leading: Icon(current == _RunModeChoice.mihomoProxy
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              onTap: () =>
-                  Navigator.of(dialogContext).pop(_RunModeChoice.mihomoProxy),
-              title: const Text('系统代理'),
-            ),
-          ],
+      builder: (dialogContext) => AnimatedBuilder(
+        animation:
+            Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
+        builder: (_, child) => AlertDialog(
+          title: const Text('选择运行模式'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(current == _RunModeChoice.mihomoTun
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                onTap: !_canEditSettings
+                    ? null
+                    : () => Navigator.of(dialogContext)
+                        .pop(_RunModeChoice.mihomoTun),
+                title: const Text('TUN'),
+              ),
+              ListTile(
+                leading: Icon(current == _RunModeChoice.mihomoProxy
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked),
+                onTap: !_canEditSettings
+                    ? null
+                    : () => Navigator.of(dialogContext)
+                        .pop(_RunModeChoice.mihomoProxy),
+                title: const Text('系统代理'),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (selected == null || !mounted) return;
+    if (selected == null || !mounted || !_canEditSettings) return;
     const core = CoreType.mihomo;
     final mode = selected == _RunModeChoice.mihomoTun
         ? NetworkMode.tun
@@ -775,7 +773,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _runCoreOperation({required bool update}) async {
-    if (_coreBusy.value || _status != ProxyStatus.running) return;
+    if (!_canOperate || _status != ProxyStatus.running) return;
     setState(() {
       _coreUpdating = update;
       _coreMessage = null;
@@ -818,7 +816,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _coreUpdateCard() {
-    final enabled = !_coreBusy.value && _status == ProxyStatus.running;
+    final enabled = _canOperate && _status == ProxyStatus.running;
     return Card(
         child: Padding(
             padding: const EdgeInsets.all(18),
@@ -1101,60 +1099,65 @@ class _HomePageState extends State<HomePage> {
 
     final action = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('调试日志'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('启用调试日志'),
-                  value: enabled,
-                  onChanged: (value) async {
-                    try {
-                      await _service.setDebugLoggingEnabled(value);
-                      if (!mounted) return;
-                      setState(() => _debugLoggingEnabled = value);
-                      setDialogState(() => enabled = value);
-                    } catch (error) {
-                      if (!mounted) return;
-                      _showError(error);
-                    }
-                  },
-                ),
-                const Divider(height: 24),
-                for (final log in logs)
-                  ListTile(
+      builder: (dialogContext) => AnimatedBuilder(
+        animation:
+            Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
+        builder: (_, child) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('调试日志'),
+            content: SizedBox(
+              width: 440,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: Icon(
-                      log.id == 'update.log'
-                          ? Icons.system_update_alt_rounded
-                          : log.id == 'mihomo.log'
-                              ? Icons.memory_rounded
-                              : Icons.settings_applications_outlined,
-                    ),
-                    title: Text(log.displayName),
-                    subtitle: Text(log.description),
-                    trailing: const Icon(Icons.chevron_right_rounded),
-                    onTap: () => _showDebugLog(log),
+                    title: const Text('启用调试日志'),
+                    value: enabled,
+                    onChanged: !_canEditSettings
+                        ? null
+                        : (value) => _changeSetting(() async {
+                              await _service.setDebugLoggingEnabled(value);
+                              if (!mounted) return;
+                              setState(() => _debugLoggingEnabled = value);
+                              if (dialogContext.mounted) {
+                                setDialogState(() => enabled = value);
+                              }
+                            }),
                   ),
-              ],
+                  const Divider(height: 24),
+                  for (final log in logs)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        log.id == 'update.log'
+                            ? Icons.system_update_alt_rounded
+                            : log.id == 'mihomo.log'
+                                ? Icons.memory_rounded
+                                : Icons.settings_applications_outlined,
+                      ),
+                      title: Text(log.displayName),
+                      subtitle: Text(log.description),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => _showDebugLog(log),
+                    ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton.icon(
+                onPressed: !_canEditSettings
+                    ? null
+                    : () => Navigator.of(dialogContext).pop('clear'),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('清除'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton.icon(
-              onPressed: () => Navigator.of(dialogContext).pop('clear'),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('清除'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭'),
-            ),
-          ],
         ),
       ),
     );
@@ -1166,38 +1169,42 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _confirmClearDebugLogs() async {
+    if (!_canEditSettings) return;
     final confirmed = await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('清除调试日志'),
-            content: const Text(
-              '将清空服务日志、mihomo 日志和内核更新日志。'
-              '此操作不会删除配置文件。',
+          builder: (dialogContext) => AnimatedBuilder(
+            animation:
+                Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
+            builder: (_, child) => AlertDialog(
+              title: const Text('清除调试日志'),
+              content: const Text(
+                '将清空服务日志、mihomo 日志和内核更新日志。'
+                '此操作不会删除配置文件。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: !_canEditSettings
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('清除'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('清除'),
-              ),
-            ],
           ),
         ) ??
         false;
 
     if (!confirmed) return;
 
-    try {
+    await _changeSetting(() async {
       await _service.clearDebugLogs();
       if (!mounted) return;
       AppNotice.show(context, '调试日志已清除');
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error);
-    }
+    });
   }
 
   Future<void> _showDebugLog(DebugLogFile file) async {
@@ -1261,7 +1268,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final busy = _coreBusy.value ||
-        _switchingMode ||
         (_status != ProxyStatus.running &&
             _status != ProxyStatus.stopped &&
             _status != ProxyStatus.failed);
@@ -1478,7 +1484,9 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           ConfigPage(
-              proxyRunning: _status != ProxyStatus.stopped, service: _service),
+              proxyRunning: _status != ProxyStatus.stopped,
+              service: _service,
+              proxyStatus: _statusNotifier),
           ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
             children: [
@@ -1488,14 +1496,14 @@ class _HomePageState extends State<HomePage> {
                   _HomeActionTile(
                       icon: Icons.tune_rounded,
                       title: '常规设置',
-                      onTap: _coreBusy.value ? null : _showGeneralSettings),
+                      onTap: _canEditSettings ? _showGeneralSettings : null),
                   const Divider(height: 1, indent: 64),
                   _HomeActionTile(
                       icon: Icons.swap_horiz_rounded,
                       title: '运行模式',
                       trailing: Text(
                           _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'),
-                      onTap: _canOperate ? _showRunModeDialog : null),
+                      onTap: _canEditSettings ? _showRunModeDialog : null),
                   const Divider(height: 1, indent: 64),
                   _HomeActionTile(
                       icon: Icons.article_outlined,
@@ -1592,39 +1600,42 @@ class _HomeActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 15, 18),
-        child: Row(
-          children: [
-            leading ??
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: colors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Icon(icon, color: colors.primary, size: 25),
-                ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+    return Opacity(
+      opacity: onTap == null ? 0.45 : 1,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 15, 18),
+          child: Row(
+            children: [
+              leading ??
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: colors.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(15),
                     ),
+                    child: Icon(icon, color: colors.primary, size: 25),
                   ),
-                ],
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-          ],
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
         ),
       ),
     );

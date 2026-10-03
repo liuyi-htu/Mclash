@@ -1,3 +1,4 @@
+import 'proxy_edit_access.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 import 'config_management.dart' show configActionOrder;
@@ -21,11 +22,13 @@ import 'config_editor_page.dart';
 enum _AddConfigAction { local, subscription }
 
 class ConfigPage extends StatefulWidget {
-  const ConfigPage({super.key, required this.proxyRunning, this.service});
+  const ConfigPage(
+      {super.key, required this.proxyRunning, this.service, this.proxyStatus});
 
   final ProxyPlatformService? service;
 
   final bool proxyRunning;
+  final ValueNotifier<ProxyStatus>? proxyStatus;
 
   @override
   State<ConfigPage> createState() => _ConfigPageState();
@@ -73,8 +76,15 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  bool get _locked => widget.proxyStatus != null
+      ? widget.proxyStatus!.value != ProxyStatus.stopped
+      : widget.proxyRunning;
+
+  Widget _watchAccess(Widget Function(BuildContext) builder) =>
+      ProxyEditAccess.wrap(widget.proxyStatus, builder);
+
   bool _ensureStopped() {
-    if (!widget.proxyRunning) return true;
+    if (!_locked) return true;
     _showError('请先停止代理再修改配置');
     return false;
   }
@@ -130,171 +140,222 @@ class _ConfigPageState extends State<ConfigPage> {
     final route = DialogRoute<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
-          content: SizedBox(
-            width: 480,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: '配置名称',
-                      hintText: '例如：我的代理配置',
-                    ),
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.maxFinite,
-                    height: urlControllers.length * 148.0,
-                    child: ReorderableListView(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      onReorderStart: (_) =>
-                          FocusManager.instance.primaryFocus?.unfocus(),
-                      // ignore: deprecated_member_use
-                      onReorder: (oldIndex, newIndex) => setDialogState(() {
-                        if (newIndex > oldIndex) newIndex--;
-                        urlControllers.insert(
-                            newIndex, urlControllers.removeAt(oldIndex));
-                        airportNameControllers.insert(newIndex,
-                            airportNameControllers.removeAt(oldIndex));
-                      }),
-                      children: [
-                        for (var i = 0; i < urlControllers.length; i++)
-                          Padding(
-                            key: ObjectKey(urlControllers[i]),
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              children: [
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 12),
-                                    child: Column(children: [
-                                      Text('${i + 1}'),
-                                      const Icon(Icons.drag_handle)
-                                    ]),
+      builder: (dialogContext) => _watchAccess((dialogContext) =>
+          StatefulBuilder(
+            builder: (dialogContext, setDialogState) =>
+                _watchAccess((dialogContext) => AlertDialog(
+                      title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
+                      content: SizedBox(
+                        width: 480,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
+                                enabled: !_locked,
+                                controller: nameController,
+                                autofocus: true,
+                                decoration: const InputDecoration(
+                                  labelText: '配置名称',
+                                  hintText: '例如：我的代理配置',
+                                ),
+                                textInputAction: TextInputAction.next,
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.maxFinite,
+                                height: urlControllers.length * 148.0,
+                                child: ReorderableListView(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  buildDefaultDragHandles: false,
+                                  onReorderStart: (_) => FocusManager
+                                      .instance.primaryFocus
+                                      ?.unfocus(),
+                                  // ignore: deprecated_member_use
+                                  onReorder: (oldIndex, newIndex) => _locked
+                                      ? null
+                                      : setDialogState(() {
+                                          if (newIndex > oldIndex) newIndex--;
+                                          urlControllers.insert(
+                                              newIndex,
+                                              urlControllers
+                                                  .removeAt(oldIndex));
+                                          airportNameControllers.insert(
+                                              newIndex,
+                                              airportNameControllers
+                                                  .removeAt(oldIndex));
+                                        }),
+                                  children: [
+                                    for (var i = 0;
+                                        i < urlControllers.length;
+                                        i++)
+                                      Padding(
+                                        key: ObjectKey(urlControllers[i]),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 12),
+                                        child: Row(
+                                          children: [
+                                            ReorderableDragStartListener(
+                                              enabled: !_locked,
+                                              index: i,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 12),
+                                                child: Column(children: [
+                                                  Text('${i + 1}'),
+                                                  const Icon(Icons.drag_handle)
+                                                ]),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  TextField(
+                                                    enabled: !_locked,
+                                                    controller:
+                                                        airportNameControllers[
+                                                            i],
+                                                    decoration: InputDecoration(
+                                                        labelText:
+                                                            '机场 ${i + 1} 名称',
+                                                        hintText: '例如：我的机场'),
+                                                    textInputAction:
+                                                        TextInputAction.next,
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  TextField(
+                                                    enabled: !_locked,
+                                                    controller:
+                                                        urlControllers[i],
+                                                    decoration: InputDecoration(
+                                                        labelText:
+                                                            '机场 ${i + 1} 订阅链接',
+                                                        hintText:
+                                                            'https://...'),
+                                                    keyboardType:
+                                                        TextInputType.url,
+                                                    autocorrect: false,
+                                                    enableSuggestions: false,
+                                                    smartDashesType:
+                                                        SmartDashesType
+                                                            .disabled,
+                                                    smartQuotesType:
+                                                        SmartQuotesType
+                                                            .disabled,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (urlControllers.length > 1)
+                                              IconButton(
+                                                tooltip: '删除机场 ${i + 1}',
+                                                icon: const Icon(Icons
+                                                    .remove_circle_outline),
+                                                onPressed: _locked
+                                                    ? null
+                                                    : () => setDialogState(() {
+                                                          removedControllers
+                                                              .add(
+                                                                  urlControllers
+                                                                      .removeAt(
+                                                                          i));
+                                                          removedControllers.add(
+                                                              airportNameControllers
+                                                                  .removeAt(i));
+                                                        }),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: AddActionButton(
+                                  tooltip: '添加订阅链接',
+                                  onPressed: _locked
+                                      ? null
+                                      : () => setDialogState(() {
+                                            urlControllers
+                                                .add(TextEditingController());
+                                            airportNameControllers
+                                                .add(TextEditingController());
+                                          }),
+                                ),
+                              ),
+                              if (validationMessage != null) ...[
+                                const SizedBox(height: 12),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    validationMessage!,
+                                    style: TextStyle(
+                                      color: Theme.of(dialogContext)
+                                          .colorScheme
+                                          .error,
+                                    ),
                                   ),
                                 ),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      TextField(
-                                        controller: airportNameControllers[i],
-                                        decoration: InputDecoration(
-                                            labelText: '机场 ${i + 1} 名称',
-                                            hintText: '例如：我的机场'),
-                                        textInputAction: TextInputAction.next,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      TextField(
-                                        controller: urlControllers[i],
-                                        decoration: InputDecoration(
-                                            labelText: '机场 ${i + 1} 订阅链接',
-                                            hintText: 'https://...'),
-                                        keyboardType: TextInputType.url,
-                                        autocorrect: false,
-                                        enableSuggestions: false,
-                                        smartDashesType:
-                                            SmartDashesType.disabled,
-                                        smartQuotesType:
-                                            SmartQuotesType.disabled,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (urlControllers.length > 1)
-                                  IconButton(
-                                    tooltip: '删除机场 ${i + 1}',
-                                    icon:
-                                        const Icon(Icons.remove_circle_outline),
-                                    onPressed: () => setDialogState(() {
-                                      removedControllers
-                                          .add(urlControllers.removeAt(i));
-                                      removedControllers.add(
-                                          airportNameControllers.removeAt(i));
-                                    }),
-                                  ),
                               ],
-                            ),
+                            ],
                           ),
-                      ],
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: AddActionButton(
-                      tooltip: '添加订阅链接',
-                      onPressed: () => setDialogState(() {
-                        urlControllers.add(TextEditingController());
-                        airportNameControllers.add(TextEditingController());
-                      }),
-                    ),
-                  ),
-                  if (validationMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        validationMessage!,
-                        style: TextStyle(
-                          color: Theme.of(dialogContext).colorScheme.error,
                         ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (nameController.text.isEmpty) {
-                  setDialogState(() => validationMessage = '请输入名称');
-                  return;
-                }
-                for (var i = 0; i < urlControllers.length; i++) {
-                  if (airportNameControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的名称');
-                    return;
-                  }
-                  if (urlControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
-                    return;
-                  }
-                }
-                try {
-                  final links = subscriptionLinks(enteredUrls());
-                  if (links.length != urlControllers.length) {
-                    setDialogState(() => validationMessage = '订阅链接重复，请删除重复项');
-                    return;
-                  }
-                } on FormatException catch (error) {
-                  setDialogState(() => validationMessage = error.message);
-                  return;
-                }
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: Text(existing == null ? '添加并下载' : '保存并更新'),
-            ),
-          ],
-        ),
-      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('取消'),
+                        ),
+                        FilledButton(
+                          onPressed: _locked
+                              ? null
+                              : () {
+                                  if (nameController.text.isEmpty) {
+                                    setDialogState(
+                                        () => validationMessage = '请输入名称');
+                                    return;
+                                  }
+                                  for (var i = 0;
+                                      i < urlControllers.length;
+                                      i++) {
+                                    if (airportNameControllers[i]
+                                        .text
+                                        .trim()
+                                        .isEmpty) {
+                                      setDialogState(() => validationMessage =
+                                          '请输入机场 ${i + 1} 的名称');
+                                      return;
+                                    }
+                                    if (urlControllers[i].text.trim().isEmpty) {
+                                      setDialogState(() => validationMessage =
+                                          '请输入机场 ${i + 1} 的订阅链接');
+                                      return;
+                                    }
+                                  }
+                                  try {
+                                    final links =
+                                        subscriptionLinks(enteredUrls());
+                                    if (links.length != urlControllers.length) {
+                                      setDialogState(() =>
+                                          validationMessage = '订阅链接重复，请删除重复项');
+                                      return;
+                                    }
+                                  } on FormatException catch (error) {
+                                    setDialogState(() =>
+                                        validationMessage = error.message);
+                                    return;
+                                  }
+                                  Navigator.of(dialogContext).pop(true);
+                                },
+                          child: Text(existing == null ? '添加并下载' : '保存并更新'),
+                        ),
+                      ],
+                    )),
+          )),
     );
     final save =
         await Navigator.of(context, rootNavigator: true).push(route) ?? false;
@@ -319,6 +380,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
     try {
       setState(() => _working = true);
+      if (!_ensureStopped()) return;
       final profiles = existing == null
           ? await _service.addSubscription(
               name: name, url: url, subscriptionNames: subscriptionNames)
@@ -357,26 +419,30 @@ class _ConfigPageState extends State<ConfigPage> {
     if (!_ensureStopped()) return;
     final confirmed = await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('删除配置'),
-            content: Text('确定删除“${profile.name}”吗？'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('取消'),
-              ),
-              DestructiveActionButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('删除'),
-              ),
-            ],
-          ),
+          builder: (dialogContext) =>
+              _watchAccess((dialogContext) => AlertDialog(
+                    title: const Text('删除配置'),
+                    content: Text('确定删除“${profile.name}”吗？'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        child: const Text('取消'),
+                      ),
+                      DestructiveActionButton(
+                        onPressed: _locked
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(true),
+                        child: const Text('删除'),
+                      ),
+                    ],
+                  )),
         ) ??
         false;
     if (!confirmed) return;
 
     try {
       setState(() => _working = true);
+      if (!_ensureStopped()) return;
       final profiles = await _service.deleteConfig(profile.id);
       if (!mounted) return;
       setState(() => _profiles = profiles);
@@ -389,9 +455,13 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showConfigDetails(ConfigProfile profile) async {
-    if (widget.proxyRunning) {
+    if (_locked) {
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => ConfigEditorPage(profile: profile)),
+        MaterialPageRoute(
+            builder: (_) => _watchAccess((_) => ConfigEditorPage(
+                profile: profile,
+                service: _service,
+                proxyStatus: widget.proxyStatus))),
       );
       return;
     }
@@ -400,97 +470,99 @@ class _ConfigPageState extends State<ConfigPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      builder: (sheetContext) => _watchAccess((sheetContext) => SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: profile.active
-                          ? colors.primaryContainer
-                          : colors.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Icon(
-                      profile.isSubscription
-                          ? Icons.cloud_outlined
-                          : Icons.description_outlined,
-                      color: profile.active
-                          ? colors.onPrimaryContainer
-                          : colors.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          profile.name,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: profile.active
+                              ? colors.primaryContainer
+                              : colors.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Icon(
+                          profile.isSubscription
+                              ? Icons.cloud_outlined
+                              : Icons.description_outlined,
+                          color: profile.active
+                              ? colors.onPrimaryContainer
+                              : colors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              profile.name,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              profile.isSubscription ? '机场订阅' : '本地 YAML 配置',
+                              style: TextStyle(color: colors.onSurfaceVariant),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (profile.active)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.primaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '当前使用',
+                            style: TextStyle(
+                              color: colors.onPrimaryContainer,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          profile.isSubscription ? '机场订阅' : '本地 YAML 配置',
-                          style: TextStyle(color: colors.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
-                  if (profile.active)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '当前使用',
-                        style: TextStyle(
-                          color: colors.onPrimaryContainer,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
+                  if (profile.isSubscription && profile.url != null) ...[
+                    const SizedBox(height: 18),
+                    const Text(
+                      '订阅链接',
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      profile.url!,
+                      style: TextStyle(
+                          color: colors.onSurfaceVariant, height: 1.4),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  Text(
+                    _locked
+                        ? '代理运行中：当前页面仅供查看，停止代理后可切换或管理配置。'
+                        : '点击非当前配置可切换，长按可管理。',
+                    style:
+                        TextStyle(color: colors.onSurfaceVariant, height: 1.4),
+                  ),
                 ],
               ),
-              if (profile.isSubscription && profile.url != null) ...[
-                const SizedBox(height: 18),
-                const Text(
-                  '订阅链接',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 6),
-                SelectableText(
-                  profile.url!,
-                  style: TextStyle(color: colors.onSurfaceVariant, height: 1.4),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Text(
-                widget.proxyRunning
-                    ? '代理运行中：当前页面仅供查看，停止代理后可切换或管理配置。'
-                    : '点击非当前配置可切换，长按可管理。',
-                style: TextStyle(color: colors.onSurfaceVariant, height: 1.4),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          )),
     );
   }
 
@@ -502,43 +574,51 @@ class _ConfigPageState extends State<ConfigPage> {
 
     final route = DialogRoute<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('配置名称'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            decoration: InputDecoration(
-              labelText: '名称',
-              errorText: validationMessage,
-            ),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) {
-              if (controller.text.trim().isEmpty) {
-                setDialogState(() => validationMessage = '请输入配置名称');
-                return;
-              }
-              Navigator.of(dialogContext).pop(true);
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().isEmpty) {
-                  setDialogState(() => validationMessage = '请输入配置名称');
-                  return;
-                }
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      ),
+      builder: (dialogContext) => _watchAccess((dialogContext) =>
+          StatefulBuilder(
+            builder: (dialogContext, setDialogState) =>
+                _watchAccess((dialogContext) => AlertDialog(
+                      title: const Text('配置名称'),
+                      content: TextField(
+                        enabled: !_locked,
+                        controller: controller,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          labelText: '名称',
+                          errorText: validationMessage,
+                        ),
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) {
+                          if (_locked) return;
+                          if (controller.text.trim().isEmpty) {
+                            setDialogState(() => validationMessage = '请输入配置名称');
+                            return;
+                          }
+                          Navigator.of(dialogContext).pop(true);
+                        },
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('取消'),
+                        ),
+                        FilledButton(
+                          onPressed: _locked
+                              ? null
+                              : () {
+                                  if (controller.text.trim().isEmpty) {
+                                    setDialogState(
+                                        () => validationMessage = '请输入配置名称');
+                                    return;
+                                  }
+                                  Navigator.of(dialogContext).pop(true);
+                                },
+                          child: const Text('保存'),
+                        ),
+                      ],
+                    )),
+          )),
     );
     final shouldSave =
         await Navigator.of(context, rootNavigator: true).push(route) ?? false;
@@ -550,6 +630,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
     try {
       setState(() => _working = true);
+      if (!_ensureStopped()) return;
       final profiles = await _service.renameConfig(id: profile.id, name: name);
       if (!mounted) return;
       setState(() => _profiles = profiles);
@@ -570,14 +651,15 @@ class _ConfigPageState extends State<ConfigPage> {
       if (!mounted) return;
       setState(() => _working = false);
       await Navigator.of(context).push<void>(MaterialPageRoute(
-          builder: (_) => ConfigManagementPage(
+          builder: (_) => _watchAccess((_) => ConfigManagementPage(
                 content: content,
                 mode: mode,
                 onSave: (value) async {
+                  if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
                   await _service.saveConfigContent(
                       id: profile.id, content: value);
                 },
-              )));
+              ))));
       if (mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
@@ -595,9 +677,11 @@ class _ConfigPageState extends State<ConfigPage> {
       setState(() => _working = false);
       final saved = await showSubscriptionHostDialog(
         context: context,
+        proxyStatus: widget.proxyStatus,
         initialHost: readSubscriptionHost(content),
         onSave: (value) async {
           final latest = await _service.getConfigContent(profile.id);
+          if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
           await _service.saveConfigContent(
             id: profile.id,
             content: editSubscriptionHost(latest, value),
@@ -620,21 +704,25 @@ class _ConfigPageState extends State<ConfigPage> {
       if (!mounted) return;
       setState(() => _working = false);
       await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => AddNodePage(
-          nodes: savedManualNodeNames(content),
-          onDelete: (name) async {
-            final latest = await _service.getConfigContent(profile.id);
-            final updated = deleteManualNode(latest, name);
-            await _service.saveConfigContent(id: profile.id, content: updated);
-            return savedManualNodeNames(updated);
-          },
-          onSave: (link) async {
-            final content = await _service.getConfigContent(profile.id);
-            final updated = addNodeLink(content, link);
-            await _service.saveConfigContent(id: profile.id, content: updated);
-            return savedManualNodeNames(updated);
-          },
-        ),
+        builder: (_) => _watchAccess((_) => AddNodePage(
+              nodes: savedManualNodeNames(content),
+              onDelete: (name) async {
+                final latest = await _service.getConfigContent(profile.id);
+                final updated = deleteManualNode(latest, name);
+                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
+                await _service.saveConfigContent(
+                    id: profile.id, content: updated);
+                return savedManualNodeNames(updated);
+              },
+              onSave: (link) async {
+                final content = await _service.getConfigContent(profile.id);
+                final updated = addNodeLink(content, link);
+                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
+                await _service.saveConfigContent(
+                    id: profile.id, content: updated);
+                return savedManualNodeNames(updated);
+              },
+            )),
       ));
       if (mounted) await _load();
     } catch (error) {
@@ -655,13 +743,14 @@ class _ConfigPageState extends State<ConfigPage> {
       if (!mounted) return;
       setState(() => _working = false);
       await Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => ProxyChainPage(
+          builder: (_) => _watchAccess((_) => ProxyChainPage(
                 content: content,
                 onSave: (next) async {
+                  if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
                   await _service.saveConfigContent(
                       id: profile.id, content: next);
                 },
-              )));
+              ))));
       if (mounted) await _load();
     } catch (error) {
       if (mounted) _showError(error);
@@ -703,19 +792,22 @@ class _ConfigPageState extends State<ConfigPage> {
     final name = profile.subscriptionNameFor(link, links.indexOf(link));
     final confirmed = await showDialog<bool>(
             context: context,
-            builder: (dialogContext) => AlertDialog(
-                  title: const Text('删除机场'),
-                  content: Text(
-                      '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(false),
-                        child: const Text('取消')),
-                    DestructiveActionButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(true),
-                        child: const Text('删除')),
-                  ],
-                )) ??
+            builder: (dialogContext) =>
+                _watchAccess((dialogContext) => AlertDialog(
+                      title: const Text('删除机场'),
+                      content: Text(
+                          '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
+                      actions: [
+                        TextButton(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(false),
+                            child: const Text('取消')),
+                        DestructiveActionButton(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(true),
+                            child: const Text('删除')),
+                      ],
+                    ))) ??
         false;
     if (!confirmed || !mounted) return;
     await _applyAirportChange(() => links.length == 1
@@ -732,88 +824,101 @@ class _ConfigPageState extends State<ConfigPage> {
     String? error;
     final route = DialogRoute<String>(
         context: context,
-        builder: (dialogContext) => StatefulBuilder(
-              builder: (dialogContext, setDialogState) => AlertDialog(
-                title: Text(link == null ? '添加机场' : '编辑机场'),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
-                content: SizedBox(
-                    width: 480,
-                    child: SingleChildScrollView(
-                        child:
-                            Column(mainAxisSize: MainAxisSize.min, children: [
-                      TextField(
-                          controller: nameController,
-                          enabled: !widget.proxyRunning,
-                          decoration: InputDecoration(
-                            labelText: '机场名称',
-                            filled: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 16),
-                            fillColor: Theme.of(dialogContext)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.45),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none),
-                          )),
-                      const SizedBox(height: 12),
-                      TextField(
-                          controller: urlController,
-                          enabled: !widget.proxyRunning,
-                          decoration: InputDecoration(
-                              labelText: '订阅链接',
-                              filled: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 16),
-                              fillColor: Theme.of(dialogContext)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.45),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none),
-                              hintText: 'https://...',
-                              errorText: error),
-                          keyboardType: TextInputType.url,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          smartDashesType: SmartDashesType.disabled,
-                          smartQuotesType: SmartQuotesType.disabled),
-                    ]))),
-                actions: [
-                  TextButton(
-                      onPressed: widget.proxyRunning
-                          ? null
-                          : () => Navigator.of(dialogContext).pop(),
-                      child: const Text('取消')),
-                  FilledButton(
-                      onPressed: widget.proxyRunning
-                          ? null
-                          : () {
-                              try {
-                                if (nameController.text.trim().isEmpty) {
-                                  throw const FormatException('请输入机场名称');
-                                }
-                                final entered =
-                                    subscriptionLinks(urlController.text);
-                                if (entered.length != 1) {
-                                  throw const FormatException('每个机场只能有一个订阅链接');
-                                }
-                                if (links.any((other) =>
-                                    other != link && other == entered.single)) {
-                                  throw const FormatException('订阅链接重复');
-                                }
-                                Navigator.of(dialogContext).pop('save');
-                              } on FormatException catch (failure) {
-                                setDialogState(() => error = failure.message);
-                              }
-                            },
-                      child: Text(link == null ? '添加' : '保存并更新')),
-                ],
-              ),
-            ));
+        builder: (dialogContext) => _watchAccess((dialogContext) =>
+            StatefulBuilder(
+              builder: (dialogContext, setDialogState) =>
+                  _watchAccess((dialogContext) => AlertDialog(
+                        title: Text(link == null ? '添加机场' : '编辑机场'),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20)),
+                        content: SizedBox(
+                            width: 480,
+                            child: SingleChildScrollView(
+                                child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                  TextField(
+                                      enabled: !_locked,
+                                      controller: nameController,
+                                      decoration: InputDecoration(
+                                        labelText: '机场名称',
+                                        filled: true,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 16),
+                                        fillColor: Theme.of(dialogContext)
+                                            .colorScheme
+                                            .surfaceContainerHighest
+                                            .withValues(alpha: 0.45),
+                                        border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            borderSide: BorderSide.none),
+                                      )),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                      enabled: !_locked,
+                                      controller: urlController,
+                                      decoration: InputDecoration(
+                                          labelText: '订阅链接',
+                                          filled: true,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 16),
+                                          fillColor: Theme.of(dialogContext)
+                                              .colorScheme
+                                              .surfaceContainerHighest
+                                              .withValues(alpha: 0.45),
+                                          border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              borderSide: BorderSide.none),
+                                          hintText: 'https://...',
+                                          errorText: error),
+                                      keyboardType: TextInputType.url,
+                                      autocorrect: false,
+                                      enableSuggestions: false,
+                                      smartDashesType: SmartDashesType.disabled,
+                                      smartQuotesType:
+                                          SmartQuotesType.disabled),
+                                ]))),
+                        actions: [
+                          TextButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(),
+                              child: const Text('取消')),
+                          FilledButton(
+                              onPressed: _locked
+                                  ? null
+                                  : () {
+                                      try {
+                                        if (nameController.text
+                                            .trim()
+                                            .isEmpty) {
+                                          throw const FormatException(
+                                              '请输入机场名称');
+                                        }
+                                        final entered = subscriptionLinks(
+                                            urlController.text);
+                                        if (entered.length != 1) {
+                                          throw const FormatException(
+                                              '每个机场只能有一个订阅链接');
+                                        }
+                                        if (links.any((other) =>
+                                            other != link &&
+                                            other == entered.single)) {
+                                          throw const FormatException('订阅链接重复');
+                                        }
+                                        Navigator.of(dialogContext).pop('save');
+                                      } on FormatException catch (failure) {
+                                        setDialogState(
+                                            () => error = failure.message);
+                                      }
+                                    },
+                              child: Text(link == null ? '添加' : '保存并更新')),
+                        ],
+                      )),
+            )));
     final action = await Navigator.of(context, rootNavigator: true).push(route);
     await route.completed;
     final name = nameController.text.trim();
@@ -821,7 +926,7 @@ class _ConfigPageState extends State<ConfigPage> {
     nameController.dispose();
     urlController.dispose();
     if (!mounted) return;
-    if (action == 'save') {
+    if (action == 'save' && _ensureStopped()) {
       await _applyAirportChange(
           () => _service.editSubscriptionAirport(profile.id,
               oldUrl: link, name: name, url: url),
@@ -838,9 +943,9 @@ class _ConfigPageState extends State<ConfigPage> {
     }
 
     await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => SubscriptionManagementPage(
+        builder: (_) => _watchAccess((_) => SubscriptionManagementPage(
               profile: profile,
-              proxyRunning: widget.proxyRunning,
+              proxyRunning: _locked,
               onEdit: (current, link) async {
                 await _showAirportDialog(current, link: link);
                 return latestProfile();
@@ -864,7 +969,7 @@ class _ConfigPageState extends State<ConfigPage> {
                     _service.editSubscriptionAirport(current.id, order: order));
                 return latestProfile();
               },
-            )));
+            ))));
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
@@ -891,68 +996,70 @@ class _ConfigPageState extends State<ConfigPage> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!profile.isSubscription) ...[
-                  ListTile(
-                    leading: const Icon(Icons.description_outlined),
-                    title: Text(profile.name),
-                    subtitle: const Text('本地 YAML 配置'),
-                  ),
-                  const Divider(height: 1),
-                ],
-                for (final action in orderedActions)
-                  if (action != 'host' || profile.isSubscription)
+      builder: (sheetContext) => _watchAccess((sheetContext) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!profile.isSubscription) ...[
+                      ListTile(
+                        leading: const Icon(Icons.description_outlined),
+                        title: Text(profile.name),
+                        subtitle: const Text('本地 YAML 配置'),
+                      ),
+                      const Divider(height: 1),
+                    ],
+                    for (final action in orderedActions)
+                      if (action != 'host' || profile.isSubscription)
+                        ManagementMenuTile(
+                          icon: editingActions[action]!.$2,
+                          title: editingActions[action]!.$1,
+                          enabled: !_locked,
+                          onTap: () => Navigator.of(sheetContext).pop(action),
+                        ),
+                    const Divider(height: 1),
                     ManagementMenuTile(
-                      icon: editingActions[action]!.$2,
-                      title: editingActions[action]!.$1,
-                      enabled: !widget.proxyRunning,
-                      onTap: () => Navigator.of(sheetContext).pop(action),
+                      icon: Icons.drive_file_rename_outline,
+                      title: '修改配置名称',
+                      enabled: !_locked,
+                      onTap: () => Navigator.of(sheetContext).pop('rename'),
                     ),
-                const Divider(height: 1),
-                ManagementMenuTile(
-                  icon: Icons.drive_file_rename_outline,
-                  title: '修改配置名称',
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('rename'),
+                    if (profile.isSubscription)
+                      ManagementMenuTile(
+                        icon: Icons.cloud_outlined,
+                        title: '订阅管理',
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop('subscription'),
+                      ),
+                    if (!profile.isSubscription)
+                      ManagementMenuTile(
+                        icon: Icons.code_outlined,
+                        title: '修改配置文件',
+                        enabled: !_locked,
+                        onTap: () =>
+                            Navigator.of(sheetContext).pop('editContent'),
+                      ),
+                    ManagementMenuTile(
+                      icon: Icons.visibility_outlined,
+                      title: '查看当前运行配置',
+                      onTap: () => Navigator.of(sheetContext).pop('runtime'),
+                    ),
+                    ManagementMenuTile(
+                      icon: Icons.delete_outline,
+                      title: '删除',
+                      destructive: true,
+                      enabled: !_locked,
+                      onTap: () => Navigator.of(sheetContext).pop('delete'),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
-                if (profile.isSubscription)
-                  ManagementMenuTile(
-                    icon: Icons.cloud_outlined,
-                    title: '订阅管理',
-                    onTap: () => Navigator.of(sheetContext).pop('subscription'),
-                  ),
-                if (!profile.isSubscription)
-                  ManagementMenuTile(
-                    icon: Icons.code_outlined,
-                    title: '修改配置文件',
-                    enabled: !widget.proxyRunning,
-                    onTap: () => Navigator.of(sheetContext).pop('editContent'),
-                  ),
-                ManagementMenuTile(
-                  icon: Icons.visibility_outlined,
-                  title: '查看当前运行配置',
-                  onTap: () => Navigator.of(sheetContext).pop('runtime'),
-                ),
-                ManagementMenuTile(
-                  icon: Icons.delete_outline,
-                  title: '删除',
-                  destructive: true,
-                  enabled: !widget.proxyRunning,
-                  onTap: () => Navigator.of(sheetContext).pop('delete'),
-                ),
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
+          )),
     );
 
     if (!mounted) return;
@@ -989,8 +1096,11 @@ class _ConfigPageState extends State<ConfigPage> {
       case 'runtime':
         await Navigator.of(context).push<void>(
           MaterialPageRoute(
-            builder: (_) =>
-                ConfigEditorPage(profile: profile, runtimeView: true),
+            builder: (_) => ConfigEditorPage(
+                profile: profile,
+                runtimeView: true,
+                service: _service,
+                proxyStatus: widget.proxyStatus),
           ),
         );
         return;
@@ -998,7 +1108,11 @@ class _ConfigPageState extends State<ConfigPage> {
         if (profile.isSubscription) return;
         if (!_ensureStopped()) return;
         await Navigator.of(context).push<void>(
-          MaterialPageRoute(builder: (_) => ConfigEditorPage(profile: profile)),
+          MaterialPageRoute(
+              builder: (_) => _watchAccess((_) => ConfigEditorPage(
+                  profile: profile,
+                  service: _service,
+                  proxyStatus: widget.proxyStatus))),
         );
         await _load();
         await _returnToActions(profile);
@@ -1149,8 +1263,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 onTap: _working
                                     ? null
                                     : () {
-                                        if (widget.proxyRunning ||
-                                            profile.active) {
+                                        if (_locked || profile.active) {
                                           _showConfigDetails(profile);
                                         } else {
                                           _select(profile);
@@ -1234,10 +1347,10 @@ class _ConfigPageState extends State<ConfigPage> {
                                             ),
                                             const SizedBox(height: 5),
                                             Text(
-                                              widget.proxyRunning
+                                              _locked
                                                   ? (profile.isSubscription
-                                                      ? '机场订阅 · 长按更新或修改'
-                                                      : '本地 YAML · 长按修改内容')
+                                                      ? '机场订阅 · 只读'
+                                                      : '本地 YAML · 只读')
                                                   : (profile.isSubscription
                                                       ? '机场订阅 · 长按管理'
                                                       : '本地 YAML · 长按管理'),
@@ -1270,7 +1383,7 @@ class _ConfigPageState extends State<ConfigPage> {
         ],
       ),
       floatingActionButton: PopupMenuButton<_AddConfigAction>(
-        enabled: !_working,
+        enabled: !_working && !_locked,
         tooltip: '添加配置',
         onSelected: _handleAdd,
         offset: const Offset(0, -128),
@@ -1300,7 +1413,7 @@ class _ConfigPageState extends State<ConfigPage> {
             ),
           ),
         ],
-        child: AddActionIcon(enabled: !_working),
+        child: AddActionIcon(enabled: !_working && !_locked),
       ),
     );
   }
