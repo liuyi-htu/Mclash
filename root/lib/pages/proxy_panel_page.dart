@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
 import '../shared/delay_test_queue.dart';
+import '../shared/proxy_node_details.dart';
 
 class ProxyPanelPage extends StatefulWidget {
   const ProxyPanelPage({required this.proxyRunning, super.key});
@@ -27,6 +28,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   var _testingAllNodes = false;
   List<_ProxyGroup> _groups = const [];
   final Map<String, String> _providerByNode = {};
+  Map<String, Map<String, dynamic>> _proxyDetails = {};
   final Map<String, _DelayResult> _delaysByNode = {};
   final _delayTestQueue = DelayTestQueue();
   var _testedCount = 0;
@@ -83,7 +85,24 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       final proxies = await _request('GET', const ['proxies']);
       final providerByNode = await _loadProviderNodeMap();
 
+      var runtimeDetails = <String, Map<String, dynamic>>{};
+      try {
+        runtimeDetails =
+            runtimeProxyDetails(await _service.getRuntimeConfigContent());
+      } catch (_) {
+        // Controller details remain available if the runtime file cannot be read.
+      }
       final proxyMap = proxies['proxies'];
+      final details = <String, Map<String, dynamic>>{
+        ...runtimeDetails,
+        if (proxyMap is Map)
+          for (final entry in proxyMap.entries)
+            if (entry.value is Map)
+              entry.key.toString(): {
+                ...runtimeDetails[entry.key.toString()] ?? {},
+                ...Map<String, dynamic>.from(entry.value as Map),
+              },
+      };
       final groups = <_ProxyGroup>[];
 
       if (proxyMap is Map) {
@@ -113,6 +132,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
           _delaysByNode.putIfAbsent(_nodeKey(entry.key), () => entry.value);
         }
         _groups = groups;
+        _proxyDetails = details;
         _providerByNode
           ..clear()
           ..addAll(providerByNode);
@@ -468,6 +488,15 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final colors = Theme.of(context).colorScheme;
+            final liveGroup = _groups.firstWhere(
+              (item) => item.name == group.name,
+              orElse: () => group,
+            );
+            final details = ProxyNodeDetails(liveGroup.now, {
+              ..._proxyDetails,
+              for (final item in _groups)
+                item.name: {..._proxyDetails[item.name] ?? {}, 'now': item.now},
+            });
             return SafeArea(
               child: Center(
                 child: Dialog(
@@ -505,7 +534,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${group.type.toUpperCase()} · ${group.selectedIndex}/${group.nodes.length}',
+                                      '${liveGroup.isManualSelectable ? 'SELECT' : liveGroup.type.toUpperCase()} · ${liveGroup.selectedIndex}/${liveGroup.nodes.length}',
                                       style: TextStyle(
                                         color: colors.onSurfaceVariant,
                                       ),
@@ -548,6 +577,20 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                     : const Icon(Icons.speed_rounded),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 8),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * 0.25,
+                            ),
+                            child: SingleChildScrollView(
+                              child: _SelectedNodeDetails(
+                                details: details,
+                                delay: _delayForNode(liveGroup.now),
+                                provider: _providerByNode[details.name],
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 14),
                           Flexible(
@@ -815,7 +858,8 @@ class _ProxyGroupButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   group.name,
-                  maxLines: 2,
+                  maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 15,
@@ -845,6 +889,64 @@ class _ProxyGroupButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SelectedNodeDetails extends StatelessWidget {
+  const _SelectedNodeDetails({
+    required this.details,
+    required this.delay,
+    required this.provider,
+  });
+  final ProxyNodeDetails details;
+  final _DelayResult? delay;
+  final String? provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = details.info;
+    final server = info['server'];
+    final port = info['port'];
+    final features = [
+      if (info['type'] != null) info['type'].toString().toUpperCase(),
+      if (info['network'] != null) info['network'].toString().toUpperCase(),
+      if (info['tls'] == true) 'TLS',
+      if (info['udp'] == true) 'UDP',
+      if (info['xudp'] == true) 'XUDP',
+      if (info['smux'] == true) 'MUX',
+    ];
+    final source = provider ?? info['provider-name']?.toString();
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(
+            details.name.isEmpty ? '未选择节点' : details.name,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text([...features, _delayLabel(delay) ?? '未测速'].join(' · '),
+              style: TextStyle(color: colors.onSurfaceVariant)),
+          if (server != null)
+            SelectableText('服务器：$server${port == null ? '' : ':$port'}'),
+          if (source != null && source.isNotEmpty) Text('来源：$source'),
+          if (details.selectionPath.length > 1)
+            SelectableText('选择路径：${details.selectionPath.join(' → ')}'),
+          if (details.chain.length > 1)
+            SelectableText('连接链路：${details.chain.join(' → ')}'),
+          if (details.incomplete) const Text('链路存在循环，无法完整展开'),
+        ],
       ),
     );
   }
@@ -884,7 +986,8 @@ class _NodeButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   name,
-                  maxLines: 2,
+                  maxLines: 1,
+                  softWrap: false,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
