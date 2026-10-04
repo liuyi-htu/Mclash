@@ -39,9 +39,14 @@ jobs:
         shell: powershell
         working-directory: windows/mclash
         run: |
+          New-Item -ItemType Directory -Path assets -Force | Out-Null
+          Copy-Item -LiteralPath "../../assets/default-config.yaml" -Destination "assets/default-config.yaml" -Force
           flutter pub get
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dart format --output=none --set-exit-if-changed lib test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           flutter analyze
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           flutter test
 
       - name: Check Windows packaging script syntax
