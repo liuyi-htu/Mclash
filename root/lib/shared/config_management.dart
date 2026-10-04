@@ -68,6 +68,20 @@ List<Map<String, dynamic>> configGroups(String content) => [
         _plain(group) as Map<String, dynamic>
     ];
 
+/// Reorder existing groups without changing their settings or references.
+String reorderConfigGroups(String content, List<String> names) {
+  final groups = configGroups(content);
+  final byName = {for (final group in groups) group['name'] as String: group};
+  if (names.length != groups.length ||
+      names.toSet().length != names.length ||
+      names.any((name) => !byName.containsKey(name))) {
+    throw const FormatException('代理组排序必须包含所有现有代理组且不能重复');
+  }
+  return (YamlEditor(content)
+        ..update(['proxy-groups'], [for (final name in names) byName[name]!]))
+      .toString();
+}
+
 int rulePolicyIndex(List<String> parts) {
   var index = parts.length - 1;
   while (index > 0 && ['no-resolve', 'src'].contains(parts[index].trim())) {

@@ -127,6 +127,10 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
               const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Text('规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。')),
+            if (mode == ConfigManagementMode.groups)
+              const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text('拖动右侧手柄调整代理组顺序。每次修改自动保存。')),
             Expanded(
                 child: AbsorbPointer(
                     absorbing: _saving,
@@ -180,46 +184,71 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                                   child:
                                                       Icon(Icons.drag_handle))),
                                         ]))))
-                        : ListView.builder(
+                        : ReorderableListView.builder(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
                             itemCount: groups.length,
+                            buildDefaultDragHandles: false,
+                            onReorder: (oldIndex, newIndex) {
+                              if (_saving) return;
+                              if (newIndex > oldIndex) newIndex--;
+                              if (newIndex == oldIndex) return;
+                              final names = [
+                                for (final group in groups)
+                                  group['name'] as String
+                              ];
+                              names.insert(newIndex, names.removeAt(oldIndex));
+                              _change(
+                                  () => reorderConfigGroups(_content, names));
+                            },
                             itemBuilder: (context, index) {
                               final group = groups[index];
                               final name = group['name'] as String;
                               final locked = managed.containsKey(name);
                               return ManagementCard(
+                                  key: ValueKey(name),
                                   child: ListTile(
                                       title: Text(name),
                                       subtitle: Text(locked
                                           ? '由链式节点管理'
                                           : '${group['type']} · ${(group['proxies'] as List? ?? []).length} 个成员'),
                                       enabled: !locked,
-                                      onTap: () => _group(group),
-                                      trailing: SizedBox(
-                                          width: 48,
-                                          height: 48,
-                                          child: mode ==
-                                                      ConfigManagementMode
-                                                          .groups &&
-                                                  !locked &&
-                                                  !isProtectedConfigGroup(name)
-                                              ? ManagementDeleteButton(
-                                                  tooltip: '删除代理组',
-                                                  onPressed: () =>
-                                                      _deleteGroup(name))
-                                              : mode ==
-                                                          ConfigManagementMode
-                                                              .groups &&
-                                                      isProtectedConfigGroup(
-                                                          name)
-                                                  ? const Tooltip(
-                                                      message: '固定代理组，不可删除或改名',
-                                                      child: Center(
-                                                          child: Icon(Icons
-                                                              .lock_outline)))
-                                                  : const Center(
-                                                      child: Icon(Icons
-                                                          .chevron_right)))));
+                                      onTap:
+                                          !locked ? () => _group(group) : null,
+                                      trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            SizedBox(
+                                                width: 48,
+                                                height: 48,
+                                                child: !locked &&
+                                                        !isProtectedConfigGroup(
+                                                            name)
+                                                    ? ManagementDeleteButton(
+                                                        tooltip: '删除代理组',
+                                                        onPressed: () =>
+                                                            _deleteGroup(name))
+                                                    : isProtectedConfigGroup(
+                                                            name)
+                                                        ? const Tooltip(
+                                                            message:
+                                                                '固定代理组，不可删除或改名',
+                                                            child: Center(
+                                                                child: Icon(Icons
+                                                                    .lock_outline)))
+                                                        : const Center(
+                                                            child: Icon(Icons
+                                                                .chevron_right))),
+                                            ReorderableDragStartListener(
+                                                enabled: !_saving,
+                                                index: index,
+                                                child: const Tooltip(
+                                                    message: '拖动排序',
+                                                    child: Padding(
+                                                        padding:
+                                                            EdgeInsets.all(12),
+                                                        child: Icon(Icons
+                                                            .drag_handle)))),
+                                          ])));
                             }))),
           ])),
         ));
