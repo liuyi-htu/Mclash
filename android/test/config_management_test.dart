@@ -14,6 +14,43 @@ rules: ['DOMAIN-SUFFIX,example.org,自选', 'MATCH,DIRECT']
 ''';
 
 void main() {
+  test('group reordering preserves settings, metadata and references', () {
+    final content = '# Mclash 链路代理组: {"链路":["JP"]}\n'
+        '# Mclash 代理组正则: {"自选":"^JP"}\n'
+        '${source.replaceFirst('rules:', '  - {name: 链路, type: select, proxies: [JP], hidden: true}\nrules:')}'
+        'sub-rules: {child: ["MATCH,自选"]}\n';
+    final before = loadYaml(content);
+    final reordered = reorderConfigGroups(content, ['链路', '自选', '🚀 国内']);
+    expect(configGroups(reordered), [
+      configGroups(content)[2],
+      configGroups(content)[1],
+      configGroups(content)[0]
+    ]);
+    final after = loadYaml(reordered);
+    for (final key in ['proxies', 'rules', 'sub-rules']) {
+      expect(after[key], before[key]);
+    }
+    expect(reordered, contains('# Mclash 链路代理组: {"链路":["JP"]}'));
+    expect(
+        readSubscriptionFilters(reordered), readSubscriptionFilters(content));
+    expect(
+        configGroups(editSubscriptionFilter(reordered, '自选', '^北'))
+            .map((group) => group['name']),
+        ['链路', '自选', '🚀 国内']);
+    expect(configGroups(reorderConfigGroups(reordered, ['🚀 国内', '自选', '链路'])),
+        configGroups(content));
+  });
+
+  test('group reordering rejects missing, repeated and unknown names', () {
+    for (final names in [
+      ['自选'],
+      ['自选', '自选'],
+      ['自选', '不存在']
+    ]) {
+      expect(() => reorderConfigGroups(source, names), throwsFormatException);
+    }
+  });
+
   test(
       'runtime metadata follows menu order and groups numbered chains by direction',
       () {

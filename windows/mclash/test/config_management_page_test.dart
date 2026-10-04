@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:mclash/models.dart';
+import 'package:mclash/proxy_edit_access.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/config_management_page.dart';
 import 'package:mclash/config_management.dart';
@@ -7,6 +9,108 @@ import 'package:yaml/yaml.dart';
 import 'config_management_test.dart' show source;
 
 void main() {
+  testWidgets('group sorting follows live Windows edit access', (tester) async {
+    final status = ValueNotifier(ProxyStatus.stopped);
+    addTearDown(status.dispose);
+    var saves = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: ProxyEditAccess.wrap(
+            status,
+            (_) => ConfigManagementPage(
+                content: source,
+                mode: ConfigManagementMode.groups,
+                onSave: (value) async {
+                  saves++;
+                }))));
+    status.value = ProxyStatus.running;
+    await tester.pump();
+    expect(
+        tester
+            .widget<ReorderableDragStartListener>(
+                find.byType(ReorderableDragStartListener).first)
+            .enabled,
+        false);
+    tester
+        .widget<ReorderableListView>(find.byType(ReorderableListView))
+        // Use the same callback as the page for older Flutter compatibility.
+        // ignore: deprecated_member_use
+        .onReorder!(0, 2);
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    status.value = ProxyStatus.stopped;
+    await tester.pump();
+    expect(
+        tester
+            .widget<ReorderableDragStartListener>(
+                find.byType(ReorderableDragStartListener).first)
+            .enabled,
+        true);
+    tester
+        .widget<ReorderableListView>(find.byType(ReorderableListView))
+        // Use the same callback as the page for older Flutter compatibility.
+        // ignore: deprecated_member_use
+        .onReorder!(0, 2);
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+  });
+
+  testWidgets('group handles reorder locked groups and persist on reopening',
+      (tester) async {
+    final content = '# Mclash 链路代理组: {"链路":["JP"]}\n'
+        '${source.replaceFirst('rules:', '  - {name: 链路, type: select, proxies: [JP]}\nrules:')}';
+    String? saved;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: content,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {
+              saved = value;
+            })));
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(3));
+    final first = tester.getCenter(find.byIcon(Icons.drag_handle).first);
+    final gesture = await tester
+        .startGesture(tester.getCenter(find.byIcon(Icons.drag_handle).last));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -20));
+    await tester.pump();
+    await gesture.moveTo(first);
+    await tester.pump(const Duration(milliseconds: 500));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(configGroups(saved!).map((group) => group['name']),
+        ['链路', '🚀 国内', '自选']);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: saved!,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {})));
+    expect(tester.getTopLeft(find.text('链路')).dy,
+        lessThan(tester.getTopLeft(find.text('🚀 国内')).dy));
+    expect(find.byTooltip('删除代理组'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed group reorder keeps the previous order', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {
+              throw StateError('保存失败');
+            })));
+    tester
+        .widget<ReorderableListView>(find.byType(ReorderableListView))
+        // Use the same callback as the page for older Flutter compatibility.
+        // ignore: deprecated_member_use
+        .onReorder!(0, 2);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('保存失败'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('🚀 国内')).dy,
+        lessThan(tester.getTopLeft(find.text('自选')).dy));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('regional groups hide delete actions and lock only their names',
       (tester) async {
     final content = source
