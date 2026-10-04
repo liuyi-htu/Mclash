@@ -29,6 +29,7 @@ class MclashTileService : TileService() {
         super.onClick()
 
         val action = Runnable {
+            if (ProxyVpnService.stopping) return@Runnable
             val store = ConfigStore(this)
             if (!store.exists()) {
                 Toast.makeText(
@@ -93,12 +94,13 @@ class MclashTileService : TileService() {
         tile.label = label
         tile.contentDescription = when {
             !hasConfig -> "$label，未配置"
+            ProxyVpnService.stopping -> "$label，正在停止"
             ProxyVpnService.starting -> "$label，正在启动"
             active -> "$label，已启动"
             else -> "$label，已停止"
         }
         tile.state = when {
-            !hasConfig -> Tile.STATE_UNAVAILABLE
+            !hasConfig || ProxyVpnService.stopping -> Tile.STATE_UNAVAILABLE
             active -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }

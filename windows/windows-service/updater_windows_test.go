@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -131,6 +132,8 @@ func stubUpdateServiceLifecycle(
 	originalQuery := queryServiceStatus
 	originalStop := stopProxyService
 	originalStart := startProxyService
+	originalVerify := verifyUpdatedCore
+	verifyUpdatedCore = func(appPaths, string) error { return nil }
 	queryServiceStatus = query
 	stopProxyService = stop
 	startProxyService = start
@@ -138,5 +141,24 @@ func stubUpdateServiceLifecycle(
 		queryServiceStatus = originalQuery
 		stopProxyService = originalStop
 		startProxyService = originalStart
+		verifyUpdatedCore = originalVerify
 	})
+}
+
+func TestUnhealthyUpdatedCoreRollsBack(t *testing.T) {
+	paths, _ := resolvePaths(t.TempDir(), "")
+	os.WriteFile(paths.MihomoExe, []byte("old"), 0o755)
+	temporary := paths.MihomoExe + ".update"
+	os.WriteFile(temporary, []byte("new"), 0o755)
+	stops, starts := 0, 0
+	stubUpdateServiceLifecycle(t,
+		func(appPaths) statusResult { return statusResult{State: "running"} },
+		func() error { stops++; return nil },
+		func(appPaths) error { starts++; return nil })
+	verifyUpdatedCore = func(appPaths, string) error { return fmt.Errorf("controller unavailable") }
+	err := activateCoreUpdate(paths, "mihomo", paths.MihomoExe, temporary, "2.0.0", func(string) (string, error) { return "2.0.0", nil })
+	data, _ := os.ReadFile(paths.MihomoExe)
+	if err == nil || string(data) != "old" || starts != 2 || stops != 2 {
+		t.Fatalf("err=%v core=%s starts=%d stops=%d", err, data, starts, stops)
+	}
 }

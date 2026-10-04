@@ -26,7 +26,7 @@ internal object MihomoProcess {
     private var process: Process? = null
 
     @Synchronized
-    fun start(context: Context, importedConfig: File): Int {
+    fun start(context: Context, importedConfig: File, cancelled: () -> Boolean = { false }): Int {
         require(importedConfig.isFile && importedConfig.length() > 0) {
             "mihomo 配置不存在或为空"
         }
@@ -103,6 +103,7 @@ internal object MihomoProcess {
                 logFile = logFile,
                 label = "本地代理端口",
                 debugLoggingEnabled = debugLoggingEnabled,
+                cancelled = cancelled,
             )
             waitForPort(
                 process = next,
@@ -111,6 +112,7 @@ internal object MihomoProcess {
                 logFile = logFile,
                 label = "外部控制器",
                 debugLoggingEnabled = debugLoggingEnabled,
+                cancelled = cancelled,
             )
         } catch (error: Throwable) {
             stop()
@@ -383,10 +385,12 @@ internal object MihomoProcess {
         logFile: File,
         label: String,
         debugLoggingEnabled: Boolean,
+        cancelled: () -> Boolean,
     ) {
         val deadline = System.currentTimeMillis() + START_TIMEOUT_MS
 
         while (System.currentTimeMillis() < deadline) {
+            check(!cancelled()) { "启动已取消" }
             if (!process.isAlive) {
                 errorReader?.join(1000)
                 error(

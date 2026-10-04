@@ -5,7 +5,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -99,7 +98,7 @@ internal class ConfigStore(private val context: Context) {
             }
 
             val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
-                readWithLimit(input.readBytes())
+                readStreamWithLimit(input)
             } ?: error("无法读取配置文件：$fileName")
             validateYaml(bytes, "配置文件 $fileName")
             PendingConfig(defaultLocalName(fileName), bytes)
@@ -510,19 +509,8 @@ internal class ConfigStore(private val context: Context) {
         }
     }
 
-    private fun readStreamWithLimit(stream: java.io.InputStream): ByteArray {
-        val output = ByteArrayOutputStream()
-        val buffer = ByteArray(16 * 1024)
-        var total = 0
-        while (true) {
-            val count = stream.read(buffer)
-            if (count < 0) break
-            total += count
-            require(total <= MAX_CONFIG_BYTES) { "配置内容超过 8 MB" }
-            output.write(buffer, 0, count)
-        }
-        return output.toByteArray()
-    }
+    private fun readStreamWithLimit(stream: java.io.InputStream): ByteArray =
+        readConfigStream(stream, MAX_CONFIG_BYTES)
 
     private fun displayName(uri: Uri): String =
         context.contentResolver.query(
@@ -535,11 +523,6 @@ internal class ConfigStore(private val context: Context) {
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
         } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "config.yaml"
-
-    private fun readWithLimit(bytes: ByteArray): ByteArray {
-        require(bytes.size <= MAX_CONFIG_BYTES) { "配置文件超过 8 MB" }
-        return bytes
-    }
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
         target.parentFile?.mkdirs()

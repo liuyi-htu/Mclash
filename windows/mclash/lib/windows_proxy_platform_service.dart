@@ -1059,7 +1059,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   Future<bool> getServiceAutoStartEnabled() async {
     final result = await _runService('autostart-json');
     final decoded = jsonDecode(result.stdout.toString().trim());
-    return decoded is Map<String, dynamic> && decoded['enabled'] == true;
+    final enabled =
+        decoded is Map<String, dynamic> && decoded['enabled'] == true;
+    if (Platform.isWindows && enabled) await _setUserLogonSync(true);
+    return enabled;
   }
 
   @override
@@ -1070,6 +1073,37 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       await _runService('install');
     }
     await _runService(enabled ? 'enable-autostart' : 'disable-autostart');
+    try {
+      await _setUserLogonSync(enabled);
+    } catch (_) {
+      if (enabled) await _runService('disable-autostart');
+      rethrow;
+    }
+  }
+
+  Future<void> _setUserLogonSync(bool enabled) async {
+    const key = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+    final base = File(Platform.resolvedExecutable).parent.path;
+    final command = '"$_serviceExe" sync-user-proxy --base "$base" '
+        '--data-dir "$_dataDir" --proxy-backup "$_systemProxyBackupPath"';
+    final arguments = enabled
+        ? [
+            'add',
+            key,
+            '/v',
+            'MclashProxySync',
+            '/t',
+            'REG_SZ',
+            '/d',
+            command,
+            '/f'
+          ]
+        : ['delete', key, '/v', 'MclashProxySync', '/f'];
+    final result = await (_registryProcessRunner?.call('reg.exe', arguments) ??
+        Process.run('reg.exe', arguments));
+    if (result.exitCode != 0 && enabled) {
+      throw StateError('无法设置登录后的系统代理同步：${result.stderr}');
+    }
   }
 
   @override

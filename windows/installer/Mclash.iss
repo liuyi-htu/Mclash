@@ -54,6 +54,7 @@ Filename: "{app}\MclashService.exe"; Parameters: "install --base ""{app}"" --dat
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch Mclash"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
+Filename: "{sys}\reg.exe"; Parameters: "delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v MclashProxySync /f"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveMclashLogonSync"
 Filename: "{app}\MclashService.exe"; Parameters: "stop --base ""{app}"" --data-dir ""{app}\data"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "StopMclashService"
 Filename: "{app}\MclashService.exe"; Parameters: "restore-system-proxy --base ""{app}"" --data-dir ""{app}\data"" --proxy-backup ""{localappdata}\Mclash\system-proxy-backup.json"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RestoreMclashSystemProxy"
 Filename: "{app}\MclashService.exe"; Parameters: "uninstall --base ""{app}"" --data-dir ""{app}\data"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "RemoveMclashService"

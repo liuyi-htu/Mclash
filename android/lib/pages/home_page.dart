@@ -25,13 +25,17 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _service = NativeProxyService.instance;
 
-  ProxyStatus _status = ProxyStatus.stopped;
+  final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
+  ProxyStatus get _status => _proxyStatus.value;
+  set _status(ProxyStatus value) => _proxyStatus.value = value;
+  bool _refreshInProgress = false;
   ConfigInfo _config = const ConfigInfo(exists: false);
   bool _debugLoggingEnabled = false;
   bool _developerModeEnabled = false;
   int _aboutTitleTapCount = 0;
   DateTime? _lastAboutTitleTap;
   Timer? _trafficTimer;
+  bool _statusChecking = false;
   int? _lastRxBytes;
   int? _lastTxBytes;
   DateTime? _lastTrafficSample;
@@ -58,6 +62,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _trafficTimer?.cancel();
+    _proxyStatus.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -65,6 +70,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(_refresh());
       _startTrafficUpdates();
     } else {
       _trafficTimer?.cancel();
@@ -88,9 +94,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _pollStatus() async {
+    if (_statusChecking || _toggling || !mounted) return;
+    _statusChecking = true;
+    final generation = _transitionGeneration;
+    try {
+      final status =
+          await _service.getProxyStatus().timeout(const Duration(seconds: 5));
+      if (!mounted || _toggling || generation != _transitionGeneration) return;
+      final previous = _status;
+      setState(() => _status = status);
+      if (status == ProxyStatus.running && previous != status) {
+        unawaited(_loadProxyMode());
+      }
+    } catch (_) {
+      // Retry on the next foreground sample. Native write guards remain authoritative.
+    } finally {
+      _statusChecking = false;
+    }
+  }
+
   Future<void> _updateTrafficSpeed() async {
     try {
-      if (!_toggling && _status == ProxyStatus.starting) await _refresh();
+      unawaited(_pollStatus());
       final stats = await _service.getTrafficStats();
       final now = DateTime.now();
       final rx = stats['rxBytes'] ?? 0;
@@ -274,6 +300,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _refresh() async {
+    if (!mounted || _refreshInProgress) return;
+    _refreshInProgress = true;
     final generation = _transitionGeneration;
     try {
       final config = await _service.getConfigInfo();
@@ -291,6 +319,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (error) {
       if (!mounted) return;
       _showError(error);
+    } finally {
+      _refreshInProgress = false;
     }
   }
 
@@ -303,8 +333,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _openProxyPanel() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) =>
-            ProxyPanelPage(proxyRunning: _status == ProxyStatus.running),
+        builder: (_) => ValueListenableBuilder<ProxyStatus>(
+          valueListenable: _proxyStatus,
+          builder: (_, status, child) =>
+              ProxyPanelPage(proxyRunning: status == ProxyStatus.running),
+        ),
       ),
     );
   }
@@ -889,62 +922,69 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     final action = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('调试日志'),
-          content: SizedBox(
-            width: 440,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('启用调试日志'),
-                  value: enabled,
-                  onChanged: (value) async {
-                    try {
-                      await _service.setDebugLoggingEnabled(value);
-                      if (!mounted) return;
-                      setState(() => _debugLoggingEnabled = value);
-                      setDialogState(() => enabled = value);
-                    } catch (error) {
-                      if (!mounted) return;
-                      _showError(error);
-                    }
-                  },
-                ),
-                const Divider(height: 20),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.settings_applications_outlined),
-                  title: const Text('Mclash.log'),
-                  subtitle: const Text('服务启动、停止和控制日志'),
-                  onTap: () => Navigator.of(dialogContext).pop('Mclash.log'),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.memory_rounded),
-                  title: const Text('mihomo.log'),
-                  subtitle: const Text('mihomo 内核运行日志'),
-                  onTap: () => Navigator.of(dialogContext).pop('mihomo.log'),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.swap_vert_circle_outlined),
-                  title: const Text('hev.log'),
-                  subtitle: const Text('IPv4/IPv6 TUN 转发日志'),
-                  onTap: () => Navigator.of(dialogContext).pop('hev.log'),
-                ),
-              ],
+      builder: (dialogContext) => ValueListenableBuilder<ProxyStatus>(
+        valueListenable: _proxyStatus,
+        builder: (_, status, child) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('调试日志'),
+            content: SizedBox(
+              width: 440,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('启用调试日志'),
+                    value: enabled,
+                    onChanged: _status != ProxyStatus.stopped
+                        ? null
+                        : (value) async {
+                            try {
+                              await _service.setDebugLoggingEnabled(value);
+                              if (!mounted) return;
+                              setState(() => _debugLoggingEnabled = value);
+                              setDialogState(() => enabled = value);
+                            } catch (error) {
+                              if (!mounted) return;
+                              _showError(error);
+                            }
+                          },
+                  ),
+                  const Divider(height: 20),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.settings_applications_outlined),
+                    title: const Text('Mclash.log'),
+                    subtitle: const Text('服务启动、停止和控制日志'),
+                    onTap: () => Navigator.of(dialogContext).pop('Mclash.log'),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.memory_rounded),
+                    title: const Text('mihomo.log'),
+                    subtitle: const Text('mihomo 内核运行日志'),
+                    onTap: () => Navigator.of(dialogContext).pop('mihomo.log'),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.swap_vert_circle_outlined),
+                    title: const Text('hev.log'),
+                    subtitle: const Text('IPv4/IPv6 TUN 转发日志'),
+                    onTap: () => Navigator.of(dialogContext).pop('hev.log'),
+                  ),
+                ],
+              ),
             ),
+            actions: [
+              TextButton.icon(
+                onPressed: _status != ProxyStatus.stopped
+                    ? null
+                    : () => Navigator.of(dialogContext).pop('clear'),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('清除'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton.icon(
-              onPressed: () => Navigator.of(dialogContext).pop('clear'),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('清除'),
-            ),
-          ],
         ),
       ),
     );
@@ -980,7 +1020,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ) ??
         false;
 
-    if (!confirmed) return;
+    if (!confirmed || await _service.getProxyStatus() != ProxyStatus.stopped) {
+      return;
+    }
 
     try {
       await _service.clearDebugLogs();

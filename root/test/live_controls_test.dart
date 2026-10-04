@@ -101,8 +101,10 @@ void main() {
   const channel = MethodChannel('mclash/native');
   late _Controller controller;
   HttpOverrides? previous;
+  var running = true;
 
   setUp(() {
+    running = true;
     previous = HttpOverrides.current;
     controller = _Controller();
     HttpOverrides.global = controller;
@@ -112,8 +114,8 @@ void main() {
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => false,
         'getConfigInfo' => <String, Object?>{'exists': true},
-        'getProxyStatus' => 'running',
-        'isRunning' => true,
+        'getProxyStatus' => running ? 'running' : 'stopped',
+        'isRunning' => running,
         'getDebugLoggingEnabled' => false,
         'getTrafficStats' => <String, int>{'rxBytes': 0, 'txBytes': 0},
         'getDelayResults' => '{}',
@@ -127,6 +129,31 @@ void main() {
     HttpOverrides.global = previous;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('open panel follows an external stop and reconnect',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('代理面板'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
+        true);
+    running = false;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
+        false);
+    running = true;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
+        true);
+    expect(find.text('Test group'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets(

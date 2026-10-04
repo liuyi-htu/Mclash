@@ -112,7 +112,7 @@ class MainActivity : FlutterActivity() {
                 "refreshSubscription" -> refreshSubscription(call, result)
                 "getRuntimeConfigContent" -> runAsync(result, "mclash-runtime-config") {
                     val runtime = File(filesDir, "mihomo/runtime.yaml")
-                    if (ProxyVpnService.running || ProxyVpnService.starting) {
+                    if (ProxyVpnService.running || ProxyVpnService.starting || ProxyVpnService.stopping) {
                         check(runtime.isFile) { "运行配置尚未生成" }
                         runtime.readText(Charsets.UTF_8)
                     } else {
@@ -135,14 +135,12 @@ class MainActivity : FlutterActivity() {
                 "saveAppFilter" -> saveAppFilter(call, result)
                 "prepareVpn" -> prepareVpn(result)
                 "start" -> startProxy(result)
-                "stop" -> {
-                    ProxyVpnService.stop(this)
-                    result.success(null)
-                }
+                "stop" -> stopProxy(result)
                 "restart" -> restartProxy(result)
                 "isRunning" -> result.success(ProxyVpnService.running)
                 "getProxyStatus" -> result.success(
                     when {
+                        ProxyVpnService.stopping -> "stopping"
                         ProxyVpnService.running -> "running"
                         ProxyVpnService.starting || ProxyVpnService.startRequested -> "starting"
                         else -> "stopped"
@@ -350,7 +348,7 @@ class MainActivity : FlutterActivity() {
 
     private fun requireProxyStopped() {
         require(!ProxyVpnService.running && !ProxyVpnService.starting &&
-            !ProxyVpnService.startRequested && !MihomoProcess.isRunning()) {
+            !ProxyVpnService.startRequested && !ProxyVpnService.stopping && !MihomoProcess.isRunning()) {
             "请先停止代理再修改配置"
         }
     }
@@ -412,17 +410,29 @@ class MainActivity : FlutterActivity() {
         }, "mclash-start-waiter").start()
     }
 
+    private fun stopProxy(result: MethodChannel.Result) {
+        ProxyVpnService.stop(this)
+        Thread({
+            val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
+            while (ProxyVpnService.stopping && System.currentTimeMillis() < deadline) Thread.sleep(100)
+            runOnUiThread {
+                if (ProxyVpnService.stopping) result.error("stop_timeout", "代理停止超时", null)
+                else result.success(null)
+            }
+        }, "mclash-stop-waiter").start()
+    }
+
     private fun restartProxy(result: MethodChannel.Result) {
         ProxyVpnService.stop(this)
         Thread({
             val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
             while (
                 System.currentTimeMillis() < deadline &&
-                (ProxyVpnService.running || ProxyVpnService.starting)
+                (ProxyVpnService.running || ProxyVpnService.starting || ProxyVpnService.stopping)
             ) {
                 Thread.sleep(100)
             }
-            if (ProxyVpnService.running || ProxyVpnService.starting) {
+            if (ProxyVpnService.running || ProxyVpnService.starting || ProxyVpnService.stopping) {
                 runOnUiThread {
                     result.error("restart_timeout", "代理停止超时，无法应用新配置", null)
                 }
@@ -588,7 +598,7 @@ class MainActivity : FlutterActivity() {
         if (!intent.getBooleanExtra(EXTRA_START_FROM_TILE, false)) return
         intent.removeExtra(EXTRA_START_FROM_TILE)
 
-        if (ProxyVpnService.running || ProxyVpnService.starting) {
+        if (ProxyVpnService.running || ProxyVpnService.starting || ProxyVpnService.stopping) {
             QuickSettingsTileUpdater.request(this)
             return
         }
@@ -721,7 +731,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private val MUTATING_METHODS = setOf(
-            "saveAppFilter", "saveVpnTunnelSettings", "setDebugLoggingEnabled",
+            "saveAppFilter", "saveVpnTunnelSettings", "setDebugLoggingEnabled", "clearDebugLogs",
             "importConfigs", "addSubscription", "updateSubscription", "editSubscriptionAirport", "refreshSubscription",
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
         )
