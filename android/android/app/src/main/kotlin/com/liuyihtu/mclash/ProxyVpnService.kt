@@ -15,12 +15,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import hev.htproxy.TProxyService
 import java.io.File
+import java.util.concurrent.Executors
 
 class ProxyVpnService : VpnService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    @Volatile
-    private var stopping = false
+    private val worker = Executors.newSingleThreadExecutor()
 
     private var tunDescriptor: ParcelFileDescriptor? = null
     private var tunnelStarted = false
@@ -34,8 +34,7 @@ class ProxyVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopProxy()
-                stopSelf()
+                requestStop(startId)
             }
             else -> startProxy()
         }
@@ -45,12 +44,13 @@ class ProxyVpnService : VpnService() {
     override fun onBind(intent: Intent?): IBinder? = super.onBind(intent)
 
     override fun onDestroy() {
-        stopProxy()
+        if (running || starting || stopping || MihomoProcess.isRunning()) requestStop(null)
+        worker.shutdown()
         super.onDestroy()
     }
 
     private fun startProxy() {
-        if (running || starting) return
+        if (running || starting || stopping) return
         lastError = null
         stopping = false
         try {
@@ -69,7 +69,7 @@ class ProxyVpnService : VpnService() {
         StartupLog.append(this, "收到启动请求；ABI=${Build.SUPPORTED_ABIS.joinToString()}")
         startForeground(NOTIFICATION_ID, buildNotification("正在启动 mihomo"))
 
-        Thread({
+        worker.execute {
             try {
                 val configStore = ConfigStore(this)
                 activeConfigName = configStore.activeProfile()?.name ?: "未命名配置"
@@ -100,7 +100,7 @@ class ProxyVpnService : VpnService() {
 
                 // Start official mihomo first, while the process still has an ordinary network route.
                 StartupLog.append(this, "开始启动官方 mihomo")
-                val socksPort = MihomoProcess.start(this, configStore.configFile)
+                val socksPort = MihomoProcess.start(this, configStore.configFile) { stopping }
                 StartupLog.append(this, "mihomo 已监听 127.0.0.1:$socksPort")
                 if (stopping) error("启动已取消")
 
@@ -171,7 +171,7 @@ class ProxyVpnService : VpnService() {
                     stopSelf()
                 }
             }
-        }, "mclash-proxy-start").start()
+        }
     }
 
     private fun writeHevConfig(
@@ -271,15 +271,23 @@ class ProxyVpnService : VpnService() {
         }
     }
 
-    private fun stopProxy() {
+    private fun requestStop(startId: Int?) {
         startRequested = false
-        StartupLog.append(this, "收到停止请求")
         stopping = true
-        stopNativeComponents()
-        running = false
-        starting = false
         QuickSettingsTileUpdater.request(this)
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        if (worker.isShutdown) return
+        worker.execute {
+            StartupLog.append(this, "收到停止请求")
+            stopNativeComponents()
+            running = false
+            starting = false
+            stopping = false
+            QuickSettingsTileUpdater.request(this)
+            mainHandler.post {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                if (startId != null) stopSelfResult(startId)
+            }
+        }
     }
 
     @Synchronized
@@ -355,6 +363,10 @@ class ProxyVpnService : VpnService() {
             private set
 
         @Volatile
+        var stopping: Boolean = false
+            private set
+
+        @Volatile
         var lastError: String? = null
             private set
 
@@ -368,6 +380,7 @@ class ProxyVpnService : VpnService() {
 
         fun start(context: android.content.Context) {
             RuntimeEdits.start {
+                check(!stopping) { "代理正在停止，请稍后再启动" }
                 if (running || starting || startRequested) return@start
                 lastError = null
                 startRequested = true
@@ -382,6 +395,8 @@ class ProxyVpnService : VpnService() {
         }
 
         fun stop(context: android.content.Context) {
+            stopping = true
+            startRequested = false
             context.startService(Intent(context, ProxyVpnService::class.java).setAction(ACTION_STOP))
         }
 

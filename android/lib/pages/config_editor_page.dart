@@ -36,6 +36,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   final _searchController = TextEditingController();
   bool _readOnly = false;
   bool _runtimeContent = false;
+  bool _observedRunning = false;
   Timer? _stateTimer;
   bool _checkingState = false;
   bool _loading = true;
@@ -70,7 +71,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     _checkingState = true;
     try {
       final running = await _service.getProxyStatus() != ProxyStatus.stopped;
-      if (mounted && running != _runtimeContent) await _load();
+      if (mounted && running != _observedRunning) {
+        await _applyRunningState(running);
+      }
     } catch (_) {
       // Keep the current view; native save guards still reject unsafe writes.
     } finally {
@@ -78,11 +81,28 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     }
   }
 
+  Future<void> _applyRunningState(bool running) async {
+    if (_dirty) {
+      // Keep the draft in place; only lock editing until the proxy stops.
+      setState(() {
+        _observedRunning = running;
+        _readOnly = running || widget.profile.isSubscription;
+      });
+      return;
+    }
+    await _load();
+  }
+
   Future<void> _load() async {
     try {
       final running = await _service.getProxyStatus() != ProxyStatus.stopped;
       if (!mounted) return;
+      if (_dirty) {
+        await _applyRunningState(running);
+        return;
+      }
       setState(() {
+        _observedRunning = running;
         _runtimeContent = widget.runtimeView || running;
         _readOnly = _runtimeContent || widget.profile.isSubscription;
       });
@@ -90,10 +110,17 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
-      _lastText = content;
+      if (_dirty) {
+        setState(() {
+          _runtimeContent = false;
+          _readOnly = _observedRunning || widget.profile.isSubscription;
+        });
+        return;
+      }
       _controller.removeListener(_handleTextChanged);
       _readOnly = _runtimeContent || widget.profile.isSubscription;
       _dirty = false;
+      _lastText = content;
       _controller.text = content;
       _lineCount = _countLines(content);
       _controller.addListener(_handleTextChanged);
@@ -240,7 +267,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     });
     try {
       if (await _service.getProxyStatus() != ProxyStatus.stopped) {
-        await _load();
+        await _applyRunningState(true);
         return;
       }
 
@@ -307,7 +334,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                     _runtimeContent
                         ? '当前运行配置'
                         : _readOnly
-                            ? '订阅配置（只读）'
+                            ? (_dirty ? '草稿已保留（停止代理后可编辑）' : '订阅配置（只读）')
                             : '修改配置',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis)),

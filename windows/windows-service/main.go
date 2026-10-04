@@ -78,6 +78,8 @@ func run(args []string) int {
 		err = setServiceAutoStart(false)
 	case "clear-runtime-message":
 		err = clearRuntimeMessage(paths)
+	case "sync-user-proxy":
+		err = syncUserProxy(paths)
 	case "restore-system-proxy":
 		err = restoreSystemProxy(paths.ProxyBackup)
 	case "core-update-json":

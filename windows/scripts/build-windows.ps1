@@ -50,19 +50,26 @@ if ($env:GH_TOKEN) {
     $releaseHeaders.Authorization = "Bearer $($env:GH_TOKEN)"
 }
 
-if (-not (Test-Path -LiteralPath $mihomo -PathType Leaf) -or
-    (Get-Item -LiteralPath $mihomo).Length -eq 0) {
-    $mihomoReleasePath = if ($env:MIHOMO_VERSION) {
-        "tags/$([uri]::EscapeDataString($env:MIHOMO_VERSION))"
-    } else {
-        "latest"
-    }
+$mihomoReleasePath = if ($env:MIHOMO_VERSION) {
+    "tags/$([uri]::EscapeDataString($env:MIHOMO_VERSION))"
+} else { "latest" }
+$mihomoRelease = Invoke-RestMethod `
+    -Headers $releaseHeaders `
+    -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/$mihomoReleasePath"
+$expectedCoreVersion = $mihomoRelease.tag_name.TrimStart('v')
+$cachedCoreMatches = $false
+if (Test-Path -LiteralPath $mihomo -PathType Leaf) {
+    try {
+        $coreOutput = & $mihomo -v 2>&1
+        $cachedCoreMatches = $LASTEXITCODE -eq 0 -and
+            "$coreOutput" -match '(?i)\bv?(\d+\.\d+\.\d+)\b' -and
+            $Matches[1] -eq $expectedCoreVersion
+    } catch { $cachedCoreMatches = $false }
+}
+if (-not $cachedCoreMatches) {
     Write-Host "Downloading official mihomo Windows amd64 core ($mihomoReleasePath)..."
-    $mihomoRelease = Invoke-RestMethod `
-        -Headers $releaseHeaders `
-        -Uri "https://api.github.com/repos/MetaCubeX/mihomo/releases/$mihomoReleasePath"
     $mihomoAsset = $mihomoRelease.assets | Where-Object {
-        $_.name -match '^mihomo-windows-amd64-compatible-.*\.zip$'
+        $_.name -eq "mihomo-windows-amd64-compatible-$($mihomoRelease.tag_name).zip"
     } | Select-Object -First 1
     if (-not $mihomoAsset -or -not $mihomoAsset.digest -or
         -not $mihomoAsset.digest.StartsWith("sha256:")) {
@@ -86,6 +93,12 @@ if (-not (Test-Path -LiteralPath $mihomo -PathType Leaf) -or
             Select-Object -First 1
         if (-not $downloadedCore) {
             throw "The mihomo archive does not contain an executable."
+        }
+        $candidateVersion = & $downloadedCore.FullName -v 2>&1
+        if ($LASTEXITCODE -ne 0 -or
+            "$candidateVersion" -notmatch '(?i)\bv?(\d+\.\d+\.\d+)\b' -or
+            $Matches[1] -ne $expectedCoreVersion) {
+            throw "Downloaded mihomo does not match expected version $expectedCoreVersion."
         }
         Copy-Item -LiteralPath $downloadedCore.FullName -Destination $mihomo -Force
     }

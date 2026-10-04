@@ -180,6 +180,7 @@ var (
 	queryServiceStatus = queryStatus
 	stopProxyService   = stopService
 	startProxyService  = startService
+	verifyUpdatedCore  = waitForCoreReady
 )
 
 // activateCoreUpdate is called only after the update has been fully downloaded,
@@ -226,9 +227,23 @@ func activateCoreUpdate(
 
 	if wasRunning {
 		appendUpdateLog(paths, "[%s] 内核替换完成，正在重启代理", name)
-		if err := startProxyService(paths); err != nil {
-			_ = os.Remove(target)
-			_ = os.Rename(backup, target)
+		err := startProxyService(paths)
+		if err == nil {
+			err = verifyUpdatedCore(paths, latestVersion)
+		}
+		if err != nil {
+			status := queryServiceStatus(paths)
+			if status.State != "stopped" && status.State != "not_installed" {
+				if stopErr := stopProxyService(); stopErr != nil {
+					return fmt.Errorf("new core failed readiness: %w; cannot stop for rollback: %v; backup retained at %s", err, stopErr, backup)
+				}
+			}
+			if removeErr := os.Remove(target); removeErr != nil {
+				return fmt.Errorf("updated core failed: %w; cannot remove new core: %v; backup retained at %s", err, removeErr, backup)
+			}
+			if restoreErr := os.Rename(backup, target); restoreErr != nil {
+				return fmt.Errorf("updated core failed: %w; cannot restore backup: %v", err, restoreErr)
+			}
 			restartErr := startProxyService(paths)
 			if restartErr != nil {
 				return fmt.Errorf("start proxy with updated %s: %w; rolled back but failed to restart old core: %v", name, err, restartErr)

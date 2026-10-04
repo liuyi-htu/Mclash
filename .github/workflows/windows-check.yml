@@ -44,6 +44,18 @@ jobs:
           flutter analyze
           flutter test
 
+      - name: Check Windows packaging script syntax
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          $script = (Resolve-Path "windows/scripts/build-windows.ps1").Path
+          [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
       - name: Check and test Windows service
         shell: powershell
         working-directory: windows/windows-service
