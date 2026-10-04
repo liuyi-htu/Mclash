@@ -16,6 +16,20 @@ class _Service implements ProxyPlatformService {
   int statusCalls = 0;
   int versionChecks = 0;
   int updates = 0;
+  int ipv6Changes = 0;
+  int logChanges = 0;
+  @override
+  Future<List<DebugLogFile>> getDebugLogs() async => [];
+  @override
+  Future<void> setIpv6Enabled(bool enabled) async {
+    ipv6Changes++;
+  }
+
+  @override
+  Future<void> setDebugLoggingEnabled(bool enabled) async {
+    logChanges++;
+  }
+
   bool alreadyLatest = false;
   Completer<void>? updateGate;
   @override
@@ -78,6 +92,98 @@ class _Service implements ProxyPlatformService {
 }
 
 void main() {
+  InkWell settingsEntry(WidgetTester tester, String label) =>
+      tester.widget<InkWell>(find
+          .ancestor(of: find.text(label), matching: find.byType(InkWell))
+          .first);
+
+  testWidgets('settings and log writes require confirmed stopped state',
+      (tester) async {
+    final service = _Service();
+    await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('设置'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    for (final status in ProxyStatus.values) {
+      service.statusOverride = status;
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      final editable = status == ProxyStatus.stopped;
+      expect(settingsEntry(tester, '常规设置').onTap != null, editable);
+      expect(settingsEntry(tester, '运行模式').onTap != null, editable);
+      expect(settingsEntry(tester, '调试日志').onTap, isNotNull);
+      expect(settingsEntry(tester, '更新内核').onTap, isNotNull);
+      expect(settingsEntry(tester, '关于 Mclash').onTap, isNotNull);
+      await tester.tap(find.text('调试日志'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+          tester
+                  .widget<SwitchListTile>(find.byType(SwitchListTile))
+                  .onChanged !=
+              null,
+          editable);
+      expect(
+          tester
+                  .widget<TextButton>(find.widgetWithText(TextButton, '清除'))
+                  .onPressed !=
+              null,
+          editable);
+      await tester.tap(find.text('关闭'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('open settings update live and recheck before saving',
+      (tester) async {
+    final service = _Service();
+    await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('设置'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('常规设置'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    service.statusOverride = ProxyStatus.running;
+    // The UI still shows stopped, but the save must probe the service again.
+    await tester.tap(find.text('启用 IPv6'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(service.ipv6Changes, 0);
+    expect(
+        tester
+            .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, '启用 IPv6'))
+            .onChanged,
+        isNull);
+    service.statusOverride = ProxyStatus.stopped;
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+        tester
+            .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, '启用 IPv6'))
+            .onChanged,
+        isNotNull);
+    await tester.tap(find.text('启用 IPv6'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(service.ipv6Changes, 1);
+    await tester.tap(find.text('关闭'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   Future<void> openUpdate(WidgetTester tester, _Service service) async {
     await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
     await tester.pumpAndSettle();

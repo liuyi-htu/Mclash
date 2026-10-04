@@ -1,3 +1,4 @@
+import 'proxy_edit_access.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 import 'package:flutter/material.dart';
@@ -42,6 +43,7 @@ class _SubscriptionManagementPageState
 
   Future<void> _change(Future<ConfigProfile?> Function() action,
       {String? updatingLink}) async {
+    if (!ProxyEditAccess.allowed(context) || widget.proxyRunning) return;
     setState(() {
       _working = true;
       _updatingLink = updatingLink;
@@ -70,8 +72,9 @@ class _SubscriptionManagementPageState
 
   @override
   Widget build(BuildContext context) {
+    final editable = ProxyEditAccess.allowed(context);
     final links = subscriptionLinks(_profile.url ?? '');
-    final editable = !_working && !widget.proxyRunning;
+    final canModify = editable && !_working && !widget.proxyRunning;
     return PopScope(
       canPop: !_working,
       child: Scaffold(
@@ -79,7 +82,7 @@ class _SubscriptionManagementPageState
         floatingActionButtonLocation: managementAddButtonLocation(context),
         floatingActionButton: AddActionButton(
           tooltip: '添加机场',
-          onPressed: editable
+          onPressed: canModify
               ? () => _change(() => widget.onEdit(_profile, null))
               : null,
         ),
@@ -100,7 +103,7 @@ class _SubscriptionManagementPageState
                 // Keep compatibility with the Flutter 3.32 CI toolchain.
                 // ignore: deprecated_member_use
                 onReorder: (oldIndex, newIndex) {
-                  if (!editable) return;
+                  if (!canModify) return;
                   if (newIndex > oldIndex) newIndex--;
                   if (newIndex == oldIndex) return;
                   final reordered = [...links];
@@ -163,7 +166,7 @@ class _SubscriptionManagementPageState
                                         : const Icon(Icons.refresh_rounded,
                                             size: 22),
                                     onPressed:
-                                        editable && widget.onUpdate != null
+                                        canModify && widget.onUpdate != null
                                             ? () => _change(
                                                 () => widget.onUpdate!(
                                                     _profile, links[i]),
@@ -173,7 +176,8 @@ class _SubscriptionManagementPageState
                                 ),
                                 ManagementDeleteButton(
                                   tooltip: '删除机场',
-                                  onPressed: editable && widget.onDelete != null
+                                  onPressed: canModify &&
+                                          widget.onDelete != null
                                       ? () => _change(() =>
                                           widget.onDelete!(_profile, links[i]))
                                       : null,
@@ -184,7 +188,7 @@ class _SubscriptionManagementPageState
                                   children: [
                                     ReorderableDragStartListener(
                                       index: i,
-                                      enabled: editable,
+                                      enabled: canModify,
                                       child: Padding(
                                         padding: const EdgeInsets.fromLTRB(
                                             0, 6, 12, 6),

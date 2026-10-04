@@ -14,11 +14,13 @@ class ConfigEditorPage extends StatefulWidget {
       {required this.profile,
       this.runtimeView = false,
       this.service,
+      this.proxyStatus,
       super.key});
 
   final ProxyPlatformService? service;
   final ConfigProfile profile;
   final bool runtimeView;
+  final ValueNotifier<ProxyStatus>? proxyStatus;
 
   @override
   State<ConfigEditorPage> createState() => _ConfigEditorPageState();
@@ -36,7 +38,12 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   bool _searchVisible = false;
   int _searchIndex = -1;
   final _searchController = TextEditingController();
-  bool _readOnly = false;
+  bool get _readOnly =>
+      widget.runtimeView ||
+      _runtimeContent ||
+      widget.profile.isSubscription ||
+      (widget.proxyStatus != null &&
+          widget.proxyStatus!.value != ProxyStatus.stopped);
   bool _runtimeContent = false;
   Timer? _stateTimer;
   bool _checkingState = false;
@@ -49,13 +56,30 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   @override
   void initState() {
     super.initState();
+    widget.proxyStatus?.addListener(_onProxyStatusChanged);
     _load();
     _stateTimer =
         Timer.periodic(const Duration(seconds: 1), (_) => _checkRunningState());
   }
 
+  void _onProxyStatusChanged() {
+    if (!mounted) return;
+    setState(() {});
+    unawaited(_checkRunningState());
+  }
+
+  @override
+  void didUpdateWidget(covariant ConfigEditorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.proxyStatus != widget.proxyStatus) {
+      oldWidget.proxyStatus?.removeListener(_onProxyStatusChanged);
+      widget.proxyStatus?.addListener(_onProxyStatusChanged);
+    }
+  }
+
   @override
   void dispose() {
+    widget.proxyStatus?.removeListener(_onProxyStatusChanged);
     _stateTimer?.cancel();
     _controller.dispose();
     _searchController.dispose();
@@ -83,14 +107,12 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       if (!mounted) return;
       setState(() {
         _runtimeContent = widget.runtimeView || running;
-        _readOnly = _runtimeContent || widget.profile.isSubscription;
       });
       final content = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
       if (!mounted) return;
       _controller.removeListener(_handleTextChanged);
-      _readOnly = _runtimeContent || widget.profile.isSubscription;
       _dirty = false;
       _lastText = content;
       _controller.text = content;
@@ -238,7 +260,9 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       _error = null;
     });
     try {
-      if (await _service.isRunning()) {
+      if (widget.proxyStatus != null
+          ? await _service.getProxyStatus() != ProxyStatus.stopped
+          : await _service.isRunning()) {
         await _load();
         return;
       }

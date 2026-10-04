@@ -6,6 +6,22 @@ import 'package:mclash/models.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
 
 void main() {
+  test('configuration selection and import reject transitional service states',
+      () async {
+    for (final state in [
+      'running',
+      'start_pending',
+      'stop_pending',
+      'unknown'
+    ]) {
+      final service = WindowsProxyPlatformService(
+          serviceProcessRunner: (_, args) async =>
+              ProcessResult(1, 0, '{"state":"$state"}', ''));
+      await expectLater(service.selectConfig('test.yaml'), throwsStateError);
+      await expectLater(service.importConfigs(), throwsStateError);
+    }
+  });
+
   test('service state alone is insufficient; PID and controller must be ready',
       () async {
     var snapshot = '{"state":"running","mihomoPid":0}';
