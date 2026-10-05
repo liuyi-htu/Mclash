@@ -1,5 +1,27 @@
 import 'package:flutter/material.dart';
 
+InputDecoration managementFieldDecoration(BuildContext context, String label) {
+  final colors = Theme.of(context).colorScheme;
+  OutlineInputBorder outline(Color color, {double width = 1}) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: color, width: width),
+      );
+  return InputDecoration(
+    labelText: label,
+    labelStyle: const TextStyle(fontSize: 14),
+    isDense: true,
+    filled: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    border: outline(colors.outline),
+    enabledBorder: outline(colors.outline),
+    focusedBorder: outline(colors.primary, width: 2),
+    disabledBorder: outline(colors.outline.withValues(alpha: 0.5)),
+    errorBorder: outline(colors.error),
+    focusedErrorBorder: outline(colors.error, width: 2),
+  );
+}
+
 class ManagementBody extends StatelessWidget {
   const ManagementBody({super.key, required this.child});
   final Widget child;
@@ -15,32 +37,36 @@ class ManagementBody extends StatelessWidget {
 }
 
 class ManagementCard extends StatelessWidget {
-  const ManagementCard({super.key, required this.child});
+  const ManagementCard({super.key, required this.child, this.compact = false});
   final Widget child;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: EdgeInsets.only(bottom: compact ? 6 : 8),
       elevation: 0,
       color: Theme.of(context).cardTheme.color ?? colors.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(compact ? 12 : 16),
         side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.6)),
       ),
       child: ListTileTheme(
         data: ListTileThemeData(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+          contentPadding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : 14, vertical: compact ? 0 : 2),
+          minLeadingWidth: compact ? 24 : null,
+          horizontalTitleGap: compact ? 8 : null,
           titleTextStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 16,
+                fontSize: compact ? 14 : 16,
                 fontWeight: FontWeight.w600,
               ),
           subtitleTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colors.onSurfaceVariant,
-                height: 1.5,
+                fontSize: compact ? 12 : null,
+                height: compact ? 1.35 : 1.5,
               ),
         ),
         child: child,

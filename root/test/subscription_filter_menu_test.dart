@@ -54,7 +54,8 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('添加配置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('添加机场订阅'));
+    expect(find.text('添加本地配置'), findsOneWidget);
+    await tester.tap(find.text('添加机场配置'));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.textContaining('拖动调整机场顺序'), findsNothing);
@@ -83,7 +84,7 @@ rules: ["MATCH,DIRECT"]
   testWidgets(
       'configuration menu follows YAML section order and handles unreadable files',
       (tester) async {
-    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '规则管理'];
+    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '规则集管理', '规则管理'];
     final cases = <String?>[
       content,
       '# proxies: comment only\nrules: ["MATCH,DIRECT"]\nproxy-groups: []\nproxies: []\n',
@@ -106,8 +107,9 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpAndSettle();
       await tester.tap(find.text('Airport').first);
       await tester.pumpAndSettle();
-      final expected =
-          index == 1 ? ['规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点'] : defaults;
+      final expected = index == 1
+          ? ['规则集管理', '规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点']
+          : defaults;
       for (var position = 1; position < expected.length; position++) {
         expect(
             tester.getTopLeft(find.text(expected[position]).last).dy,
@@ -191,6 +193,39 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(loadYaml(saved!)['rules'],
         ['DOMAIN-SUFFIX,new.example,DIRECT', 'MATCH,DIRECT']);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ruleset menu saves the selected configuration', (tester) async {
+    String? saved;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigContent') return saved ?? content;
+      if (call.method == 'saveConfigContent') {
+        expect(call.arguments['id'], 'airport');
+        saved = call.arguments['content'] as String;
+        return [profile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Airport').first);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('规则集管理'));
+    await tester.tap(find.text('规则集管理'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新增规则集'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '名称'), 'remote');
+    await tester.enterText(find.widgetWithText(TextField, '下载链接'),
+        'https://example.org/rules.yaml');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(loadYaml(saved!)['rule-providers']['remote']['interval'], 86400);
+    expect(loadYaml(saved!)['rules'], loadYaml(content)['rules']);
     expect(tester.takeException(), isNull);
   });
 

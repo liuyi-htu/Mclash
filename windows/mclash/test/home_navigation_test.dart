@@ -213,18 +213,18 @@ void main() {
     await tester.tapAt(const Offset(5, 5));
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
     expect(service.updates, 1);
     service.updateGate!.complete();
     await tester.pumpAndSettle();
-    expect(find.text('当前 2.0.0 / 官方 2.0.0'), findsOneWidget);
+    expect(find.text('2.0.0'), findsNWidgets(2));
     expect(find.text('mihomo 内核更新完成'), findsOneWidget);
     expect(service.versionChecks, 2);
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('更新内核'));
     await tester.pumpAndSettle();
-    expect(find.text('当前 2.0.0 / 官方 2.0.0'), findsOneWidget);
+    expect(find.text('2.0.0'), findsNWidgets(2));
     await tester.tap(find.widgetWithText(FilledButton, '更新内核'));
     await tester.pumpAndSettle();
     expect(find.text('当前已是最新稳定版'), findsOneWidget);
@@ -387,9 +387,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('更新内核'));
         await tester.pumpAndSettle();
-        expect(find.byType(AlertDialog), findsOneWidget);
-        expect(find.byType(BottomSheet), findsNothing);
-        expect(tester.getCenter(find.byType(AlertDialog)).dy, closeTo(400, 1));
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(
+            tester.getBottomLeft(find.byType(BottomSheet)).dy, closeTo(800, 1));
         expect(find.text('检测版本'), findsOneWidget);
         for (final button in [
           find.widgetWithText(OutlinedButton, '检测版本'),
