@@ -135,7 +135,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('代理面板'));
+    await tester.tap(find.text('代理'));
     await tester.pumpAndSettle();
     expect(
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
@@ -235,9 +235,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    for (final label in ['全局模式', '直连模式', '规则模式']) {
-      await tester.tap(find.text('代理规则'));
-      await tester.pumpAndSettle();
+    for (final label in ['全局', '直连', '规则']) {
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle();
     }
