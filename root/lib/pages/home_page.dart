@@ -44,7 +44,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   DateTime? _lastTrafficSample;
   double _downloadBytesPerSecond = 0;
   double _uploadBytesPerSecond = 0;
-  String _proxyMode = 'rule';
+  String? _proxyMode;
+  Future<bool>? _proxyModeLoad;
+  int _proxyModeGeneration = 0;
   bool _changingProxyMode = false;
   int _selectedHomeTab = 0;
 
@@ -105,8 +107,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted || _toggling || generation != _transitionGeneration) return;
       final previous = _status;
       setState(() => _status = status);
-      if (status == ProxyStatus.running && previous != status) {
+      if (status == ProxyStatus.running) {
         unawaited(_loadProxyMode());
+      } else if (previous != status) {
+        _proxyModeGeneration++;
+        setState(() => _proxyMode = null);
       }
     } catch (_) {
       // Retry on the next foreground sample. Native write guards remain authoritative.
@@ -312,7 +317,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         _debugLoggingEnabled = debugLoggingEnabled;
       });
-      if (status == ProxyStatus.running) unawaited(_loadProxyMode());
+      if (status == ProxyStatus.running) {
+        unawaited(_loadProxyMode());
+      } else if (!_toggling) {
+        _proxyModeGeneration++;
+        setState(() => _proxyMode = null);
+      }
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -347,7 +357,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     String method, {
     Map<String, Object>? body,
   }) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5)
+      ..findProxy = (_) => 'DIRECT';
     try {
       final request = await client.openUrl(
         method,
@@ -361,7 +373,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final response = await request.close().timeout(
             const Duration(seconds: 8),
           );
-      final text = await utf8.decodeStream(response);
+      final text = await utf8.decodeStream(response).timeout(
+            const Duration(seconds: 8),
+          );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception('Controller ${response.statusCode}: ${text.trim()}');
       }
@@ -375,21 +389,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadProxyMode() async {
+  Future<bool> _loadProxyMode() {
+    if (_changingProxyMode || _status != ProxyStatus.running) {
+      return Future.value(false);
+    }
+    // Foreground refresh and status polling share one controller request.
+    return _proxyModeLoad ??= _readProxyMode().whenComplete(() {
+      _proxyModeLoad = null;
+    });
+  }
+
+  Future<bool> _readProxyMode() async {
+    final generation = _proxyModeGeneration;
     try {
       final configs = await _proxyControllerRequest('GET');
       final mode = configs['mode']?.toString().toLowerCase();
-      if (!mounted || mode == null) return;
-      await _service.rememberProxyMode(_normalProxyMode(mode));
-      if (mounted) setState(() => _proxyMode = _normalProxyMode(mode));
+      if (!const ['rule', 'global', 'direct'].contains(mode)) return false;
+      if (!mounted ||
+          _status != ProxyStatus.running ||
+          _changingProxyMode ||
+          generation != _proxyModeGeneration) {
+        return false;
+      }
+      setState(() => _proxyMode = mode);
+      // Persistence failure must not hide the live controller's actual mode.
+      unawaited(_service.rememberProxyMode(mode!).catchError((Object _) {}));
+      return true;
     } catch (_) {
-      // Keep the last known mode while mihomo is still becoming available.
+      // The next foreground status sample retries, even if the service stayed up.
+      return false;
     }
   }
 
   Future<void> _setProxyMode(String mode) async {
     if (_changingProxyMode || mode == _proxyMode) return;
     final previous = _proxyMode;
+    _proxyModeGeneration++;
     setState(() {
       _changingProxyMode = true;
       _proxyMode = mode;
@@ -399,7 +434,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         'PATCH',
         body: <String, Object>{'mode': mode},
       );
-      await _service.rememberProxyMode(mode);
+      unawaited(_service.rememberProxyMode(mode).catchError((Object _) {}));
     } catch (error) {
       if (!mounted) return;
       setState(() => _proxyMode = previous);
@@ -411,6 +446,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _showProxyModeDialog() async {
     if (_changingProxyMode || _status != ProxyStatus.running) return;
+    final loaded = await _loadProxyMode();
+    if (!mounted || _status != ProxyStatus.running || _changingProxyMode) {
+      return;
+    }
+    if (!loaded) {
+      _showError('无法读取当前运行模式，请稍后重试');
+      return;
+    }
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
@@ -513,16 +556,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (selected != null) await _setProxyMode(selected);
   }
 
-  String _normalProxyMode(String mode) => switch (mode) {
-        'global' => 'global',
-        'direct' => 'direct',
-        _ => 'rule',
-      };
-
   String get _proxyModeLabel => switch (_proxyMode) {
-        'global' => '全局',
-        'direct' => '直连',
-        _ => '规则',
+        'global' => '全局模式',
+        'direct' => '直连模式',
+        'rule' => '规则模式',
+        _ => '读取模式中…',
       };
 
   Future<void> _loadDeveloperMode() async {
@@ -782,6 +820,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _toggling = true;
     _transitionGeneration++;
+    _proxyModeGeneration++;
     try {
       if (_status == ProxyStatus.running) {
         setState(() => _status = ProxyStatus.stopping);
@@ -1181,7 +1220,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                               )
                             : Text(
-                                running ? '$_proxyModeLabel模式' : '启动代理后可切换',
+                                running ? _proxyModeLabel : '启动代理后可切换',
                                 style: TextStyle(
                                   color: colors.onSurfaceVariant,
                                   fontSize: 12,
