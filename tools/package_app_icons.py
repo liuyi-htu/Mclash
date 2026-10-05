@@ -13,7 +13,7 @@ import cairosvg
 ROOT = Path(__file__).resolve().parents[1]
 PRIMARY = '#315F95'
 SECONDARY = '#82A7D5'
-BACKGROUND = '#E3EDFC'
+BACKGROUND = '#FFFFFF'
 art = np.array(Image.open(ROOT / 'assets/app-icon.png').convert('RGBA'))
 size = art.shape[0]
 
@@ -67,7 +67,7 @@ for client in ('android', 'root'):
     res = ROOT / client / 'android/app/src/main/res'
     (res / 'drawable/ic_launcher_monochrome.xml').write_text(vector('#000000', '#000000', True))
     (res / 'drawable/ic_launcher_foreground.xml').write_text(vector(PRIMARY, SECONDARY))
-    (res / 'values/colors.xml').write_text('<resources>\n    <color name="ic_launcher_background">#E3EDFC</color>\n</resources>\n')
+    (res / 'values/colors.xml').write_text('<resources>\n    <color name="ic_launcher_background">#FFFFFF</color>\n</resources>\n')
     for version in (26, 33):
         mono = '<monochrome android:drawable="@drawable/ic_launcher_monochrome"/>' if version == 33 else ''
         for suffix in ('', '_round'):
