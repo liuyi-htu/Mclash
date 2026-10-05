@@ -92,7 +92,7 @@ class PulseDashboard extends StatelessWidget {
   final bool running, busy, changingMode;
   final String status, download, upload;
   final String? mode, detail, downloadTotal, uploadTotal;
-  final VoidCallback onToggle;
+  final VoidCallback? onToggle;
   final ValueChanged<String> onMode;
   final Future<void> Function() onRefresh;
   @override

@@ -1175,7 +1175,7 @@ class _HomePageState extends State<HomePage> {
           children: [
             PulseDashboard(
               running: running,
-              busy: busy || !_canOperate,
+              busy: busy || _changingProxyMode || _settingsBusy.value,
               status: _statusText,
               detail: _statusError == null
                   ? '${_networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'} · ${_config.fileName ?? '未选择配置'}'
@@ -1184,7 +1184,7 @@ class _HomePageState extends State<HomePage> {
               upload: _formatSpeed(_uploadBytesPerSecond),
               mode: _proxyMode,
               changingMode: _changingProxyMode,
-              onToggle: _toggle,
+              onToggle: _canOperate ? _toggle : null,
               onMode: _setProxyMode,
               onRefresh: _refresh,
             ),
