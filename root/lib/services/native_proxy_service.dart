@@ -16,6 +16,9 @@ class NativeProxyService {
     return _channel.invokeMethod<void>('acceptUsageNotice');
   }
 
+  Future<void> rememberProxyMode(String mode) =>
+      _channel.invokeMethod<void>('rememberProxyMode', {'mode': mode});
+
   Future<bool> getDeveloperModeEnabled() async {
     return await _channel.invokeMethod<bool>('getDeveloperModeEnabled') ??
         false;

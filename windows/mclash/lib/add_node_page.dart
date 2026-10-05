@@ -9,9 +9,11 @@ class AddNodePage extends StatefulWidget {
     required this.nodes,
     required this.onDelete,
     required this.onSave,
+    this.onReorder,
   });
 
   final List<String> nodes;
+  final Future<List<String>> Function(List<String> order)? onReorder;
   final Future<List<String>> Function(String name) onDelete;
   final Future<List<String>> Function(String link) onSave;
 
@@ -32,7 +34,9 @@ class _AddNodePageState extends State<AddNodePage> {
   }
 
   Future<void> _change(Future<List<String>> Function() action) async {
-    if (!ProxyEditAccess.allowed(context)) return;
+    if (!ProxyEditAccess.allowed(context)) {
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -123,28 +127,64 @@ class _AddNodePageState extends State<AddNodePage> {
               onPressed:
                   !ProxyEditAccess.allowed(context) || _saving ? null : _add),
           body: ManagementBody(
-              child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 168),
-            children: [
+            child: Column(children: [
               if (_saving) const LinearProgressIndicator(),
               if (_error != null)
                 Text(_error!,
                     style:
                         TextStyle(color: Theme.of(context).colorScheme.error)),
               if (_nodes.isEmpty) const Text('暂无手动节点'),
-              for (final name in _nodes)
-                ManagementCard(
-                    child: ListTile(
-                  title: Text(name),
-                  trailing: ManagementDeleteButton(
-                    tooltip: '删除手动节点',
-                    onPressed: !ProxyEditAccess.allowed(context) || _saving
-                        ? null
-                        : () => _change(() => widget.onDelete(name)),
-                  ),
-                )),
-            ],
-          )),
+              Expanded(
+                  child: ReorderableListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 168),
+                buildDefaultDragHandles: false,
+                // Keep compatibility with Flutter 3.32 CI.
+                // ignore: deprecated_member_use
+                onReorder: (oldIndex, newIndex) {
+                  if (_saving ||
+                      widget.onReorder == null ||
+                      !ProxyEditAccess.allowed(context)) {
+                    return;
+                  }
+                  if (newIndex > oldIndex) newIndex--;
+                  if (oldIndex == newIndex) return;
+                  final order = [..._nodes];
+                  order.insert(newIndex, order.removeAt(oldIndex));
+                  _change(() => widget.onReorder!(order));
+                },
+                children: [
+                  for (var i = 0; i < _nodes.length; i++)
+                    ManagementCard(
+                      key: ValueKey(_nodes[i]),
+                      child: ListTile(
+                        title: Text(_nodes[i]),
+                        trailing:
+                            Row(mainAxisSize: MainAxisSize.min, children: [
+                          ManagementDeleteButton(
+                            tooltip: '删除手动节点',
+                            onPressed: _saving ||
+                                    !ProxyEditAccess.allowed(context)
+                                ? null
+                                : () =>
+                                    _change(() => widget.onDelete(_nodes[i])),
+                          ),
+                          ReorderableDragStartListener(
+                            index: i,
+                            enabled: !_saving &&
+                                widget.onReorder != null &&
+                                ProxyEditAccess.allowed(context),
+                            child: const SizedBox(
+                                width: 48,
+                                height: 48,
+                                child: Icon(Icons.drag_handle)),
+                          ),
+                        ]),
+                      ),
+                    ),
+                ],
+              )),
+            ]),
+          ),
         ),
       );
 }

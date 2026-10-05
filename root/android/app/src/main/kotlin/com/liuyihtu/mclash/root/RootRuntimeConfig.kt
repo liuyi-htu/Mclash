@@ -13,7 +13,7 @@ internal object RootRuntimeConfig {
     const val CONTROLLER_PORT = 9090
     const val BYPASS_MARK = 0x40000000
 
-    fun build(source: String, debug: Boolean): String {
+    fun build(source: String, debug: Boolean, mode: String? = null): String {
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {
             codePointLimit = 8 * 1024 * 1024
             isAllowDuplicateKeys = false
@@ -26,6 +26,7 @@ internal object RootRuntimeConfig {
             require(key is String) { "配置字段必须是字符串" }
             if (key !in CONTROLLED_KEYS) config[key] = value
         }
+        if (mode != null && RootRuntimeMode.valid(mode)) config["mode"] = mode
         val dns = linkedMapOf<String, Any?>()
         (original["dns"] as? Map<*, *>)?.forEach { (key, value) ->
             require(key is String) { "DNS 字段必须是字符串" }

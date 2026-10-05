@@ -23,6 +23,14 @@ internal class AppPreferences(context: Context) {
             ?: MODE_EXCLUDE_SELECTED
         set(value) = preferences.edit().putString(KEY_APP_PROXY_MODE, value).apply()
 
+    var coreMode: String?
+        get() = preferences.getString("core_mode", null)?.takeIf(RootRuntimeMode::valid)
+        set(value) {
+            if (value != null && RootRuntimeMode.valid(value) && value != coreMode) {
+                preferences.edit().putString("core_mode", value).commit()
+            }
+        }
+
     var selectedPackages: Set<String>
         get() = preferences.getStringSet(KEY_SELECTED_PACKAGES, emptySet())?.toSet()
             ?: emptySet()

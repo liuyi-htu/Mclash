@@ -706,6 +706,14 @@ class _ConfigPageState extends State<ConfigPage> {
       await Navigator.of(context).push<void>(MaterialPageRoute(
         builder: (_) => _watchAccess((_) => AddNodePage(
               nodes: savedManualNodeNames(content),
+              onReorder: (order) async {
+                final latest = await _service.getConfigContent(profile.id);
+                final updated = reorderManualNodes(latest, order);
+                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
+                await _service.saveConfigContent(
+                    id: profile.id, content: updated);
+                return savedManualNodeNames(updated);
+              },
               onDelete: (name) async {
                 final latest = await _service.getConfigContent(profile.id);
                 final updated = deleteManualNode(latest, name);

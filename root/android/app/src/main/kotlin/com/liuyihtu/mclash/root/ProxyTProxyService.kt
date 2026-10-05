@@ -59,6 +59,7 @@ class ProxyTProxyService : Service() {
             require(Settings.Global.getString(contentResolver, "private_dns_mode") != "hostname") {
                 "请先在 Android 网络设置中关闭严格私人 DNS，再启动 TProxy"
             }
+            RootRuntimeMode.capture(this)
             MihomoProcess.recover(this)
             val preferences = AppPreferences(this)
             val store = ConfigStore(this)
@@ -82,6 +83,7 @@ class ProxyTProxyService : Service() {
                 while (running && !stopping && MihomoProcess.isRunning()) {
                     Thread.sleep(2000)
                     if (!running || stopping || !MihomoProcess.isRunning()) break
+                    RootRuntimeMode.capture(this)
                     try {
                         val current = HotspotRules.snapshot(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
                         if (current != hotspotSnapshot && running && !stopping) {
@@ -113,6 +115,7 @@ class ProxyTProxyService : Service() {
     private fun stopProxy() {
         stopping = true
         try {
+            RootRuntimeMode.capture(this)
             if (!MihomoProcess.stop()) MihomoProcess.recover(this)
             running = false
             starting = false
@@ -131,12 +134,18 @@ class ProxyTProxyService : Service() {
     override fun onDestroy() {
         stopping = true
         if (running || starting) worker.execute {
+            RootRuntimeMode.capture(this)
             runCatching { if (!MihomoProcess.stop()) MihomoProcess.recover(this) }
                 .onSuccess { running = false; starting = false }
                 .onFailure { lastError = "停止清理失败：${it.message}" }
         }
         worker.shutdown()
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        worker.execute { RootRuntimeMode.capture(this) }
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun notification(text: String) = NotificationCompat.Builder(this, "root-proxy")

@@ -243,6 +243,50 @@ List<String> savedManualNodeNames(String content) {
   return readManualNodeNames(content).where(saved.contains).toList();
 }
 
+/// Reorder manual nodes in their existing slots, keeping subscription nodes intact.
+String reorderManualNodes(String content, List<String> order) {
+  final names = savedManualNodeNames(content).toSet();
+  if (order.length != names.length ||
+      order.toSet().length != names.length ||
+      !names.containsAll(order)) {
+    throw const FormatException('手动节点列表已变化，请重新打开页面');
+  }
+  final config = loadYaml(content) as YamlMap;
+  final nodes = config['proxies'] as List? ?? [];
+  final manual = {
+    for (final node in nodes)
+      if (names.contains(node['name'])) node['name']: node
+  };
+  var index = 0;
+  final editor = YamlEditor(content)
+    ..update([
+      'proxies'
+    ], [
+      for (final node in nodes)
+        if (names.contains(node['name'])) manual[order[index++]] else node,
+    ]);
+  final groups = config['proxy-groups'] as List? ?? [];
+  final chainGroups = readProxyChainGroups(content);
+  for (var i = 0; i < groups.length; i++) {
+    if (chainGroups.containsKey(groups[i]['name'])) continue;
+    final members = groups[i]['proxies'];
+    if (members is! List) continue;
+    final selected = order.where(members.contains).toList();
+    var next = 0;
+    editor.update([
+      'proxy-groups',
+      i,
+      'proxies'
+    ], [
+      for (final member in members)
+        if (names.contains(member)) selected[next++] else member,
+    ]);
+  }
+  final result = writeManualNodeNames(editor.toString(), order);
+  validateProxyChains(result);
+  return result;
+}
+
 String restoreManualNodes(String content, String? previous) {
   if (previous == null) return content;
   final names = readManualNodeNames(previous).toSet();
