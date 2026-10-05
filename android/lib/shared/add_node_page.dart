@@ -64,8 +64,8 @@ class _AddNodePageState extends State<AddNodePage> {
               enabled: !_saving,
               minLines: 1,
               maxLines: 6,
-              decoration: InputDecoration(
-                  labelText: '节点链接', errorText: error, errorMaxLines: 8),
+              decoration: managementFieldDecoration(context, '节点链接')
+                  .copyWith(errorText: error, errorMaxLines: 8),
             ),
             actions: [
               TextButton(

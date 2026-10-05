@@ -1,3 +1,4 @@
+import '../shared/rule_provider_page.dart';
 import '../shared/app_appearance.dart';
 import '../shared/management_style.dart';
 import '../shared/add_action_button.dart';
@@ -517,14 +518,17 @@ class _ConfigPageState extends State<ConfigPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('配置名称'),
+          title: Text('配置名称',
+              style: Theme.of(dialogContext)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontSize: 18)),
           content: TextField(
+            style: Theme.of(dialogContext).textTheme.bodyMedium,
             controller: controller,
             autofocus: true,
-            decoration: InputDecoration(
-              labelText: '名称',
-              errorText: validationMessage,
-            ),
+            decoration: managementFieldDecoration(dialogContext, '名称')
+                .copyWith(errorText: validationMessage),
             textInputAction: TextInputAction.done,
             onSubmitted: (_) {
               if (controller.text.trim().isEmpty) {
@@ -586,6 +590,29 @@ class _ConfigPageState extends State<ConfigPage> {
           builder: (_) => ConfigManagementPage(
                 content: content,
                 mode: mode,
+                onSave: (value) async {
+                  await _service.saveConfigContent(
+                      id: profile.id, content: value);
+                },
+              )));
+      if (mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _manageRuleProviders(ConfigProfile profile) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() => _working = true);
+      final content = await _service.getConfigContent(profile.id);
+      if (!mounted) return;
+      setState(() => _working = false);
+      await Navigator.of(context).push<void>(MaterialPageRoute(
+          builder: (_) => RuleProviderPage(
+                content: content,
                 onSave: (value) async {
                   await _service.saveConfigContent(
                       id: profile.id, content: value);
@@ -753,48 +780,47 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(
-                title: Text(link == null ? '添加机场' : '编辑机场'),
+                title: Text(link == null ? '添加机场' : '编辑机场',
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontSize: 18)),
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20)),
+                    borderRadius: BorderRadius.circular(16)),
                 content: SizedBox(
-                    width: 480,
+                    width: 420,
                     child: SingleChildScrollView(
                         child:
                             Column(mainAxisSize: MainAxisSize.min, children: [
                       TextField(
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontSize: 14),
                           controller: nameController,
                           enabled: !widget.proxyRunning,
-                          decoration: InputDecoration(
-                            labelText: '机场名称',
-                            filled: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 16),
-                            fillColor: Theme.of(dialogContext)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.45),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none),
-                          )),
+                          decoration:
+                              managementFieldDecoration(dialogContext, '机场名称')),
                       const SizedBox(height: 12),
                       TextField(
+                          style: Theme.of(dialogContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontSize: 14),
                           controller: urlController,
                           enabled: !widget.proxyRunning,
-                          decoration: InputDecoration(
-                              labelText: '订阅链接',
-                              filled: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 16),
-                              fillColor: Theme.of(dialogContext)
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withValues(alpha: 0.45),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none),
-                              hintText: 'https://...',
-                              errorText: error),
+                          decoration: managementFieldDecoration(
+                                  dialogContext, '订阅链接')
+                              .copyWith(
+                                  hintText: 'https://...',
+                                  hintStyle: const TextStyle(fontSize: 12),
+                                  errorText: error,
+                                  errorStyle: const TextStyle(fontSize: 12)),
                           keyboardType: TextInputType.url,
                           autocorrect: false,
                           enableSuggestions: false,
@@ -803,11 +829,21 @@ class _ConfigPageState extends State<ConfigPage> {
                     ]))),
                 actions: [
                   TextButton(
+                      style: TextButton.styleFrom(
+                          textStyle: Theme.of(dialogContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontSize: 14)),
                       onPressed: widget.proxyRunning
                           ? null
                           : () => Navigator.of(dialogContext).pop(),
                       child: const Text('取消')),
                   FilledButton(
+                      style: FilledButton.styleFrom(
+                          textStyle: Theme.of(dialogContext)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontSize: 14)),
                       onPressed: widget.proxyRunning
                           ? null
                           : () {
@@ -911,6 +947,7 @@ class _ConfigPageState extends State<ConfigPage> {
       'host': ('修改 Host', Icons.dns_outlined),
       'prependProxy': ('链式节点', Icons.link),
       'groups': ('代理组管理', Icons.account_tree_outlined),
+      'ruleProviders': ('规则集管理', Icons.folder_copy_outlined),
       'rules': ('规则管理', Icons.rule),
     };
     final action = await showModalBottomSheet<String>(
@@ -985,6 +1022,10 @@ class _ConfigPageState extends State<ConfigPage> {
     switch (action) {
       case 'subscription':
         await _showSubscriptionActions(profile);
+        await _returnToActions(profile);
+        return;
+      case 'ruleProviders':
+        await _manageRuleProviders(profile);
         await _returnToActions(profile);
         return;
       case 'rules':
@@ -1213,7 +1254,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                   style:
                                       Theme.of(context).textTheme.titleMedium),
                               const SizedBox(height: 6),
-                              Text('点击右下角“＋”导入 YAML或添加机场订阅',
+                              Text('点击右下角“＋”添加本地配置或机场配置',
                                   textAlign: TextAlign.center,
                                   style: Theme.of(context).textTheme.bodySmall),
                             ]),
@@ -1249,7 +1290,7 @@ class _ConfigPageState extends State<ConfigPage> {
               children: [
                 Icon(Icons.file_open_outlined, size: 21),
                 SizedBox(width: 11),
-                Text('导入本地 YAML'),
+                Text('添加本地配置'),
               ],
             ),
           ),
@@ -1261,7 +1302,7 @@ class _ConfigPageState extends State<ConfigPage> {
               children: [
                 Icon(Icons.cloud_download_outlined, size: 21),
                 SizedBox(width: 11),
-                Text('添加机场订阅'),
+                Text('添加机场配置'),
               ],
             ),
           ),

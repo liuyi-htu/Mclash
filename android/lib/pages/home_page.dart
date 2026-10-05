@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/models.dart';
 import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
+import '../shared/management_style.dart';
 import 'app_selector_page.dart';
 import 'config_page.dart';
 import 'device_registration_page.dart';
@@ -407,6 +408,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
+          child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
           child: Column(
@@ -417,9 +419,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 '开发者模式',
                 style: Theme.of(
                   sheetContext,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                )
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               _settingsTile(
                 context: sheetContext,
                 icon: Icons.badge_outlined,
@@ -427,8 +432,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 subtitle: '生成并导出本设备登记文件',
                 onTap: _openDeviceRegistration,
               ),
-              const Divider(height: 24),
+              const Divider(height: 20),
               OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                    textStyle: Theme.of(sheetContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: () async {
                   await _service.disableDeveloperMode();
                   if (!mounted) return;
@@ -441,13 +451,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const SnackBar(content: Text('开发者模式已关闭')),
                   );
                 },
-                icon: const Icon(Icons.developer_mode_outlined),
+                icon: const Icon(Icons.developer_mode_outlined, size: 18),
                 label: const Text('关闭开发者模式'),
               ),
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -468,16 +478,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       leading: Container(
-        width: 40,
-        height: 40,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: colors.primaryContainer.withValues(alpha: 0.65),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: colors.onPrimaryContainer),
+        child: Icon(icon, size: 20, color: colors.onPrimaryContainer),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-      subtitle: subtitle == null ? null : Text(subtitle),
+      title: Text(title,
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: subtitle == null
+          ? null
+          : Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
       onTap: () async {
         Navigator.of(context).pop();
         await onTap();
@@ -513,61 +529,79 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             context: context,
             builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => AlertDialog(
-                title: const Text('VPN 参数'),
+                title: Text('VPN 参数',
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontSize: 18)),
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('启用 IPv6'),
+                        title: Text('启用 IPv6',
+                            style:
+                                Theme.of(dialogContext).textTheme.bodyMedium),
                         value: ipv6Enabled,
                         onChanged: (value) =>
                             setDialogState(() => ipv6Enabled = value),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('绕过局域网'),
+                        title: Text('绕过局域网',
+                            style:
+                                Theme.of(dialogContext).textTheme.bodyMedium),
                         value: bypassLan,
                         onChanged: (value) =>
                             setDialogState(() => bypassLan = value),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       TextField(
+                        style: Theme.of(dialogContext).textTheme.bodyMedium,
                         controller: ipv4DnsController,
-                        decoration: const InputDecoration(
-                          labelText: 'IPv4 DNS',
-                          hintText: '114.114.114.114',
-                        ),
+                        decoration:
+                            managementFieldDecoration(dialogContext, 'IPv4 DNS')
+                                .copyWith(hintText: '114.114.114.114'),
                         keyboardType: TextInputType.text,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       TextField(
+                        style: Theme.of(dialogContext).textTheme.bodyMedium,
                         controller: mtuController,
-                        decoration: const InputDecoration(
-                          labelText: 'VPN MTU',
-                          hintText: '1500',
-                        ),
+                        decoration:
+                            managementFieldDecoration(dialogContext, 'VPN MTU')
+                                .copyWith(hintText: '1500'),
                         keyboardType: TextInputType.number,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       TextField(
+                        style: Theme.of(dialogContext).textTheme.bodyMedium,
                         controller: bufferController,
-                        decoration: const InputDecoration(
-                          labelText: 'TCP 缓冲大小',
-                          hintText: '262144',
-                        ),
+                        decoration:
+                            managementFieldDecoration(dialogContext, 'TCP 缓冲大小')
+                                .copyWith(hintText: '262144'),
                         keyboardType: TextInputType.number,
                       ),
                       if (validationMessage != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
                             validationMessage!,
-                            style: TextStyle(
-                              color: Theme.of(dialogContext).colorScheme.error,
-                            ),
+                            style: Theme.of(dialogContext)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(dialogContext).colorScheme.error,
+                                ),
                           ),
                         ),
                       ],
@@ -576,6 +610,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 actions: [
                   TextButton(
+                    style: TextButton.styleFrom(
+                        textStyle: Theme.of(dialogContext)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 14)),
                     onPressed: () {
                       ipv4DnsController.text = '114.114.114.114';
                       mtuController.text = '1500';
@@ -589,6 +628,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     child: const Text('恢复默认'),
                   ),
                   FilledButton(
+                    style: FilledButton.styleFrom(
+                        textStyle: Theme.of(dialogContext)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 14)),
                     onPressed: () {
                       final mtu = int.tryParse(mtuController.text.trim());
                       final tcpBuffer = int.tryParse(
@@ -667,7 +711,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('关于'),
+        title: Text('关于',
+            style: Theme.of(dialogContext)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontSize: 18)),
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -679,28 +732,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 padding: EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   'Mclash',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
             const SizedBox(height: 8),
-            Text('版本：${packageInfo.version}$buildSuffix'),
-            const SizedBox(height: 14),
+            Text('版本：${packageInfo.version}$buildSuffix',
+                style: Theme.of(dialogContext).textTheme.bodyMedium),
+            const SizedBox(height: 12),
             const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.code_rounded, size: 20),
+                Icon(Icons.code_rounded, size: 18),
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     '本项目完全透明开源，构建脚本与完整源码均随发布包提供。',
-                    style: TextStyle(height: 1.45),
+                    style: TextStyle(fontSize: 13, height: 1.45),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text('开源地址', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            const Text('开源地址',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Semantics(
               link: true,
@@ -712,6 +767,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     'https://github.com/liuyi-htu/Mclash',
                     style: TextStyle(
                       color: Colors.blue,
+                      fontSize: 12,
                       decoration: TextDecoration.underline,
                       height: 1.4,
                     ),
@@ -806,15 +862,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         valueListenable: _proxyStatus,
         builder: (_, status, child) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => AlertDialog(
-            title: const Text('调试日志'),
+            title: Text('调试日志',
+                style: Theme.of(dialogContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontSize: 18)),
+            scrollable: true,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SizedBox(
-              width: 440,
+              width: 400,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('启用调试日志'),
+                    title: Text('启用调试日志',
+                        style: Theme.of(dialogContext).textTheme.bodyMedium),
                     value: enabled,
                     onChanged: _status != ProxyStatus.stopped
                         ? null
@@ -833,23 +902,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   const Divider(height: 20),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.settings_applications_outlined),
-                    title: const Text('Mclash.log'),
-                    subtitle: const Text('服务启动、停止和控制日志'),
+                    leading: const Icon(Icons.settings_applications_outlined,
+                        size: 20),
+                    title: Text('Mclash.log',
+                        style: Theme.of(dialogContext).textTheme.bodyMedium),
+                    subtitle: Text('服务启动、停止和控制日志',
+                        style: Theme.of(dialogContext).textTheme.bodySmall),
                     onTap: () => Navigator.of(dialogContext).pop('Mclash.log'),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.memory_rounded),
-                    title: const Text('mihomo.log'),
-                    subtitle: const Text('mihomo 内核运行日志'),
+                    leading: const Icon(Icons.memory_rounded, size: 20),
+                    title: Text('mihomo.log',
+                        style: Theme.of(dialogContext).textTheme.bodyMedium),
+                    subtitle: Text('mihomo 内核运行日志',
+                        style: Theme.of(dialogContext).textTheme.bodySmall),
                     onTap: () => Navigator.of(dialogContext).pop('mihomo.log'),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.swap_vert_circle_outlined),
-                    title: const Text('hev.log'),
-                    subtitle: const Text('IPv4/IPv6 TUN 转发日志'),
+                    leading:
+                        const Icon(Icons.swap_vert_circle_outlined, size: 20),
+                    title: Text('hev.log',
+                        style: Theme.of(dialogContext).textTheme.bodyMedium),
+                    subtitle: Text('IPv4/IPv6 TUN 转发日志',
+                        style: Theme.of(dialogContext).textTheme.bodySmall),
                     onTap: () => Navigator.of(dialogContext).pop('hev.log'),
                   ),
                 ],
@@ -857,10 +934,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             actions: [
               TextButton.icon(
+                style: TextButton.styleFrom(
+                    textStyle: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: _status != ProxyStatus.stopped
                     ? null
                     : () => Navigator.of(dialogContext).pop('clear'),
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Icons.delete_outline, size: 20),
                 label: const Text('清除'),
               ),
             ],
@@ -881,17 +963,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('清除调试日志'),
+            title: Text('清除调试日志',
+                style: Theme.of(dialogContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontSize: 18)),
+            scrollable: true,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: const Text(
               '将清空 App 启动日志、mihomo 日志和最近一次启动错误。'
               '此操作不会删除配置文件。',
+              style: TextStyle(fontSize: 13, height: 1.45),
             ),
             actions: [
               TextButton(
+                style: TextButton.styleFrom(
+                    textStyle: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: () => Navigator.of(dialogContext).pop(false),
                 child: const Text('取消'),
               ),
               FilledButton(
+                style: FilledButton.styleFrom(
+                    textStyle: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text('清除'),
               ),
@@ -922,7 +1027,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text(name),
+          title: Text(name,
+              style: Theme.of(dialogContext)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontSize: 18)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ConstrainedBox(
@@ -930,13 +1043,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               child: SingleChildScrollView(
                 child: SelectableText(
                   log,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace', fontSize: 12, height: 1.5),
                 ),
               ),
             ),
           ),
           actions: [
             TextButton.icon(
+              style: TextButton.styleFrom(
+                  textStyle: Theme.of(dialogContext)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14)),
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: log));
                 if (!dialogContext.mounted) return;
@@ -945,7 +1064,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   const SnackBar(content: Text('日志已复制')),
                 );
               },
-              icon: const Icon(Icons.copy),
+              icon: const Icon(Icons.copy, size: 20),
               label: const Text('复制'),
             ),
           ],

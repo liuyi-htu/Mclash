@@ -1,3 +1,4 @@
+import '../shared/management_style.dart';
 import 'package:flutter/material.dart';
 
 import '../core/models.dart';
@@ -86,12 +87,22 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('分应用代理'),
+        title: Text('分应用代理',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontSize: 18)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: FilledButton.tonalIcon(
-              onPressed: _saving ? null : _save,
+              onPressed: _saving || _loading ? null : _save,
+              style: FilledButton.styleFrom(
+                  textStyle: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 12)),
               icon: _saving
                   ? const SizedBox.square(
                       dimension: 17,
@@ -112,33 +123,67 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                   child: Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
-                      child: SegmentedButton<AppProxyMode>(
-                        showSelectedIcon: false,
-                        segments: const [
-                          ButtonSegment<AppProxyMode>(
-                            value: AppProxyMode.excludeSelected,
-                            icon: Icon(Icons.block_outlined),
-                            label: Text('选中的不代理'),
-                          ),
-                          ButtonSegment<AppProxyMode>(
-                            value: AppProxyMode.onlySelected,
-                            icon: Icon(Icons.check_circle_outline),
-                            label: Text('仅代理选中的'),
-                          ),
-                        ],
-                        selected: {_mode},
-                        onSelectionChanged: (selection) {
-                          setState(() => _mode = selection.first);
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.comfortable,
-                          shape: WidgetStatePropertyAll(
-                            RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(13),
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final textStyle = Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 13);
+                        if (constraints.maxWidth <
+                            MediaQuery.textScalerOf(context).scale(13) * 14 +
+                                72) {
+                          return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (final entry in [
+                                  (AppProxyMode.excludeSelected, '选中的不代理'),
+                                  (AppProxyMode.onlySelected, '仅代理选中的')
+                                ])
+                                  RadioListTile<AppProxyMode>(
+                                    // Keep compatibility with Flutter 3.32 CI.
+                                    // ignore: deprecated_member_use
+                                    groupValue: _mode,
+                                    value: entry.$1,
+                                    title: Text(entry.$2, style: textStyle),
+                                    contentPadding: EdgeInsets.zero,
+                                    // ignore: deprecated_member_use
+                                    onChanged: _saving
+                                        ? null
+                                        : (value) =>
+                                            setState(() => _mode = value!),
+                                  ),
+                              ]);
+                        }
+                        return SegmentedButton<AppProxyMode>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment<AppProxyMode>(
+                              value: AppProxyMode.excludeSelected,
+                              icon: Icon(Icons.block_outlined, size: 18),
+                              label: Text('选中的不代理'),
+                            ),
+                            ButtonSegment<AppProxyMode>(
+                              value: AppProxyMode.onlySelected,
+                              icon: Icon(Icons.check_circle_outline, size: 18),
+                              label: Text('仅代理选中的'),
+                            ),
+                          ],
+                          selected: {_mode},
+                          onSelectionChanged: _saving
+                              ? null
+                              : (selection) {
+                                  setState(() => _mode = selection.first);
+                                },
+                          style: ButtonStyle(
+                            textStyle: WidgetStatePropertyAll(textStyle),
+                            visualDensity: VisualDensity.comfortable,
+                            shape: WidgetStatePropertyAll(
+                              RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(13),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      }),
                     ),
                   ),
                 ),
@@ -146,7 +191,10 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                   padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
                   child: TextField(
                     controller: _searchController,
-                    decoration: InputDecoration(
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    decoration:
+                        managementFieldDecoration(context, '搜索应用').copyWith(
+                      hintStyle: Theme.of(context).textTheme.bodySmall,
                       hintText: '搜索应用名称、包名或“系统应用”',
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: _query.isEmpty
@@ -173,14 +221,15 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                         style: Theme.of(context)
                             .textTheme
                             .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                            ?.copyWith(
+                                fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                       const Spacer(),
                       Text(
                         '已选 ${_selected.length} 个',
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
-                          fontSize: 13,
+                          fontSize: 12,
                         ),
                       ),
                     ],
@@ -196,6 +245,8 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                       final selected = _selected.contains(app.packageName);
                       return Card(
                         child: CheckboxListTile(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
                           value: selected,
                           controlAffinity: ListTileControlAffinity.trailing,
                           shape: RoundedRectangleBorder(
@@ -205,40 +256,48 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                             app.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                    fontSize: 14, fontWeight: FontWeight.w600),
                           ),
                           subtitle: Text(
                             app.isSystemApp
                                 ? '系统应用 · ${app.packageName}'
                                 : app.packageName,
+                            style: Theme.of(context).textTheme.bodySmall,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           secondary: Container(
-                            width: 44,
-                            height: 44,
+                            width: 36,
+                            height: 36,
                             decoration: BoxDecoration(
                               color: selected
                                   ? colors.primaryContainer
                                   : colors.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
                               Icons.android_rounded,
+                              size: 20,
                               color: selected
                                   ? colors.onPrimaryContainer
                                   : colors.onSurfaceVariant,
                             ),
                           ),
-                          onChanged: (checked) {
-                            setState(() {
-                              if (checked ?? false) {
-                                _selected.add(app.packageName);
-                              } else {
-                                _selected.remove(app.packageName);
-                              }
-                            });
-                          },
+                          onChanged: _saving
+                              ? null
+                              : (checked) {
+                                  setState(() {
+                                    if (checked ?? false) {
+                                      _selected.add(app.packageName);
+                                    } else {
+                                      _selected.remove(app.packageName);
+                                    }
+                                  });
+                                },
                         ),
                       );
                     },

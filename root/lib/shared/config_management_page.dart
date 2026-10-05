@@ -126,17 +126,19 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
             if (mode == ConfigManagementMode.rules)
               const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text('规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。')),
+                  child: Text('规则从上到下匹配，拖动右侧手柄调整顺序。每次修改自动保存。',
+                      style: TextStyle(fontSize: 12))),
             if (mode == ConfigManagementMode.groups)
               const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text('拖动右侧手柄调整代理组顺序。每次修改自动保存。')),
+                  child: Text('拖动右侧手柄调整代理组顺序。每次修改自动保存。',
+                      style: TextStyle(fontSize: 12))),
             Expanded(
                 child: AbsorbPointer(
                     absorbing: _saving,
                     child: mode == ConfigManagementMode.rules
                         ? ReorderableListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 168),
                             itemCount: rules.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
@@ -149,7 +151,9 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                             },
                             itemBuilder: (context, index) => ManagementCard(
                                 key: ValueKey('$index:${rules[index]}'),
+                                compact: true,
                                 child: ListTile(
+                                    minTileHeight: 56,
                                     key: ValueKey('$index:${rules[index]}'),
                                     title: ScrollConfiguration(
                                       behavior: ScrollConfiguration.of(context)
@@ -180,12 +184,12 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                           ReorderableDragStartListener(
                                               index: index,
                                               child: const Padding(
-                                                  padding: EdgeInsets.all(12),
-                                                  child:
-                                                      Icon(Icons.drag_handle))),
+                                                  padding: EdgeInsets.all(14),
+                                                  child: Icon(Icons.drag_handle,
+                                                      size: 20))),
                                         ]))))
                         : ReorderableListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 168),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 168),
                             itemCount: groups.length,
                             buildDefaultDragHandles: false,
                             onReorder: (oldIndex, newIndex) {
@@ -206,7 +210,9 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                               final locked = managed.containsKey(name);
                               return ManagementCard(
                                   key: ValueKey(name),
+                                  compact: true,
                                   child: ListTile(
+                                      minTileHeight: 64,
                                       title: Text(name),
                                       subtitle: Text(locked
                                           ? '由链式节点管理'
@@ -245,9 +251,10 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                                                     message: '拖动排序',
                                                     child: Padding(
                                                         padding:
-                                                            EdgeInsets.all(12),
-                                                        child: Icon(Icons
-                                                            .drag_handle)))),
+                                                            EdgeInsets.all(14),
+                                                        child: Icon(
+                                                            Icons.drag_handle,
+                                                            size: 20)))),
                                           ])));
                             }))),
           ])),
@@ -274,16 +281,6 @@ const _ruleTypes = [
   'MATCH'
 ];
 
-InputDecoration _managementFieldDecoration(String label) => InputDecoration(
-      labelText: label,
-      filled: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-    );
-
 Future<String?> _ruleDialog(
     BuildContext context, String? initial, List<String> policies) async {
   final parts = initial?.split(',') ?? [];
@@ -304,11 +301,15 @@ Future<String?> _ruleDialog(
         context: context,
         builder: (context) => StatefulBuilder(
             builder: (context, update) => AlertDialog(
-                  title: Text(initial == null ? '新增规则' : '编辑规则'),
+                  title: Text(initial == null ? '新增规则' : '编辑规则',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontSize: 18)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                   content: SizedBox(
-                      width: 480,
+                      width: 420,
                       child: SingleChildScrollView(
                           child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -316,27 +317,31 @@ Future<String?> _ruleDialog(
                               children: [
                             SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
-                                title: const Text('编辑完整单条规则'),
+                                title: Text('编辑完整单条规则',
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium),
                                 value: advanced,
                                 onChanged: (value) =>
                                     update(() => advanced = value)),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                             if (advanced)
                               TextField(
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   controller: raw,
                                   minLines: 2,
                                   maxLines: 6,
-                                  decoration: _managementFieldDecoration(
-                                          'Mihomo 规则')
+                                  decoration: managementFieldDecoration(
+                                          context, 'Mihomo 规则')
                                       .copyWith(
                                           helperText:
                                               '支持 AND、OR、NOT、SUB-RULE 等复杂规则'))
                             else ...[
                               DropdownButtonFormField<String>(
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   value: type,
                                   isExpanded: true,
-                                  decoration:
-                                      _managementFieldDecoration('规则类型'),
+                                  decoration: managementFieldDecoration(
+                                      context, '规则类型'),
                                   items: [
                                     for (final item in _ruleTypes)
                                       DropdownMenuItem(
@@ -347,18 +352,21 @@ Future<String?> _ruleDialog(
                                   onChanged: (value) =>
                                       update(() => type = value!)),
                               if (type != 'MATCH') ...[
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 10),
                                 TextField(
+                                    style:
+                                        Theme.of(context).textTheme.bodyMedium,
                                     controller: expression,
-                                    decoration:
-                                        _managementFieldDecoration('匹配内容')),
+                                    decoration: managementFieldDecoration(
+                                        context, '匹配内容')),
                               ],
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               DropdownButtonFormField<String>(
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   value: target,
                                   isExpanded: true,
-                                  decoration:
-                                      _managementFieldDecoration('目标策略'),
+                                  decoration: managementFieldDecoration(
+                                      context, '目标策略'),
                                   items: [
                                     for (final policy in policies)
                                       DropdownMenuItem(
@@ -370,7 +378,10 @@ Future<String?> _ruleDialog(
                               if (['GEOIP', 'IP-CIDR', 'IP-CIDR6', 'RULE-SET']
                                   .contains(type))
                                 CheckboxListTile(
-                                    title: const Text('不触发 DNS 解析（no-resolve）'),
+                                    title: Text('不触发 DNS 解析（no-resolve）',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium),
                                     value: noResolve,
                                     onChanged: (value) =>
                                         update(() => noResolve = value!)),
@@ -453,25 +464,33 @@ Future<String?> _groupDialog(
         context: context,
         builder: (context) => StatefulBuilder(
             builder: (context, update) => AlertDialog(
-                  title: Text(initial == null ? '新增代理组' : '编辑代理组'),
+                  title: Text(initial == null ? '新增代理组' : '编辑代理组',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontSize: 18)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                   content: SizedBox(
-                      width: 480,
+                      width: 420,
                       child: SingleChildScrollView(
                           child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                             TextField(
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 controller: name,
                                 enabled: !isProtectedConfigGroup(
                                     initial?['name'] as String?),
-                                decoration: _managementFieldDecoration('名称')),
-                            const SizedBox(height: 12),
+                                decoration:
+                                    managementFieldDecoration(context, '名称')),
+                            const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 value: type,
-                                decoration: _managementFieldDecoration('类型'),
+                                decoration:
+                                    managementFieldDecoration(context, '类型'),
                                 items: [
                                   for (final item in types)
                                     DropdownMenuItem(
@@ -482,26 +501,29 @@ Future<String?> _groupDialog(
                                 onChanged: (value) =>
                                     update(() => type = value!)),
                             if (type != 'select') ...[
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               TextField(
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   controller: url,
-                                  decoration:
-                                      _managementFieldDecoration('测速地址')),
-                              const SizedBox(height: 12),
+                                  decoration: managementFieldDecoration(
+                                      context, '测速地址')),
+                              const SizedBox(height: 10),
                               TextField(
+                                  style: Theme.of(context).textTheme.bodyMedium,
                                   controller: interval,
                                   keyboardType: TextInputType.number,
-                                  decoration:
-                                      _managementFieldDecoration('检测间隔（秒）')),
+                                  decoration: managementFieldDecoration(
+                                      context, '检测间隔（秒）')),
                             ],
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                             TextField(
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 controller: filter,
                                 minLines: 1,
                                 maxLines: 4,
-                                decoration:
-                                    _managementFieldDecoration('正则表达式')),
-                            const SizedBox(height: 12),
+                                decoration: managementFieldDecoration(
+                                    context, '正则表达式')),
+                            const SizedBox(height: 10),
                             if (error != null)
                               Text(error!,
                                   style: TextStyle(
@@ -541,7 +563,7 @@ Future<String?> _groupDialog(
                                           softWrap: false,
                                           style: Theme.of(context)
                                               .textTheme
-                                              .bodyLarge),
+                                              .bodyMedium),
                                     ),
                                   ),
                                 ),

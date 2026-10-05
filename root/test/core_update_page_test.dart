@@ -57,7 +57,8 @@ void main() {
     if (!check) return;
     await tester.tap(find.text('检测版本'));
     await tester.pumpAndSettle();
-    expect(find.text('当前 v1.19.31 / 官方 v1.19.32'), findsOneWidget);
+    expect(find.text('v1.19.31'), findsOneWidget);
+    expect(find.text('v1.19.32'), findsOneWidget);
   }
 
   testWidgets('outside tap closes idle dialog and waits for an active update',
@@ -68,8 +69,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Builder(
           builder: (context) => TextButton(
-                onPressed: () => showDialog<void>(
+                onPressed: () => showModalBottomSheet<void>(
                   context: context,
+                  isScrollControlled: true,
+                  enableDrag: false,
+                  showDragHandle: false,
                   builder: (_) => CoreUpdateDialog(proxyStatus: sharedStatus),
                 ),
                 child: const Text('打开'),
@@ -80,7 +84,7 @@ void main() {
     expect(find.text('关闭'), findsNothing);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
 
     pending = Completer<Map<String, Object>>();
     await tester.tap(find.text('打开'));
@@ -90,12 +94,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.tapAt(const Offset(5, 5));
     await tester.pump();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
     pending!.complete({'version': 'v1.19.32', 'updated': true});
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
   });
 
   testWidgets('updates version and prevents duplicate updates while busy',
@@ -111,7 +115,7 @@ void main() {
     pending!
         .complete({'version': 'v1.19.32', 'installed': true, 'updated': true});
     await tester.pumpAndSettle();
-    expect(find.text('当前 v1.19.32 / 官方 v1.19.32'), findsOneWidget);
+    expect(find.text('v1.19.32'), findsNWidgets(2));
     expect(find.text('mihomo 内核更新完成'), findsOneWidget);
   });
 
@@ -144,8 +148,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await open(tester, check: false);
     for (final label in ['检测版本', '更新内核']) {
-      final button =
-          find.descendant(of: find.byType(Row), matching: find.text(label));
+      final button = find.descendant(
+          of: label == '检测版本'
+              ? find.byType(OutlinedButton)
+              : find.byType(FilledButton),
+          matching: find.text(label));
       expect(tester.widget<Text>(button).maxLines, 1);
       expect(tester.widget<Text>(button).softWrap, false);
     }
@@ -168,11 +175,12 @@ void main() {
     await open(tester);
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
-    expect(find.text('当前 v1.19.31 / 官方 v1.19.32'), findsOneWidget);
+    expect(find.text('v1.19.31'), findsOneWidget);
+    expect(find.text('v1.19.32'), findsOneWidget);
     expect(find.textContaining('校验失败'), findsOneWidget);
     fail = false;
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
-    expect(find.text('当前 v1.19.32 / 官方 v1.19.32'), findsOneWidget);
+    expect(find.text('v1.19.32'), findsNWidgets(2));
   });
 }

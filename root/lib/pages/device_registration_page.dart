@@ -74,7 +74,12 @@ class _DeviceRegistrationPageState extends State<DeviceRegistrationPage> {
   Widget build(BuildContext context) {
     final info = _info;
     return Scaffold(
-      appBar: AppBar(title: const Text('设备登记')),
+      appBar: AppBar(
+          title: Text('设备登记',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontSize: 18))),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -96,39 +101,64 @@ class _DeviceRegistrationPageState extends State<DeviceRegistrationPage> {
                     Text(
                       '设备身份已就绪',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                     ),
                     const SizedBox(height: 12),
-                    const Text('安装 ID'),
-                    SelectableText(info['installationId']?.toString() ?? ''),
+                    Text('安装 ID', style: Theme.of(context).textTheme.bodySmall),
+                    SelectableText(info['installationId']?.toString() ?? '',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 13)),
                     const SizedBox(height: 12),
-                    const Text('公钥 SHA-256 指纹'),
-                    SelectableText(info['fingerprint']?.toString() ?? ''),
+                    Text('公钥 SHA-256 指纹',
+                        style: Theme.of(context).textTheme.bodySmall),
+                    SelectableText(info['fingerprint']?.toString() ?? '',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 13)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
+              style: FilledButton.styleFrom(
+                  textStyle: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14)),
               onPressed: _busy ? null : _export,
-              icon: const Icon(Icons.save_alt_rounded),
+              icon: const Icon(Icons.save_alt_rounded, size: 18),
               label: const Text('导出设备登记 JSON'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  textStyle: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14)),
               onPressed: _busy ? null : _copy,
-              icon: const Icon(Icons.copy_rounded),
+              icon: const Icon(Icons.copy_rounded, size: 18),
               label: const Text('复制登记 JSON'),
             ),
             const SizedBox(height: 16),
             ExpansionTile(
-              title: const Text('查看完整登记信息'),
+              title: Text('查看完整登记信息',
+                  style: Theme.of(context).textTheme.bodyMedium),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: SelectableText(
                     const JsonEncoder.withIndent('  ').convert(info),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(fontFamily: 'monospace'),
                   ),
                 ),
               ],

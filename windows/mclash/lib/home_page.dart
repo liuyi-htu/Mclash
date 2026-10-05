@@ -1,3 +1,4 @@
+import 'core_update_panel.dart';
 import 'app_appearance.dart';
 import 'pulse_dashboard.dart';
 import 'dart:async';
@@ -619,26 +620,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCoreUpdate() async {
-    await showDialog<void>(
+    await showModalBottomSheet<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AnimatedBuilder(
+      isScrollControlled: true,
+      enableDrag: false,
+      showDragHandle: false,
+      builder: (sheetContext) => AnimatedBuilder(
         animation: Listenable.merge([_statusNotifier, _coreBusy]),
         builder: (_, child) => PopScope(
           canPop: !_coreBusy.value,
-          child: AlertDialog(
-            title: const Text('更新内核'),
-            content: SizedBox(
-                width: 440,
-                child: SingleChildScrollView(child: _coreUpdateCard())),
-            actions: [
-              FilledButton(
-                onPressed: _coreBusy.value
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              )
-            ],
+          child: CoreUpdateSheetContent(
+            panel: _coreUpdateCard(),
+            busy: _coreBusy.value,
+            onClose: () {
+              if (!_coreBusy.value) Navigator.of(sheetContext).pop();
+            },
           ),
         ),
       ),
@@ -688,61 +684,16 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Widget _coreUpdateCard() {
-    final enabled = _canOperate && _status == ProxyStatus.running;
-    return Card(
-        color: pulsePanelCardColor(context),
-        shape: pulsePanelCardShape(context),
-        child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('mihomo',
-                    style:
-                        TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                Text(_coreInfo == null
-                    ? '尚未检测版本'
-                    : '当前 ${_coreInfo!.currentVersion} / 官方 ${_coreInfo!.latestVersion}'),
-                if (_coreBusy.value) ...[
-                  const SizedBox(height: 14),
-                  const LinearProgressIndicator(),
-                  const SizedBox(height: 8),
-                  Text(_coreUpdating ? '正在下载并更新内核，请勿关闭应用…' : '正在检测版本…'),
-                ],
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(
-                      child: OutlinedButton(
-                    onPressed:
-                        enabled ? () => _runCoreOperation(update: false) : null,
-                    style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    child: const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('检测版本', maxLines: 1, softWrap: false)),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: FilledButton(
-                    onPressed:
-                        enabled ? () => _runCoreOperation(update: true) : null,
-                    style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8)),
-                    child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(_coreUpdating ? '正在更新…' : '更新内核',
-                            maxLines: 1, softWrap: false)),
-                  )),
-                ]),
-                if (_coreMessage != null) ...[
-                  const SizedBox(height: 14),
-                  SelectableText(_coreMessage!)
-                ],
-              ],
-            )));
-  }
+  Widget _coreUpdateCard() => CoreUpdatePanel(
+        currentVersion: _coreInfo?.currentVersion,
+        latestVersion: _coreInfo?.latestVersion,
+        busy: _coreBusy.value,
+        updating: _coreUpdating,
+        proxyEnabled: _canOperate && _status == ProxyStatus.running,
+        message: _coreMessage,
+        onCheck: () => _runCoreOperation(update: false),
+        onUpdate: () => _runCoreOperation(update: true),
+      );
 
   Future<void> _showCoreUpdateFailure(String name, Object error) async {
     String updateLog;
@@ -768,7 +719,11 @@ class _HomePageState extends State<HomePage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('$name 内核更新失败'),
+        title: Text('$name 内核更新失败',
+            style: Theme.of(dialogContext)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontSize: 18)),
         content: SizedBox(
           width: 640,
           child: ConstrainedBox(
@@ -808,7 +763,16 @@ class _HomePageState extends State<HomePage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('关于'),
+        title: Text('关于',
+            style: Theme.of(dialogContext)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontSize: 18)),
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -817,27 +781,29 @@ class _HomePageState extends State<HomePage> {
               padding: EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 'Mclash',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 8),
-            Text('版本：${packageInfo.version}$buildSuffix'),
-            const SizedBox(height: 14),
+            Text('版本：${packageInfo.version}$buildSuffix',
+                style: Theme.of(dialogContext).textTheme.bodyMedium),
+            const SizedBox(height: 12),
             const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.code_rounded, size: 20),
+                Icon(Icons.code_rounded, size: 18),
                 SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     '本项目完全透明开源，构建脚本与完整源码均随发布包提供。',
-                    style: TextStyle(height: 1.45),
+                    style: TextStyle(fontSize: 13, height: 1.45),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text('开源地址', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            const Text('开源地址',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
             Semantics(
               link: true,
@@ -849,6 +815,7 @@ class _HomePageState extends State<HomePage> {
                     'https://github.com/liuyi-htu/Mclash',
                     style: TextStyle(
                       color: Colors.blue,
+                      fontSize: 12,
                       decoration: TextDecoration.underline,
                       height: 1.4,
                     ),
@@ -979,15 +946,28 @@ class _HomePageState extends State<HomePage> {
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
         builder: (_, child) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => AlertDialog(
-            title: const Text('调试日志'),
+            title: Text('调试日志',
+                style: Theme.of(dialogContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontSize: 18)),
+            scrollable: true,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SizedBox(
-              width: 440,
+              width: 400,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('启用调试日志'),
+                    title: Text('启用调试日志',
+                        style: Theme.of(dialogContext).textTheme.bodyMedium),
                     value: enabled,
                     onChanged: !_canEditSettings
                         ? null
@@ -1011,8 +991,10 @@ class _HomePageState extends State<HomePage> {
                                 ? Icons.memory_rounded
                                 : Icons.settings_applications_outlined,
                       ),
-                      title: Text(log.displayName),
-                      subtitle: Text(log.description),
+                      title: Text(log.displayName,
+                          style: Theme.of(dialogContext).textTheme.bodyMedium),
+                      subtitle: Text(log.description,
+                          style: Theme.of(dialogContext).textTheme.bodySmall),
                       trailing: const Icon(Icons.chevron_right_rounded),
                       onTap: () => _showDebugLog(log),
                     ),
@@ -1021,13 +1003,23 @@ class _HomePageState extends State<HomePage> {
             ),
             actions: [
               TextButton.icon(
+                style: TextButton.styleFrom(
+                    textStyle: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: !_canEditSettings
                     ? null
                     : () => Navigator.of(dialogContext).pop('clear'),
-                icon: const Icon(Icons.delete_outline),
+                icon: const Icon(Icons.delete_outline, size: 20),
                 label: const Text('清除'),
               ),
               FilledButton(
+                style: FilledButton.styleFrom(
+                    textStyle: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontSize: 14)),
                 onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('关闭'),
               ),
@@ -1051,17 +1043,40 @@ class _HomePageState extends State<HomePage> {
             animation:
                 Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
             builder: (_, child) => AlertDialog(
-              title: const Text('清除调试日志'),
+              title: Text('清除调试日志',
+                  style: Theme.of(dialogContext)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontSize: 18)),
+              scrollable: true,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               content: const Text(
                 '将清空服务日志、mihomo 日志和内核更新日志。'
                 '此操作不会删除配置文件。',
+                style: TextStyle(fontSize: 13, height: 1.45),
               ),
               actions: [
                 TextButton(
+                  style: TextButton.styleFrom(
+                      textStyle: Theme.of(dialogContext)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontSize: 14)),
                   onPressed: () => Navigator.of(dialogContext).pop(false),
                   child: const Text('取消'),
                 ),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                      textStyle: Theme.of(dialogContext)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(fontSize: 14)),
                   onPressed: !_canEditSettings
                       ? null
                       : () => Navigator.of(dialogContext).pop(true),
@@ -1090,7 +1105,15 @@ class _HomePageState extends State<HomePage> {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: Text(file.displayName),
+          title: Text(file.displayName,
+              style: Theme.of(dialogContext)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontSize: 18)),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ConstrainedBox(
@@ -1098,22 +1121,33 @@ class _HomePageState extends State<HomePage> {
               child: SingleChildScrollView(
                 child: SelectableText(
                   log,
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace', fontSize: 12, height: 1.5),
                 ),
               ),
             ),
           ),
           actions: [
             TextButton.icon(
+              style: TextButton.styleFrom(
+                  textStyle: Theme.of(dialogContext)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14)),
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: log));
                 if (!dialogContext.mounted) return;
                 AppNotice.show(dialogContext, '日志已复制');
               },
-              icon: const Icon(Icons.copy),
+              icon: const Icon(Icons.copy, size: 20),
               label: const Text('复制'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                  textStyle: Theme.of(dialogContext)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontSize: 14)),
               onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('关闭'),
             ),

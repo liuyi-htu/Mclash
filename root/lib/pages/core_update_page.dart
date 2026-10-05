@@ -1,4 +1,4 @@
-import '../shared/app_appearance.dart';
+import '../shared/core_update_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -77,77 +77,16 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
         valueListenable: widget.proxyStatus,
         builder: (context, status, _) => PopScope(
           canPop: !_busy,
-          child: AlertDialog(
-            title: const Text('更新内核'),
-            content: SizedBox(
-              width: 440,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Card(
-                      color: pulsePanelCardColor(context),
-                      shape: pulsePanelCardShape(context),
-                      child: Padding(
-                        padding: const EdgeInsets.all(18),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('mihomo',
-                                style: TextStyle(
-                                    fontSize: 17, fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 6),
-                            Text(_info == null
-                                ? '尚未检测版本'
-                                : '当前 ${_info!['currentVersion']} / 官方 ${_info!['latestVersion']}'),
-                            if (_updating) ...[
-                              const SizedBox(height: 14),
-                              const LinearProgressIndicator(),
-                              const SizedBox(height: 8),
-                              const Text('正在下载并更新内核，请勿关闭应用…'),
-                            ],
-                            const SizedBox(height: 16),
-                            Row(children: [
-                              Expanded(
-                                  child: OutlinedButton(
-                                      onPressed: _busy || !_proxyEnabled
-                                          ? null
-                                          : _check,
-                                      style: OutlinedButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8)),
-                                      child: const FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text('检测版本',
-                                              maxLines: 1, softWrap: false)))),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                  child: FilledButton(
-                                      onPressed: _busy || !_proxyEnabled
-                                          ? null
-                                          : _update,
-                                      style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8)),
-                                      child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                              _updating ? '正在更新…' : '更新内核',
-                                              maxLines: 1,
-                                              softWrap: false)))),
-                            ]),
-                            if (_message != null) ...[
-                              const SizedBox(height: 14),
-                              Text(_message!),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          child: CoreUpdateSheetContent(
+            panel: CoreUpdatePanel(
+              currentVersion: _info?['currentVersion']?.toString(),
+              latestVersion: _info?['latestVersion']?.toString(),
+              busy: _busy,
+              updating: _updating,
+              proxyEnabled: _proxyEnabled,
+              message: _message,
+              onCheck: _check,
+              onUpdate: _update,
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'management_style.dart';
 import 'package:flutter/material.dart';
 
 Future<bool> showSubscriptionHostDialog({
@@ -16,7 +17,11 @@ Future<bool> showSubscriptionHostDialog({
             builder: (context, setDialogState) => PopScope(
               canPop: !saving,
               child: AlertDialog(
-                title: const Text('修改 Host'),
+                title: Text('修改 Host',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontSize: 18)),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20)),
                 actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -28,21 +33,23 @@ Future<bool> showSubscriptionHostDialog({
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         TextField(
+                          style: Theme.of(context).textTheme.bodyMedium,
                           controller: controller,
                           enabled: !saving,
                           minLines: 1,
                           maxLines: 1,
-                          decoration: InputDecoration(
-                            labelText: 'VMess HTTP / WS Host',
-                            filled: true,
+                          decoration: managementFieldDecoration(
+                                  context, 'VMess HTTP / WS Host')
+                              .copyWith(
                             fillColor: Theme.of(context)
                                 .colorScheme
                                 .surfaceContainerHighest
                                 .withValues(alpha: 0.45),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14)),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 16),
+                            errorStyle: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error),
                             errorText: error,
                             errorMaxLines: 8,
                           ),

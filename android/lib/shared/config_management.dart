@@ -34,7 +34,10 @@ List<String> configActionOrder(String content) {
   return [
     for (final section in sections)
       for (final entry in _configActionSections.entries)
-        if (entry.value == section) entry.key,
+        if (entry.value == section) ...[
+          if (entry.key == 'rules') 'ruleProviders',
+          entry.key,
+        ],
   ];
 }
 

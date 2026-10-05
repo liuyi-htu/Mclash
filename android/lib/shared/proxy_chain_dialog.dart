@@ -13,7 +13,11 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
       final media = MediaQuery.of(context);
       return AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title),
+        title: Text(title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontSize: 18)),
         scrollable: true,
         content: SizedBox(
           width: 480,
@@ -22,6 +26,7 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
+                style: Theme.of(context).textTheme.bodyMedium,
                 onChanged: (value) => setState(() => query = value.trim()),
                 decoration: InputDecoration(
                   hintText: '搜索节点',
@@ -90,7 +95,10 @@ class _NodeName extends StatelessWidget {
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: Text(name, maxLines: 1, softWrap: false),
+          child: Text(name,
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.bodyMedium),
         ),
       );
 }
@@ -169,7 +177,11 @@ Future<bool> showProxyChainDialog({
           builder: (context, setDialogState) => PopScope(
             canPop: !saving,
             child: AlertDialog(
-              title: Text(prepend ? '链式节点' : '添加后置代理'),
+              title: Text(prepend ? '链式节点' : '添加后置代理',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontSize: 18)),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
               content: SizedBox(
