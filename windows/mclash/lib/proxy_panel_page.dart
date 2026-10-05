@@ -723,10 +723,15 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         actions: [
           IconButton(
             tooltip: '全部测速',
+            iconSize: 28,
+            style: IconButton.styleFrom(
+              fixedSize: const Size(48, 48),
+              padding: EdgeInsets.zero,
+            ),
             onPressed: widget.proxyRunning && !busy ? _refreshAndTestAll : null,
             icon: widget.proxyRunning && _testingAllNodes
                 ? const SizedBox.square(
-                    dimension: 20,
+                    dimension: 24,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.speed_rounded),
@@ -1066,12 +1071,8 @@ class _DelayBadge extends StatelessWidget {
     final text = _delayLabel(delay);
     if (text == null) return const SizedBox.shrink();
 
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: colors.primaryContainer.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(999),
-      ),
       child: Text(
         text,
         style: TextStyle(
