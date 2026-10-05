@@ -130,7 +130,7 @@ void main() {
           false);
       expect(find.text('保存'), findsOneWidget);
       expect(find.byType(CheckboxListTile), findsNothing);
-      await tester.tap(find.text('取消'));
+      await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
     }
     expect(tester.takeException(), isNull);
@@ -172,7 +172,7 @@ void main() {
     expect(find.text('北京'), findsNothing);
     expect(find.textContaining('保存正则后重新匹配'), findsNothing);
     expect(find.text('当前成员'), findsNothing);
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -282,7 +282,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('保存'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
   });
 }

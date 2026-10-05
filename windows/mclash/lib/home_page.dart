@@ -493,7 +493,7 @@ class _HomePageState extends State<HomePage> {
     if (!_canEditSettings) return;
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (dialogContext) => AnimatedBuilder(
         animation:
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
@@ -559,14 +559,6 @@ class _HomePageState extends State<HomePage> {
                 ]),
               ),
             ),
-            actions: [
-              FilledButton(
-                onPressed: _settingsBusy.value
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              )
-            ],
           )),
         ),
       ),
@@ -632,10 +624,6 @@ class _HomePageState extends State<HomePage> {
           canPop: !_coreBusy.value,
           child: CoreUpdateDialogContent(
             panel: _coreUpdateCard(),
-            busy: _coreBusy.value,
-            onClose: () {
-              if (!_coreBusy.value) Navigator.of(dialogContext).pop();
-            },
           ),
         ),
       ),
@@ -748,10 +736,6 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.copy),
             label: const Text('复制日志'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('关闭'),
-          ),
         ],
       )),
     );
@@ -828,12 +812,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
       )),
     );
   }
@@ -1019,15 +997,6 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.delete_outline, size: 20),
                 label: const Text('清除'),
               ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                    textStyle: Theme.of(dialogContext)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontSize: 14)),
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              ),
             ],
           )),
         ),
@@ -1068,15 +1037,6 @@ class _HomePageState extends State<HomePage> {
                 style: TextStyle(fontSize: 14, height: 1.45),
               ),
               actions: [
-                TextButton(
-                  style: TextButton.styleFrom(
-                      textStyle: Theme.of(dialogContext)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontSize: 14)),
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('取消'),
-                ),
                 FilledButton(
                   style: FilledButton.styleFrom(
                       textStyle: Theme.of(dialogContext)
@@ -1148,15 +1108,6 @@ class _HomePageState extends State<HomePage> {
               },
               icon: const Icon(Icons.copy, size: 20),
               label: const Text('复制'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                  textStyle: Theme.of(dialogContext)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(fontSize: 14)),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('关闭'),
             ),
           ],
         )),

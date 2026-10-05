@@ -316,11 +316,6 @@ class _ConfigPageState extends State<ConfigPage> {
                         ),
                       ),
                       actions: [
-                        TextButton(
-                          onPressed: () =>
-                              Navigator.of(dialogContext).pop(false),
-                          child: const Text('取消'),
-                        ),
                         FilledButton(
                           onPressed: _locked
                               ? null
@@ -437,10 +432,6 @@ class _ConfigPageState extends State<ConfigPage> {
                     title: const Text('删除配置'),
                     content: Text('确定删除“${profile.name}”吗？'),
                     actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(dialogContext).pop(false),
-                        child: const Text('取消'),
-                      ),
                       DestructiveActionButton(
                         onPressed: _locked
                             ? null
@@ -620,11 +611,6 @@ class _ConfigPageState extends State<ConfigPage> {
                         },
                       ),
                       actions: [
-                        TextButton(
-                          onPressed: () =>
-                              Navigator.of(dialogContext).pop(false),
-                          child: const Text('取消'),
-                        ),
                         FilledButton(
                           onPressed: _locked
                               ? null
@@ -853,10 +839,6 @@ class _ConfigPageState extends State<ConfigPage> {
                       content: Text(
                           '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
                       actions: [
-                        TextButton(
-                            onPressed: () =>
-                                Navigator.of(dialogContext).pop(false),
-                            child: const Text('取消')),
                         DestructiveActionButton(
                             onPressed: () =>
                                 Navigator.of(dialogContext).pop(true),
@@ -938,15 +920,6 @@ class _ConfigPageState extends State<ConfigPage> {
                                           SmartQuotesType.disabled),
                                 ]))),
                         actions: [
-                          TextButton(
-                              style: TextButton.styleFrom(
-                                  textStyle: Theme.of(dialogContext)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(fontSize: 14)),
-                              onPressed: () =>
-                                  Navigator.of(dialogContext).pop(),
-                              child: const Text('取消')),
                           FilledButton(
                               style: FilledButton.styleFrom(
                                   textStyle: Theme.of(dialogContext)

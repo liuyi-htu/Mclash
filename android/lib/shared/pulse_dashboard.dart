@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
 import 'pulse_icons.dart';
 
+const _navigationRailMinWidth = 720.0;
+
+class _PulseRailScope extends InheritedWidget {
+  const _PulseRailScope({required this.hasRail, required super.child});
+
+  final bool hasRail;
+
+  @override
+  bool updateShouldNotify(_PulseRailScope oldWidget) =>
+      hasRail != oldWidget.hasRail;
+}
+
 PreferredSizeWidget pulseAppBar(BuildContext context,
     {String badge = '',
     String title = 'Mclash',
@@ -8,14 +20,19 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
     PreferredSizeWidget? bottom}) {
   final colors = Theme.of(context).colorScheme;
   final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
+  // Nested pages inherit the rail state even after SafeArea reduces their width.
+  final hasRail =
+      context.dependOnInheritedWidgetOfExactType<_PulseRailScope>()?.hasRail ??
+          MediaQuery.sizeOf(context).width >= _navigationRailMinWidth;
+  final topPadding = hasRail ? (24 - titleHeight / 2).clamp(0.0, 24.0) : 22.0;
   return PreferredSize(
     preferredSize: Size.fromHeight(
-        22 + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
+        topPadding + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
     child: SafeArea(
         bottom: false,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
-              padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
+              padding: EdgeInsets.fromLTRB(18, topPadding, 18, 14),
               child: SizedBox(
                   height: titleHeight,
                   child: Row(children: [
@@ -394,28 +411,33 @@ class PulseNavigation extends StatelessWidget {
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
         final page = Scaffold(appBar: appBar, body: child);
-        if (constraints.maxWidth < 720) return page;
-        return SafeArea(
-          top: false,
-          bottom: false,
-          child: Row(children: [
-            SafeArea(
-              left: false,
-              right: false,
-              child: NavigationRail(
-                  selectedIndex: index,
-                  labelType: NavigationRailLabelType.all,
-                  onDestinationSelected: onSelected,
-                  destinations: [
-                    for (var i = 0; i < PulseBottomBar.labels.length; i++)
-                      NavigationRailDestination(
-                          icon: PulseIcon(PulseBottomBar.icons[i]),
-                          label: Text(PulseBottomBar.labels[i]))
-                  ]),
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(child: page)
-          ]),
+        if (constraints.maxWidth < _navigationRailMinWidth) {
+          return _PulseRailScope(hasRail: false, child: page);
+        }
+        return _PulseRailScope(
+          hasRail: true,
+          child: SafeArea(
+            top: false,
+            bottom: false,
+            child: Row(children: [
+              SafeArea(
+                left: false,
+                right: false,
+                child: NavigationRail(
+                    selectedIndex: index,
+                    labelType: NavigationRailLabelType.all,
+                    onDestinationSelected: onSelected,
+                    destinations: [
+                      for (var i = 0; i < PulseBottomBar.labels.length; i++)
+                        NavigationRailDestination(
+                            icon: PulseIcon(PulseBottomBar.icons[i]),
+                            label: Text(PulseBottomBar.labels[i]))
+                    ]),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: page)
+            ]),
+          ),
         );
       });
 }

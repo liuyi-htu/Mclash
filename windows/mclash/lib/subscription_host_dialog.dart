@@ -70,12 +70,6 @@ Future<bool> showSubscriptionHostDialog({
                           ),
                         ),
                         actions: [
-                          TextButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.of(context).pop(false),
-                            child: const Text('取消'),
-                          ),
                           FilledButton(
                             style: FilledButton.styleFrom(
                               minimumSize: const Size(96, 48),

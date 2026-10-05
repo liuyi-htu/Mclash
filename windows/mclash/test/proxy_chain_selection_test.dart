@@ -57,7 +57,8 @@ void main() {
     await open('确定');
     await open('选择前置节点');
     expect(node('C'), findsNothing);
-    await open('取消');
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
     await open('保存');
     expect(savedChain, ['A']);
     expect(savedTargets, ['C']);

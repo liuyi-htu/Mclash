@@ -91,9 +91,6 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                   ),
                 ),
                 actions: [
-                  TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('取消')),
                   FilledButton(
                       onPressed: !ProxyEditAccess.allowed(context)
                           ? null
@@ -386,11 +383,6 @@ Future<bool> showProxyChainDialog({
                         ),
                       ),
                       actions: [
-                        TextButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.of(context).pop(false),
-                            child: const Text('取消')),
                         FilledButton(
                           onPressed: !ProxyEditAccess.allowed(context) ||
                                   saving ||

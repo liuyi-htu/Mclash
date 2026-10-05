@@ -8,14 +8,16 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
     PreferredSizeWidget? bottom}) {
   final colors = Theme.of(context).colorScheme;
   final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
+  // The first rail icon is centered 24px below the safe-area top.
+  final topPadding = (24 - titleHeight / 2).clamp(0.0, 24.0);
   return PreferredSize(
     preferredSize: Size.fromHeight(
-        22 + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
+        topPadding + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
     child: SafeArea(
         bottom: false,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(
-              padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
+              padding: EdgeInsets.fromLTRB(18, topPadding, 18, 14),
               child: SizedBox(
                   height: titleHeight,
                   child: Row(children: [

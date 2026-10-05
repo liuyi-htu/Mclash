@@ -55,9 +55,6 @@ class _RuleProviderPageState extends State<RuleProviderPage> {
                       .titleMedium
                       ?.copyWith(fontSize: 18)),
               actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('取消')),
                 DestructiveActionButton(
                     onPressed: () => Navigator.pop(context, true),
                     child: const Text('删除')),
@@ -257,11 +254,6 @@ Future<void> _providerDialog(
                                                       .error)),
                                   ]))),
                           actions: [
-                            TextButton(
-                                onPressed: saving
-                                    ? null
-                                    : () => Navigator.pop(context),
-                                child: const Text('取消')),
                             FilledButton(
                                 onPressed: !editable
                                     ? null

@@ -106,17 +106,6 @@ class _AddNodePageState extends State<AddNodePage> {
                       ),
                     ),
                     actions: [
-                      TextButton(
-                          style: TextButton.styleFrom(
-                              minimumSize: const Size(64, 44),
-                              textStyle: Theme.of(context)
-                                  .textTheme
-                                  .labelLarge
-                                  ?.copyWith(fontSize: 14, height: 1.45)),
-                          onPressed: _saving
-                              ? null
-                              : () => Navigator.of(context).pop(),
-                          child: const Text('取消')),
                       FilledButton(
                           style: FilledButton.styleFrom(
                               minimumSize: const Size(64, 44),
