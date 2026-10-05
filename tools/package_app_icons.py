@@ -33,18 +33,34 @@ def paths(mask):
 alpha = art[:, :, 3] > 128
 outline = paths(alpha)
 light = paths(alpha & (art[:, :, 0] > 75) & (art[:, :, 1] > 125))
+# Measure only retained artwork contours, not stray transparent-edge pixels.
+contours, _ = cv2.findContours(alpha.astype(np.uint8) * 255, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+points = np.concatenate([c.reshape(-1, 2) for c in contours if abs(cv2.contourArea(c)) >= size * size * .0003])
+left, top = points.min(axis=0)
+right, bottom = points.max(axis=0)
+span = max(right - left, bottom - top)
 
 
-def svg(color, secondary, background=None, factor=.8):
-    inset = size * (1 - factor) / 2
+def transform(occupancy):
+    factor = size * occupancy / span
+    x = size / 2 - (left + right) / 2 * factor
+    y = size / 2 - (top + bottom) / 2 * factor
+    return factor, x, y
+
+
+
+def svg(color, secondary, background=None, occupancy=.5):
+    factor, x, y = transform(occupancy)
     tile = '' if background is None else f'<rect width="{size}" height="{size}" rx="{size * .24}" fill="{background}"/>'
-    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{tile}<g transform="translate({inset} {inset}) scale({factor})"><path fill="{color}" fill-rule="evenodd" d="{outline}"/><path fill="{secondary}" fill-rule="evenodd" d="{light}"/></g></svg>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{tile}<g transform="translate({x} {y}) scale({factor})"><path fill="{color}" fill-rule="evenodd" d="{outline}"/><path fill="{secondary}" fill-rule="evenodd" d="{light}"/></g></svg>'
 
 
 def vector(color, secondary, monochrome=False):
-    inset = size * .1
+    # Adaptive foregrounds use 108dp for a visible 72dp launcher tile.
+    # 1/3 of the foreground viewport occupies half of that visible tile.
+    factor, x, y = transform(1 / 3)
     accents = '' if monochrome else f'<path android:fillColor="{secondary}" android:fillType="evenOdd" android:pathData="{light}"/>'
-    return f'<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="{size}" android:viewportHeight="{size}"><group android:scaleX="0.8" android:scaleY="0.8" android:translateX="{inset}" android:translateY="{inset}"><path android:fillColor="{color}" android:fillType="evenOdd" android:pathData="{outline}"/>{accents}</group></vector>\n'
+    return f'<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="{size}" android:viewportHeight="{size}"><group android:scaleX="{factor}" android:scaleY="{factor}" android:translateX="{x}" android:translateY="{y}"><path android:fillColor="{color}" android:fillType="evenOdd" android:pathData="{outline}"/>{accents}</group></vector>\n'
 
 
 for client in ('android', 'root'):
@@ -60,10 +76,10 @@ for client in ('android', 'root'):
     cairosvg.svg2png(bytestring=svg('#000000', '#000000').encode(), write_to=str(res / 'drawable-nodpi/ic_launcher_brand_monochrome.png'), output_width=1024, output_height=1024)
     for density, pixels in [('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)]:
         for suffix in ('', '_round'):
-            cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .9).encode(), write_to=str(res / f'mipmap-{density}/ic_launcher{suffix}.png'), output_width=pixels, output_height=pixels)
+            cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .5).encode(), write_to=str(res / f'mipmap-{density}/ic_launcher{suffix}.png'), output_width=pixels, output_height=pixels)
 
 # Render the same fixed tile for the Windows launcher.
-image = Image.open(BytesIO(cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .9).encode()))).convert('RGBA')
+image = Image.open(BytesIO(cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .7).encode()))).convert('RGBA')
 image.save(ROOT / 'windows/mclash/windows/runner/resources/app_icon.ico', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 (ROOT / 'assets/app-icon.svg').write_text(svg(PRIMARY, SECONDARY))
 print('Packaged Android, Root and Windows app icons.')
