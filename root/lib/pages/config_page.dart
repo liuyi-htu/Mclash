@@ -1058,13 +1058,17 @@ class _ConfigPageState extends State<ConfigPage> {
         ..._profiles.where((profile) => !profile.active),
       ];
 
-  Widget _configCard(ConfigProfile profile) => Card(
+  Widget _configCard(ConfigProfile profile, {bool stacked = false}) => Card(
       key: ValueKey('config-card-${profile.id}'),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: _working
             ? null
             : () {
+                if (stacked) {
+                  setState(() => _profilesExpanded = true);
+                  return;
+                }
                 if (widget.proxyRunning || profile.active) {
                   _showConfigDetails(profile);
                 } else {
@@ -1082,7 +1086,36 @@ class _ConfigPageState extends State<ConfigPage> {
                       style: Theme.of(context).textTheme.titleMedium,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis)),
-              if (profile.active) ...[
+              if (profile.active && !stacked) ...[
+                const SizedBox(width: 8),
+                Text('当前使用',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFFA6D7B8)
+                            : const Color(0xFF367151))),
+              ],
+              if (stacked)
+                TextButton(
+                  key: const ValueKey('toggle-config-stack'),
+                  onPressed: _working
+                      ? null
+                      : () => setState(() => _profilesExpanded = true),
+                  child: const Text('展开'),
+                ),
+            ]),
+            SizedBox(height: stacked ? 4 : 6),
+            Row(children: [
+              Expanded(
+                child: Text(
+                    profile.isSubscription
+                        ? '${_airportLinks(profile).length} 个机场 · 长按管理'
+                        : '本地 YAML · 长按管理',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+              if (stacked && profile.active) ...[
                 const SizedBox(width: 8),
                 Text('当前使用',
                     style: TextStyle(
@@ -1092,12 +1125,6 @@ class _ConfigPageState extends State<ConfigPage> {
                             : const Color(0xFF367151))),
               ],
             ]),
-            const SizedBox(height: 6),
-            Text(
-                profile.isSubscription
-                    ? '${_airportLinks(profile).length} 个机场 · 长按管理'
-                    : '本地 YAML · 长按管理',
-                style: Theme.of(context).textTheme.bodySmall),
           ]),
         ),
       ));
@@ -1132,7 +1159,7 @@ class _ConfigPageState extends State<ConfigPage> {
         ),
       Padding(
         padding: EdgeInsets.only(bottom: depth * 8.0),
-        child: _configCard(profiles.first),
+        child: _configCard(profiles.first, stacked: true),
       ),
     ]);
   }
@@ -1166,7 +1193,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                         .titleMedium)),
                             Text('${_profiles.length} 个配置',
                                 style: Theme.of(context).textTheme.bodySmall),
-                            if (_profiles.length > 1)
+                            if (_profiles.length > 1 && _profilesExpanded)
                               TextButton(
                                 key: const ValueKey('toggle-config-stack'),
                                 onPressed: _working
