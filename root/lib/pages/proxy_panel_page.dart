@@ -12,9 +12,11 @@ import '../shared/delay_test_queue.dart';
 import '../shared/proxy_node_details.dart';
 
 class ProxyPanelPage extends StatefulWidget {
-  const ProxyPanelPage({required this.proxyRunning, super.key});
+  const ProxyPanelPage(
+      {required this.proxyRunning, this.proxyMode = 'rule', super.key});
 
   final bool proxyRunning;
+  final String? proxyMode;
 
   @override
   State<ProxyPanelPage> createState() => _ProxyPanelPageState();
@@ -743,9 +745,14 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
       body: !widget.proxyRunning
           ? const _StoppedHint()
           : _ProxyTab(
-              groups: _groups,
+              groups: [
+                for (final group in _groups)
+                  if (!_isGlobalGroup(group.name) ||
+                      widget.proxyMode == 'global')
+                    group,
+              ],
               delayForNode: _delayForNode,
-              loading: _loading,
+              loading: _loading || widget.proxyMode == null,
               onRefresh: _loadProxies,
               onGroupTap: _showNodes,
             ),

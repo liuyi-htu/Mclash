@@ -14,6 +14,8 @@ class _Controller extends HttpOverrides {
   String mode = 'rule';
   int failedModeReads = 0;
   bool failPersistence = false;
+  bool includeGlobalGroup = false;
+  bool includeConfiguredGroup = true;
   Completer<Map<String, Object>>? pendingModeRead;
   Completer<Map<String, Object>>? pendingProxyRead;
 
@@ -48,11 +50,18 @@ class _Controller extends HttpOverrides {
           },
           'Node B': {'type': 'Http', 'server': 'other.example', 'port': 80},
           'Front': {'type': 'Socks5'},
-          'Test group': {
-            'type': 'Selector',
-            'now': 'Node A',
-            'all': ['Node A', 'Node B'],
-          },
+          if (includeGlobalGroup)
+            'GLOBAL': {
+              'type': 'Selector',
+              'now': 'Node A',
+              'all': ['Node A', 'Node B'],
+            },
+          if (includeConfiguredGroup)
+            'Test group': {
+              'type': 'Selector',
+              'now': 'Node A',
+              'all': ['Node A', 'Node B'],
+            },
         },
       };
     }
@@ -170,6 +179,44 @@ void main() {
     HttpOverrides.global = previous;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets(
+      'GLOBAL group follows mode while configured groups remain visible',
+      (tester) async {
+    controller.includeGlobalGroup = true;
+    for (final mode in ['rule', 'global', 'direct', 'global', 'rule']) {
+      await tester.pumpWidget(MaterialApp(
+        home: ProxyPanelPage(proxyRunning: true, proxyMode: mode),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('GLOBAL'),
+          mode == 'global' ? findsOneWidget : findsNothing);
+      expect(find.text('Test group'), findsOneWidget);
+    }
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('unknown mode does not flash empty for a GLOBAL-only controller',
+      (tester) async {
+    controller
+      ..includeGlobalGroup = true
+      ..includeConfiguredGroup = false;
+    await tester.pumpWidget(const MaterialApp(
+      home: ProxyPanelPage(proxyRunning: true, proxyMode: null),
+    ));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('没有可选择的代理组'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pumpWidget(const MaterialApp(
+      home: ProxyPanelPage(proxyRunning: true, proxyMode: 'global'),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('GLOBAL'), findsOneWidget);
+    expect(find.text('没有可选择的代理组'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
   });
 
   for (final empty in [false, true]) {
