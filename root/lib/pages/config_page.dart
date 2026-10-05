@@ -35,6 +35,7 @@ class _ConfigPageState extends State<ConfigPage> {
   List<ConfigProfile> _profiles = const [];
   bool _loading = true;
   bool _working = false;
+  bool _profilesExpanded = false;
 
   @override
   void initState() {
@@ -350,6 +351,7 @@ class _ConfigPageState extends State<ConfigPage> {
       setState(() => _working = true);
       await _service.selectConfig(profile.id);
       await _load();
+      if (mounted) setState(() => _profilesExpanded = false);
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -1051,6 +1053,90 @@ class _ConfigPageState extends State<ConfigPage> {
     showErrorNotice(context, error);
   }
 
+  List<ConfigProfile> get _displayProfiles => [
+        ..._profiles.where((profile) => profile.active),
+        ..._profiles.where((profile) => !profile.active),
+      ];
+
+  Widget _configCard(ConfigProfile profile) => Card(
+      key: ValueKey('config-card-${profile.id}'),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _working
+            ? null
+            : () {
+                if (widget.proxyRunning || profile.active) {
+                  _showConfigDetails(profile);
+                } else {
+                  _select(profile);
+                }
+              },
+        onLongPress: _working ? null : () => _showActions(profile),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                  child: Text(profile.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis)),
+              if (profile.active) ...[
+                const SizedBox(width: 8),
+                Text('当前使用',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFFA6D7B8)
+                            : const Color(0xFF367151))),
+              ],
+            ]),
+            const SizedBox(height: 6),
+            Text(
+                profile.isSubscription
+                    ? '${_airportLinks(profile).length} 个机场 · 长按管理'
+                    : '本地 YAML · 长按管理',
+                style: Theme.of(context).textTheme.bodySmall),
+          ]),
+        ),
+      ));
+
+  Widget _configCards() {
+    final profiles = _displayProfiles;
+    if (profiles.length == 1) return _configCard(profiles.first);
+    if (_profilesExpanded) {
+      return Column(children: [
+        for (var i = 0; i < profiles.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _configCard(profiles[i]),
+        ],
+      ]);
+    }
+    final depth = (profiles.length - 1).clamp(0, 2).toInt();
+    final colors = Theme.of(context).colorScheme;
+    return Stack(key: const ValueKey('config-profile-stack'), children: [
+      for (var layer = depth; layer > 0; layer--)
+        Positioned(
+          left: layer * 6.0,
+          right: layer * 6.0,
+          top: layer * 8.0,
+          bottom: (depth - layer) * 8.0,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.primaryContainer
+                  .withValues(alpha: layer == 2 ? .45 : .75),
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+      Padding(
+        padding: EdgeInsets.only(bottom: depth * 8.0),
+        child: _configCard(profiles.first),
+      ),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1080,6 +1166,15 @@ class _ConfigPageState extends State<ConfigPage> {
                                         .titleMedium)),
                             Text('${_profiles.length} 个配置',
                                 style: Theme.of(context).textTheme.bodySmall),
+                            if (_profiles.length > 1)
+                              TextButton(
+                                key: const ValueKey('toggle-config-stack'),
+                                onPressed: _working
+                                    ? null
+                                    : () => setState(() =>
+                                        _profilesExpanded = !_profilesExpanded),
+                                child: Text(_profilesExpanded ? '收起' : '展开'),
+                              ),
                           ]),
                         ),
                         if (_profiles.isEmpty)
@@ -1097,98 +1192,17 @@ class _ConfigPageState extends State<ConfigPage> {
                                   style: Theme.of(context).textTheme.bodySmall),
                             ]),
                           )),
-                        for (final profile in _profiles) ...[
-                          Card(
-                              child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: _working
-                                ? null
-                                : () {
-                                    if (widget.proxyRunning || profile.active) {
-                                      _showConfigDetails(profile);
-                                    } else {
-                                      _select(profile);
-                                    }
-                                  },
-                            onLongPress:
-                                _working ? null : () => _showActions(profile),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 12),
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(children: [
-                                      Expanded(
-                                          child: Text(profile.name,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleMedium,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis)),
-                                      if (profile.active) ...[
-                                        const SizedBox(width: 8),
-                                        Text('当前使用',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: Theme.of(context)
-                                                            .brightness ==
-                                                        Brightness.dark
-                                                    ? const Color(0xFFA6D7B8)
-                                                    : const Color(0xFF367151))),
-                                      ],
-                                    ]),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                        profile.isSubscription
-                                            ? '${_airportLinks(profile).length} 个机场 · 长按管理'
-                                            : '本地 YAML · 长按管理',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall),
-                                  ]),
-                            ),
-                          )),
+                        if (_profiles.isNotEmpty) ...[
+                          _configCards(),
                           const SizedBox(height: 10),
+                        ],
+                        for (final profile in _profiles)
                           if (profile.active &&
                               profile.isSubscription &&
                               _airportLinks(profile).isNotEmpty) ...[
                             const PulseSectionLabel('机场订阅'),
                             _subscriptionPanel(profile, embedded: true),
                           ],
-                          if (profile.active) ...[
-                            const PulseSectionLabel('配置工具'),
-                            PulseSettingsGroup(children: [
-                              SettingsCard(
-                                  icon: Icons.add_link,
-                                  title: '手动节点',
-                                  onTap: widget.proxyRunning || _working
-                                      ? null
-                                      : () => _addNode(profile)),
-                              SettingsCard(
-                                  icon: Icons.link,
-                                  title: '链式节点',
-                                  onTap: widget.proxyRunning || _working
-                                      ? null
-                                      : () => _editProxyChain(profile)),
-                              SettingsCard(
-                                  icon: Icons.rule,
-                                  title: '规则管理',
-                                  onTap: widget.proxyRunning || _working
-                                      ? null
-                                      : () => _manageConfiguration(
-                                          profile, ConfigManagementMode.rules)),
-                              SettingsCard(
-                                  icon: Icons.account_tree_outlined,
-                                  title: '代理组管理',
-                                  onTap: widget.proxyRunning || _working
-                                      ? null
-                                      : () => _manageConfiguration(profile,
-                                          ConfigManagementMode.groups)),
-                            ]),
-                            const SizedBox(height: 10),
-                          ],
-                        ],
                       ],
                     ),
                   ),
