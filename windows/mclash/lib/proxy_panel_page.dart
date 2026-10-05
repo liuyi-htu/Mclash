@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'pulse_dashboard.dart';
 import 'app_appearance.dart';
 import 'dart:async';
@@ -541,8 +542,9 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
         return AnimatedBuilder(
           animation: _connectionSignal,
           builder: (_, child) => !widget.proxyRunning
-              ? const AlertDialog(
-                  title: Text('代理已断开'), content: Text('请重新连接代理后操作'))
+              ? const DialogTypography(
+                  child: AlertDialog(
+                      title: Text('代理已断开'), content: Text('请重新连接代理后操作')))
               : StatefulBuilder(
                   builder: (context, setModalState) {
                     final colors = Theme.of(context).colorScheme;
@@ -560,7 +562,8 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                     });
                     return SafeArea(
                       child: Center(
-                        child: Dialog(
+                        child: DialogTypography(
+                            child: Dialog(
                           insetPadding: const EdgeInsets.symmetric(
                             horizontal: 20,
                             vertical: 28,
@@ -592,7 +595,8 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                                   .textTheme
                                                   .titleLarge
                                                   ?.copyWith(
-                                                    fontWeight: FontWeight.w900,
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 18,
                                                   ),
                                             ),
                                             const SizedBox(height: 4),
@@ -701,7 +705,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                               ),
                             ),
                           ),
-                        ),
+                        )),
                       ),
                     );
                   },
@@ -1048,7 +1052,7 @@ class _NodeButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 13,
+                    fontSize: 14,
                     fontWeight: FontWeight.normal,
                     height: 1.45,
                   ),
@@ -1117,7 +1121,7 @@ class _DelayText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: selected ? colors.primary : _delayColor(colors, delay),
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: FontWeight.normal,
       ),
     );

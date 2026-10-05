@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'proxy_edit_access.dart';
 import 'package:flutter/material.dart';
 
@@ -15,7 +16,8 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                       name.toLowerCase().contains(query.toLowerCase()))
                   .toList();
               final media = MediaQuery.of(context);
-              return AlertDialog(
+              return DialogTypography(
+                  child: AlertDialog(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20)),
                 title: Text(title,
@@ -98,7 +100,7 @@ Future<List<String>?> _selectNodes(BuildContext context, String title,
                           : () => Navigator.of(context).pop(selected.toList()),
                       child: const Text('确定')),
                 ],
-              );
+              ));
             })),
   );
 }
@@ -195,7 +197,8 @@ Future<bool> showProxyChainDialog({
             (context) => StatefulBuilder(
                   builder: (context, setDialogState) => PopScope(
                     canPop: !saving,
-                    child: AlertDialog(
+                    child: DialogTypography(
+                        child: AlertDialog(
                       title: Text(prepend ? '链式节点' : '添加后置代理',
                           style: Theme.of(context)
                               .textTheme
@@ -417,7 +420,7 @@ Future<bool> showProxyChainDialog({
                           child: Text(saving ? '保存中…' : '保存'),
                         ),
                       ],
-                    ),
+                    )),
                   ),
                 )),
       ) ??

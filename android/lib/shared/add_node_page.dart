@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 import 'package:flutter/material.dart';
@@ -57,21 +58,53 @@ class _AddNodePageState extends State<AddNodePage> {
       builder: (context) => StatefulBuilder(
         builder: (context, update) => PopScope(
           canPop: !_saving,
-          child: AlertDialog(
+          child: DialogTypography(
+              child: AlertDialog(
+            alignment: Alignment.center,
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             title: const Text('添加节点'),
-            content: TextField(
-              controller: _controller,
-              enabled: !_saving,
-              minLines: 1,
-              maxLines: 6,
-              decoration: managementFieldDecoration(context, '节点链接')
-                  .copyWith(errorText: error, errorMaxLines: 8),
+            titleTextStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 18, height: 1.45, fontWeight: FontWeight.w600),
+            contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            scrollable: true,
+            content: SizedBox(
+              width: 400,
+              child: TextField(
+                controller: _controller,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontSize: 14, height: 1.45),
+                enabled: !_saving,
+                minLines: 1,
+                maxLines: 6,
+                decoration: managementFieldDecoration(context, '节点链接').copyWith(
+                    errorText: error,
+                    errorMaxLines: 8,
+                    errorStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: Theme.of(context).colorScheme.error)),
+              ),
             ),
             actions: [
               TextButton(
+                  style: TextButton.styleFrom(
+                      minimumSize: const Size(64, 44),
+                      textStyle: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(fontSize: 14, height: 1.45)),
                   onPressed: _saving ? null : () => Navigator.of(context).pop(),
                   child: const Text('取消')),
               FilledButton(
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size(64, 44),
+                      textStyle: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(fontSize: 14, height: 1.45)),
                   onPressed: _saving
                       ? null
                       : () async {
@@ -95,7 +128,7 @@ class _AddNodePageState extends State<AddNodePage> {
                         },
                   child: Text(_saving ? '保存中…' : '保存')),
             ],
-          ),
+          )),
         ),
       ),
     );

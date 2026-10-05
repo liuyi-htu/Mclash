@@ -69,11 +69,8 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Builder(
           builder: (context) => TextButton(
-                onPressed: () => showModalBottomSheet<void>(
+                onPressed: () => showDialog<void>(
                   context: context,
-                  isScrollControlled: true,
-                  enableDrag: false,
-                  showDragHandle: false,
                   builder: (_) => CoreUpdateDialog(proxyStatus: sharedStatus),
                 ),
                 child: const Text('打开'),
@@ -84,7 +81,7 @@ void main() {
     expect(find.text('关闭'), findsNothing);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
 
     pending = Completer<Map<String, Object>>();
     await tester.tap(find.text('打开'));
@@ -94,12 +91,28 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.tapAt(const Offset(5, 5));
     await tester.pump();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
     pending!.complete({'version': 'v1.19.32', 'updated': true});
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('core update stays centered in landscape and scrolls to actions',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 320);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await open(tester, check: false);
+    expect(tester.getCenter(find.byType(AlertDialog)), const Offset(450, 160));
+    await tester.ensureVisible(find.byType(FilledButton));
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
+    expect(updates, 1);
+    expect(find.text('mihomo 内核更新完成'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('updates version and prevents duplicate updates while busy',

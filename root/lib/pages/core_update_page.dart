@@ -77,7 +77,7 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
         valueListenable: widget.proxyStatus,
         builder: (context, status, _) => PopScope(
           canPop: !_busy,
-          child: CoreUpdateSheetContent(
+          child: CoreUpdateDialogContent(
             panel: CoreUpdatePanel(
               currentVersion: _info?['currentVersion']?.toString(),
               latestVersion: _info?['latestVersion']?.toString(),

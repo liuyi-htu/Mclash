@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'proxy_edit_access.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
@@ -83,7 +84,8 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
         context: context,
         builder: (_) => ProxyEditAccess.inherit(
             context,
-            (context) => AlertDialog(
+            (context) => DialogTypography(
+                    child: AlertDialog(
                   title: Text('删除 $name？'),
                   actions: [
                     TextButton(
@@ -95,7 +97,7 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                             : () => Navigator.pop(context, true),
                         child: const Text('删除'))
                   ],
-                )));
+                ))));
     if (confirmed == true && mounted) {
       await _change(() => deleteConfigGroup(_content, name));
     }
@@ -321,7 +323,8 @@ Future<String?> _ruleDialog(
         builder: (_) => ProxyEditAccess.inherit(
             context,
             (context) => StatefulBuilder(
-                builder: (context, update) => AlertDialog(
+                builder: (context, update) => DialogTypography(
+                        child: AlertDialog(
                       title: Text(initial == null ? '新增规则' : '编辑规则',
                           style: Theme.of(context)
                               .textTheme
@@ -479,7 +482,7 @@ Future<String?> _ruleDialog(
                                   },
                             child: const Text('保存'))
                       ],
-                    ))));
+                    )))));
   } finally {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expression.dispose();
@@ -517,7 +520,8 @@ Future<String?> _groupDialog(
         builder: (_) => ProxyEditAccess.inherit(
             context,
             (context) => StatefulBuilder(
-                builder: (context, update) => AlertDialog(
+                builder: (context, update) => DialogTypography(
+                        child: AlertDialog(
                       title: Text(initial == null ? '新增代理组' : '编辑代理组',
                           style: Theme.of(context)
                               .textTheme
@@ -718,7 +722,7 @@ Future<String?> _groupDialog(
                                   },
                             child: const Text('保存'))
                       ],
-                    ))));
+                    )))));
   } finally {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     filter.dispose();

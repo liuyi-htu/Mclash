@@ -1,3 +1,4 @@
+import '../shared/dialog_typography.dart';
 import '../shared/rule_provider_page.dart';
 import '../shared/app_appearance.dart';
 import '../shared/management_style.dart';
@@ -88,7 +89,8 @@ class _ConfigPageState extends State<ConfigPage> {
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DialogTypography(
+          child: AlertDialog(
         title: Text(message),
         content: Text(
           '配置已保存，新配置将在下次启动时应用。',
@@ -99,7 +101,7 @@ class _ConfigPageState extends State<ConfigPage> {
             child: const Text('确定'),
           ),
         ],
-      ),
+      )),
     );
   }
 
@@ -144,7 +146,8 @@ class _ConfigPageState extends State<ConfigPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
+        builder: (dialogContext, setDialogState) => DialogTypography(
+            child: AlertDialog(
           title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
           content: SizedBox(
             width: 480,
@@ -306,7 +309,7 @@ class _ConfigPageState extends State<ConfigPage> {
               child: Text(existing == null ? '添加并下载' : '保存并更新'),
             ),
           ],
-        ),
+        )),
       ),
     );
     final save =
@@ -371,7 +374,8 @@ class _ConfigPageState extends State<ConfigPage> {
     if (!_ensureStopped()) return;
     final confirmed = await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
+          builder: (dialogContext) => DialogTypography(
+              child: AlertDialog(
             title: const Text('删除配置'),
             content: Text('确定删除“${profile.name}”吗？'),
             actions: [
@@ -384,7 +388,7 @@ class _ConfigPageState extends State<ConfigPage> {
                 child: const Text('删除'),
               ),
             ],
-          ),
+          )),
         ) ??
         false;
     if (!confirmed) return;
@@ -414,7 +418,8 @@ class _ConfigPageState extends State<ConfigPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => DialogTypography(
+          child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           child: Column(
@@ -449,8 +454,8 @@ class _ConfigPageState extends State<ConfigPage> {
                         Text(
                           profile.name,
                           style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -504,7 +509,7 @@ class _ConfigPageState extends State<ConfigPage> {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -517,7 +522,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final route = DialogRoute<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
+        builder: (dialogContext, setDialogState) => DialogTypography(
+            child: AlertDialog(
           title: Text('配置名称',
               style: Theme.of(dialogContext)
                   .textTheme
@@ -554,7 +560,7 @@ class _ConfigPageState extends State<ConfigPage> {
               child: const Text('保存'),
             ),
           ],
-        ),
+        )),
       ),
     );
     final shouldSave =
@@ -749,7 +755,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final name = profile.subscriptionNameFor(link, links.indexOf(link));
     final confirmed = await showDialog<bool>(
             context: context,
-            builder: (dialogContext) => AlertDialog(
+            builder: (dialogContext) => DialogTypography(
+                    child: AlertDialog(
                   title: const Text('删除机场'),
                   content: Text(
                       '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
@@ -761,7 +768,7 @@ class _ConfigPageState extends State<ConfigPage> {
                         onPressed: () => Navigator.of(dialogContext).pop(true),
                         child: const Text('删除')),
                   ],
-                )) ??
+                ))) ??
         false;
     if (!confirmed || !mounted) return;
     await _applyAirportChange(() => links.length == 1
@@ -779,7 +786,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final route = DialogRoute<String>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
-              builder: (dialogContext, setDialogState) => AlertDialog(
+              builder: (dialogContext, setDialogState) => DialogTypography(
+                  child: AlertDialog(
                 title: Text(link == null ? '添加机场' : '编辑机场',
                     style: Theme.of(dialogContext)
                         .textTheme
@@ -867,7 +875,7 @@ class _ConfigPageState extends State<ConfigPage> {
                             },
                       child: Text(link == null ? '添加' : '保存并更新')),
                 ],
-              ),
+              )),
             ));
     final action = await Navigator.of(context, rootNavigator: true).push(route);
     await route.completed;
@@ -954,7 +962,8 @@ class _ConfigPageState extends State<ConfigPage> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => DialogTypography(
+          child: SafeArea(
         child: ConstrainedBox(
           constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
@@ -1015,7 +1024,7 @@ class _ConfigPageState extends State<ConfigPage> {
             ),
           ),
         ),
-      ),
+      )),
     );
 
     if (!mounted) return;

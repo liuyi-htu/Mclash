@@ -378,32 +378,43 @@ class PulseBottomBar extends StatelessWidget {
   }
 }
 
+/// Keeps page headers and content beside the navigation rail.
 class PulseNavigation extends StatelessWidget {
   const PulseNavigation(
       {super.key,
       required this.index,
       required this.onSelected,
+      this.appBar,
       required this.child});
   final int index;
   final ValueChanged<int> onSelected;
+  final PreferredSizeWidget? appBar;
   final Widget child;
   @override
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
-        if (constraints.maxWidth < 720) return child;
-        return Row(children: [
-          NavigationRail(
-              selectedIndex: index,
-              labelType: NavigationRailLabelType.all,
-              onDestinationSelected: onSelected,
-              destinations: [
-                for (var i = 0; i < PulseBottomBar.labels.length; i++)
-                  NavigationRailDestination(
-                      icon: PulseIcon(PulseBottomBar.icons[i]),
-                      label: Text(PulseBottomBar.labels[i]))
-              ]),
-          const VerticalDivider(width: 1),
-          Expanded(child: child)
-        ]);
+        final page = Scaffold(appBar: appBar, body: child);
+        return SafeArea(
+          top: false,
+          bottom: false,
+          child: Row(children: [
+            SafeArea(
+              left: false,
+              right: false,
+              child: NavigationRail(
+                  selectedIndex: index,
+                  labelType: NavigationRailLabelType.all,
+                  onDestinationSelected: onSelected,
+                  destinations: [
+                    for (var i = 0; i < PulseBottomBar.labels.length; i++)
+                      NavigationRailDestination(
+                          icon: PulseIcon(PulseBottomBar.icons[i]),
+                          label: Text(PulseBottomBar.labels[i]))
+                  ]),
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: page)
+          ]),
+        );
       });
 }
