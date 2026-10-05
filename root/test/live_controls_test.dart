@@ -11,6 +11,9 @@ import 'package:mclash/pages/proxy_panel_page.dart';
 class _Controller extends HttpOverrides {
   final writes = <Map<String, Object>>[];
   String mode = 'rule';
+  int failedModeReads = 0;
+  bool failPersistence = false;
+  Completer<Map<String, Object>>? pendingModeRead;
 
   @override
   HttpClient createHttpClient(SecurityContext? context) => _Client(this);
@@ -19,9 +22,18 @@ class _Controller extends HttpOverrides {
     if (method == 'PATCH' || method == 'PUT') {
       writes
           .add({'method': method, 'path': url.path, 'body': jsonDecode(body)});
+      if (method == 'PATCH' && url.path == '/configs') {
+        mode = (jsonDecode(body) as Map)['mode'] as String;
+      }
       return {};
     }
-    if (url.path == '/configs') return {'mode': mode};
+    if (url.path == '/configs') {
+      if (failedModeReads > 0) {
+        failedModeReads--;
+        throw const SocketException('controller not ready');
+      }
+      return {'mode': mode};
+    }
     if (url.path == '/proxies') {
       return {
         'proxies': {
@@ -80,8 +92,14 @@ class _Request extends Fake implements HttpClientRequest {
   @override
   void write(Object? value) => body.write(value);
   @override
-  Future<HttpClientResponse> close() async =>
-      _Response(controller.respond(method, url, body.toString()));
+  Future<HttpClientResponse> close() async {
+    if (method == 'GET' &&
+        url.path == '/configs' &&
+        controller.pendingModeRead != null) {
+      return _Response(await controller.pendingModeRead!.future);
+    }
+    return _Response(controller.respond(method, url, body.toString()));
+  }
 }
 
 class _Response extends Stream<List<int>> implements HttpClientResponse {
@@ -104,16 +122,20 @@ void main() {
   HttpOverrides? previous;
   var running = true;
   final rememberedModes = <String>[];
+  final nativeCalls = <String>[];
 
   setUp(() {
     running = true;
     rememberedModes.clear();
+    nativeCalls.clear();
     previous = HttpOverrides.current;
     controller = _Controller();
     HttpOverrides.global = controller;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      nativeCalls.add(call.method);
       if (call.method == 'rememberProxyMode') {
+        if (controller.failPersistence) throw StateError('storage unavailable');
         rememberedModes.add(call.arguments['mode'] as String);
       }
       return switch (call.method) {
@@ -275,6 +297,114 @@ void main() {
     await tester.pumpAndSettle();
     expect(rememberedModes, contains('global'));
     expect(find.text('全局模式'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'reopening with a continuously running service retries mode reads',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    expect(find.text('规则模式'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    controller.mode = 'global'; // Dashboard changes the still-running core.
+    controller.failedModeReads = 2;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    expect(find.text('规则模式'), findsNothing);
+    expect(find.text('读取模式中…'), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('全局模式'), findsOneWidget);
+    expect(controller.mode, 'global');
+    expect(controller.writes, isEmpty);
+    expect(nativeCalls, isNot(contains('start')));
+    expect(nativeCalls, isNot(contains('restart')));
+    expect(nativeCalls, isNot(contains('stop')));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('foreground polling reflects dashboard edits without restarting',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    for (final mode in ['global', 'direct', 'rule']) {
+      controller.mode = mode;
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(
+          find.text(
+              {'global': '全局模式', 'direct': '直连模式', 'rule': '规则模式'}[mode]!),
+          findsOneWidget);
+    }
+    expect(controller.writes, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('live mode remains visible when persistence fails',
+      (tester) async {
+    controller.mode = 'direct';
+    controller.failPersistence = true;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    expect(find.text('直连模式'), findsOneWidget);
+    expect(find.text('规则模式'), findsNothing);
+    expect(controller.writes, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a late mode read cannot undo the user selection',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('代理规则'));
+    await tester.pumpAndSettle();
+    controller.pendingModeRead = Completer<Map<String, Object>>();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    await tester.tap(find.text('全局模式'));
+    await tester.pumpAndSettle();
+    controller.pendingModeRead!.complete({'mode': 'rule'});
+    controller.pendingModeRead = null;
+    await tester.pumpAndSettle();
+    expect(find.text('全局模式'), findsOneWidget);
+    expect(controller.mode, 'global');
+    expect(rememberedModes.last, 'global');
+    expect(controller.writes.single['body'], {'mode': 'global'});
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a successful core mode change survives a persistence failure',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('代理规则'));
+    await tester.pumpAndSettle();
+    controller.failPersistence = true;
+    await tester.tap(find.text('全局模式'));
+    await tester.pumpAndSettle();
+    expect(find.text('全局模式'), findsOneWidget);
+    expect(controller.mode, 'global');
+    expect(controller.writes.single['body'], {'mode': 'global'});
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('invalid controller mode is not normalized to rule',
+      (tester) async {
+    controller.mode = 'invalid';
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    expect(find.text('规则模式'), findsNothing);
+    expect(rememberedModes, isEmpty);
+    await tester.tap(find.text('代理规则'));
+    await tester.pumpAndSettle();
+    expect(find.text('选择运行模式'), findsNothing);
+    expect(find.textContaining('无法读取当前运行模式'), findsOneWidget);
+    expect(controller.writes, isEmpty);
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
 
