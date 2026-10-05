@@ -1073,7 +1073,7 @@ class _DelayBadge extends StatelessWidget {
         style: TextStyle(
           color: _delayColor(colors, delay),
           fontSize: 12,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.normal,
         ),
       ),
     );
