@@ -32,7 +32,7 @@ internal object MihomoProcess {
 
     fun previewConfig(context: Context, source: File): String {
         val settings = AppPreferences(context)
-        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled)
+        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode)
     }
 
     fun validateConfig(context: Context, source: File) = validateWithBinary(context, source, binary(context))

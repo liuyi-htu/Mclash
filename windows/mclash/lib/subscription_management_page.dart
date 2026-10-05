@@ -182,37 +182,41 @@ class _SubscriptionManagementPageState
                                           widget.onDelete!(_profile, links[i]))
                                       : null,
                                 ),
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  enabled: editable,
+                                  child: SizedBox(
+                                      width: 48,
+                                      height: 48,
+                                      child: Icon(Icons.drag_handle,
+                                          size: 22,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant)),
+                                ),
                               ]),
-                              Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ReorderableDragStartListener(
-                                      index: i,
-                                      enabled: canModify,
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(
-                                            0, 6, 12, 6),
-                                        child: Icon(Icons.drag_handle,
-                                            size: 22,
+                              ScrollConfiguration(
+                                behavior: ScrollConfiguration.of(context)
+                                    .copyWith(scrollbars: false),
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Text(
+                                    subscriptionUsageSummary(_profile
+                                            .subscriptionInfoFor(links[i]))
+                                        .replaceAll('\n', '    '),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
                                             color: Theme.of(context)
                                                 .colorScheme
-                                                .onSurfaceVariant),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                          subscriptionUsageSummary(_profile
-                                              .subscriptionInfoFor(links[i])),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                  height: 1.5)),
-                                    ),
-                                  ]),
+                                                .onSurfaceVariant,
+                                            height: 1.5),
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),

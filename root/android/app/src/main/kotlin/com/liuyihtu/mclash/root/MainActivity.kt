@@ -72,6 +72,12 @@ class MainActivity : FlutterActivity() {
                     preferences.acceptedUsageNoticeVersion = USAGE_NOTICE_VERSION
                     result.success(null)
                 }
+                "rememberProxyMode" -> {
+                    val mode = call.argument<String>("mode") ?: error("缺少运行模式")
+                    require(RootRuntimeMode.valid(mode)) { "无效运行模式" }
+                    preferences.coreMode = mode
+                    result.success(null)
+                }
                 "getDeveloperModeEnabled" -> result.success(preferences.developerModeEnabled)
                 "enableDeveloperMode" -> {
                     preferences.developerModeEnabled = true

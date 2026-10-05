@@ -207,7 +207,7 @@ rules: ["MATCH,DIRECT"]
     await tester.longPress(find.text('Airport'));
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsNothing);
+    expect(find.text('剩余流量：1.00 GB    到期时间：不限时'), findsNothing);
     expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
       '规则管理',
@@ -675,7 +675,7 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('修改订阅'), findsNothing);
     expect(find.text('更新订阅'), findsNothing);
     expect(find.text('检测订阅链接'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：1.00 GB    到期时间：不限时'), findsOneWidget);
     await tester.tap(find.text('1 · Airport'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNWidgets(2));
@@ -711,8 +711,8 @@ rules: ["MATCH,DIRECT"]
     await openAirports(tester);
     expect(find.text('1 · 第一机场'), findsOneWidget);
     expect(find.text('2 · 第二机场'), findsOneWidget);
-    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
-    expect(find.text('剩余流量：2.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：1.00 GB    到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：2.00 GB    到期时间：不限时'), findsOneWidget);
     await tester.tap(find.text('2 · 第二机场'));
     await tester.pumpAndSettle();
     expect(
@@ -792,7 +792,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.text('1 · 第一机场'), findsOneWidget);
     expect(find.text('2 · 第二机场'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB\n到期时间：不限时'), findsOneWidget);
+    expect(find.text('剩余流量：1.00 GB    到期时间：不限时'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

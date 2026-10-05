@@ -5,6 +5,19 @@ import org.junit.Test
 import org.yaml.snakeyaml.Yaml
 
 class RootRuntimeConfigTest {
+    @Test fun rememberedDashboardModeSurvivesRuntimeRegeneration() {
+        val source = "mode: rule\nproxies: []\nrules: ['MATCH,DIRECT']"
+        for (mode in listOf("global", "direct", "rule")) {
+            val runtime = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build(source, false, mode))
+            assertEquals(mode, runtime["mode"])
+            assertEquals(listOf("MATCH,DIRECT"), runtime["rules"])
+        }
+        val invalid = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build(source, false, "invalid"))
+        assertEquals("rule", invalid["mode"])
+        val unchanged = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build(source, false))
+        assertEquals("rule", unchanged["mode"])
+    }
+
     @Test fun runtimeOverridesConflictingListenersButRetainsRoutingAndUpstreamDns() {
         val source = """
             mixed-port: 9999

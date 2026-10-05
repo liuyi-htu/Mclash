@@ -118,9 +118,17 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
                     ManagementCard(
                         child: ListTile(
                       title: Text('链式节点 ${entry.key}'),
-                      subtitle: Text(
-                          '${entry.value['front']!.join(' → ')}\n作用节点：${(entry.value['frontTargets'] ?? []).join('、')}'),
-                      isThreeLine: true,
+                      subtitle: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context)
+                            .copyWith(scrollbars: false),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Text(
+                              '前置节点：${entry.value['front']!.join(' → ')}    作用节点：${(entry.value['frontTargets'] ?? []).join('、')}',
+                              maxLines: 1,
+                              softWrap: false),
+                        ),
+                      ),
                       trailing: ManagementDeleteButton(
                         tooltip: '删除链式节点',
                         onPressed: _saving ? null : () => _delete(entry.key),

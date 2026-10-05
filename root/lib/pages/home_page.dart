@@ -380,7 +380,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final configs = await _proxyControllerRequest('GET');
       final mode = configs['mode']?.toString().toLowerCase();
       if (!mounted || mode == null) return;
-      setState(() => _proxyMode = _normalProxyMode(mode));
+      await _service.rememberProxyMode(_normalProxyMode(mode));
+      if (mounted) setState(() => _proxyMode = _normalProxyMode(mode));
     } catch (_) {
       // Keep the last known mode while mihomo is still becoming available.
     }
@@ -398,6 +399,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         'PATCH',
         body: <String, Object>{'mode': mode},
       );
+      await _service.rememberProxyMode(mode);
     } catch (error) {
       if (!mounted) return;
       setState(() => _proxyMode = previous);

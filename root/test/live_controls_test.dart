@@ -10,6 +10,7 @@ import 'package:mclash/pages/proxy_panel_page.dart';
 
 class _Controller extends HttpOverrides {
   final writes = <Map<String, Object>>[];
+  String mode = 'rule';
 
   @override
   HttpClient createHttpClient(SecurityContext? context) => _Client(this);
@@ -20,7 +21,7 @@ class _Controller extends HttpOverrides {
           .add({'method': method, 'path': url.path, 'body': jsonDecode(body)});
       return {};
     }
-    if (url.path == '/configs') return {'mode': 'rule'};
+    if (url.path == '/configs') return {'mode': mode};
     if (url.path == '/proxies') {
       return {
         'proxies': {
@@ -102,14 +103,19 @@ void main() {
   late _Controller controller;
   HttpOverrides? previous;
   var running = true;
+  final rememberedModes = <String>[];
 
   setUp(() {
     running = true;
+    rememberedModes.clear();
     previous = HttpOverrides.current;
     controller = _Controller();
     HttpOverrides.global = controller;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'rememberProxyMode') {
+        rememberedModes.add(call.arguments['mode'] as String);
+      }
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => false,
@@ -241,6 +247,7 @@ void main() {
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle();
     }
+    expect(rememberedModes, containsAllInOrder(['global', 'direct', 'rule']));
     expect(controller.writes, [
       {
         'method': 'PATCH',
@@ -258,6 +265,16 @@ void main() {
         'body': {'mode': 'rule'}
       },
     ]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('dashboard mode is remembered when the app reopens',
+      (tester) async {
+    controller.mode = 'global';
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    expect(rememberedModes, contains('global'));
+    expect(find.text('全局模式'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
