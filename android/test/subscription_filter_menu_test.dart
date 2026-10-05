@@ -104,7 +104,7 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpWidget(MaterialApp(
           key: ValueKey(index), home: const ConfigPage(proxyRunning: false)));
       await tester.pumpAndSettle();
-      await tester.longPress(find.text('Airport').first);
+      await tester.tap(find.text('Airport').first);
       await tester.pumpAndSettle();
       final expected =
           index == 1 ? ['规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点'] : defaults;
@@ -139,7 +139,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.text('修改配置名称')).dy,
         greaterThan(tester.getTopLeft(find.byType(Divider).first).dy));
@@ -178,7 +178,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
     await tester.ensureVisible(find.text('规则管理').last);
@@ -204,7 +204,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: true)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
     expect(
@@ -243,7 +243,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
@@ -289,7 +289,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
@@ -352,7 +352,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改 Host'));
     await tester.tap(find.text('修改 Host'));
@@ -403,7 +403,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
@@ -441,7 +441,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
@@ -498,7 +498,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('链式节点').last);
     await tester.tap(find.text('链式节点').last);
@@ -583,7 +583,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('链式节点').last);
     await tester.tap(find.text('链式节点').last);
@@ -622,7 +622,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('订阅管理'));
     await tester.tap(find.text('订阅管理'));

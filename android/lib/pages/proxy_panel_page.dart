@@ -647,6 +647,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                           context,
                                           constraints.maxWidth,
                                           spacing: 10,
+                                          nodeCards: true,
                                         ),
                                         itemBuilder: (context, index) {
                                           final liveGroup = _groups.firstWhere(
@@ -860,8 +861,12 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
   double width, {
   required double spacing,
   double extraHeight = 0,
+  bool nodeCards = false,
 }) {
-  final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
+  final baseline = nodeCards && AppearanceScope.maybeOf(context) != null
+      ? AppearanceController.fontSizeBaseline
+      : 1.0;
+  final textScale = MediaQuery.textScalerOf(context).scale(15) / 15 / baseline;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
   final columns =
       ((width + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
@@ -955,7 +960,7 @@ class _SelectedNodeDetails extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),

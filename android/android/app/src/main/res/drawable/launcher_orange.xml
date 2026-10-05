@@ -1,0 +1,1 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item><shape><solid android:color="#F4EAE3"/><corners android:radius="24dp"/><size android:width="108dp" android:height="108dp"/></shape></item><item android:drawable="@drawable/launcher_foreground_orange"/></layer-list>

@@ -101,8 +101,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('配置0'), findsNothing);
     expect(tester.widget<TextButton>(toggle).onPressed, isNull);
-    await tester.tap(find.text('配置29'));
-    await tester.pumpAndSettle();
+    final cardInk = find
+        .descendant(
+            of: find.byKey(const ValueKey('config-card-29')),
+            matching: find.byType(InkWell))
+        .first;
+    expect(tester.widget<InkWell>(cardInk).onLongPress, isNull);
     expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(find.text('配置0'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -147,6 +151,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('配置2'), findsNothing);
     expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('stack body opens management and only top right button expands',
+      (tester) async {
+    final service =
+        _Service(() => [profile(1, active: true), profile(2)], (_) {});
+    await tester.pumpWidget(
+        MaterialApp(home: ConfigPage(proxyRunning: false, service: service)));
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const ValueKey('toggle-config-stack'));
+    final card = find.byKey(const ValueKey('config-card-1'));
+    expect(tester.getCenter(toggle).dx, greaterThan(tester.getCenter(card).dx));
+    expect(tester.getTopLeft(toggle).dy - tester.getTopLeft(card).dy,
+        lessThan(30));
+    await tester.tap(find.text('配置1'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
+    expect(find.text('配置2'), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('配置2'), findsOneWidget);
+    expect(find.byTooltip('管理配置'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 }

@@ -1068,15 +1068,15 @@ class _ConfigPageState extends State<ConfigPage> {
       key: ValueKey('config-card-${profile.id}'),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: _working || (stacked && widget.proxyRunning)
+        onTap: _working
             ? null
             : () {
                 if (!stacked && profile.active && _profiles.length > 1) {
                   setState(() => _profilesExpanded = false);
                   return;
                 }
-                if (stacked) {
-                  setState(() => _profilesExpanded = true);
+                if (stacked || _profiles.length == 1) {
+                  _showActions(profile);
                   return;
                 }
                 if (widget.proxyRunning || profile.active) {
@@ -1085,7 +1085,6 @@ class _ConfigPageState extends State<ConfigPage> {
                   _select(profile);
                 }
               },
-        onLongPress: _working ? null : () => _showActions(profile),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child:
@@ -1113,6 +1112,12 @@ class _ConfigPageState extends State<ConfigPage> {
                           : () => setState(() => _profilesExpanded = true),
                       child: const Text('展开'),
                     ),
+                  if (!stacked && _profiles.length > 1)
+                    IconButton(
+                      tooltip: '管理配置',
+                      icon: const Icon(Icons.more_horiz, size: 20),
+                      onPressed: _working ? null : () => _showActions(profile),
+                    ),
                 ])),
             const SizedBox(height: 4),
             ConstrainedBox(
@@ -1123,8 +1128,8 @@ class _ConfigPageState extends State<ConfigPage> {
                   Expanded(
                     child: Text(
                         profile.isSubscription
-                            ? '${_airportLinks(profile).length} 个机场 · 长按管理'
-                            : '本地 YAML · 长按管理',
+                            ? '${_airportLinks(profile).length} 个机场${stacked || _profiles.length == 1 ? ' · 点按管理' : ''}'
+                            : '本地 YAML${stacked || _profiles.length == 1 ? ' · 点按管理' : ''}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall),
