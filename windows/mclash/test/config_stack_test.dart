@@ -49,9 +49,17 @@ void main() {
     expect(find.text('配置2'), findsOneWidget);
     expect(find.text('配置1'), findsNothing);
     expect(find.text('配置3'), findsNothing);
+    final cardHeight =
+        tester.getSize(find.byKey(const ValueKey('config-card-2'))).height;
     final toggle = find.byKey(const ValueKey('toggle-config-stack'));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
+    for (final id in ['1', '2', '3']) {
+      expect(tester.getSize(find.byKey(ValueKey('config-card-$id'))).height,
+          closeTo(cardHeight, .1));
+    }
+    expect(find.text('收起'), findsNothing);
+    expect(find.text('3 个配置'), findsNothing);
     expect(tester.getTopLeft(find.text('配置2')).dy,
         lessThan(tester.getTopLeft(find.text('配置1')).dy));
     expect(tester.getTopLeft(find.text('配置1')).dy,
@@ -92,7 +100,12 @@ void main() {
     await tester.tap(toggle);
     await tester.pumpAndSettle();
     expect(find.text('配置0'), findsOneWidget);
-    await tester.tap(toggle);
+    expect(
+        tester.getSize(find.byKey(const ValueKey('config-card-0'))).height,
+        closeTo(
+            tester.getSize(find.byKey(const ValueKey('config-card-29'))).height,
+            .1));
+    await tester.tap(find.text('配置29'));
     await tester.pumpAndSettle();
     expect(find.text('配置0'), findsNothing);
     expect(tester.takeException(), isNull);

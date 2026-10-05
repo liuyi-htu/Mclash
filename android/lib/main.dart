@@ -11,20 +11,51 @@ void main() {
   runApp(const MclashApp());
 }
 
-class MclashApp extends StatelessWidget {
+class MclashApp extends StatefulWidget {
   const MclashApp({super.key});
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'Mclash',
-        locale: const Locale('zh', 'CN'),
-        supportedLocales: const [Locale('zh', 'CN')],
-        localizationsDelegates: GlobalMaterialLocalizations.delegates,
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.system,
-        theme: buildPulseTheme(Brightness.light),
-        darkTheme: buildPulseTheme(Brightness.dark),
-        builder: (context, child) => WindowSafeArea(child: child!),
-        home: const HomePage(),
+  State<MclashApp> createState() => _MclashAppState();
+}
+
+class _MclashAppState extends State<MclashApp> {
+  final _appearance = AppearanceController();
+  @override
+  void initState() {
+    super.initState();
+    _appearance.load();
+  }
+
+  @override
+  void dispose() {
+    _appearance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: _appearance,
+        builder: (context, _) => AppearanceScope(
+            controller: _appearance,
+            child: MaterialApp(
+              title: 'Mclash',
+              locale: const Locale('zh', 'CN'),
+              supportedLocales: const [Locale('zh', 'CN')],
+              localizationsDelegates: GlobalMaterialLocalizations.delegates,
+              debugShowCheckedModeBanner: false,
+              themeMode: ThemeMode.system,
+              theme: buildPulseTheme(Brightness.light,
+                  seedColor: _appearance.color),
+              darkTheme: buildPulseTheme(Brightness.dark,
+                  seedColor: _appearance.color),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                    textScaler: AppearanceTextScaler(
+                        MediaQuery.textScalerOf(context),
+                        _appearance.fontScale)),
+                child: WindowSafeArea(child: child!),
+              ),
+              home: const HomePage(),
+            )),
       );
 }

@@ -1122,12 +1122,6 @@ class _StoppedHint extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '代理面板需要连接本机 mihomo controller 后才能读取代理组和测速。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
               ],
             ),
           ),
