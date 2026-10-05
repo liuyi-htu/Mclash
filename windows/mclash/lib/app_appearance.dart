@@ -174,7 +174,6 @@ class AppearanceController extends ChangeNotifier {
         fontScale = relativeScale.clamp(.7, 1.3);
       }
       if (!_disposed) notifyListeners();
-      await _syncLauncherIcon(color);
     } catch (_) {
       // Missing or damaged preferences leave the default appearance usable.
     }
@@ -187,16 +186,7 @@ class AppearanceController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _syncLauncherIcon(Color color) async {
-    if (!Platform.isAndroid) return;
-    await const MethodChannel('mclash/native').invokeMethod<void>(
-      'setThemeIcon',
-      {'color': color.toARGB32()},
-    );
-  }
-
   Future<void> save() {
-    final savedColor = color;
     final data = jsonEncode({
       'color': color.toARGB32(),
       'fontScale': fontScale,
@@ -210,7 +200,6 @@ class AppearanceController extends ChangeNotifier {
       final temporary = File('${file.path}.tmp');
       await temporary.writeAsString(data, flush: true);
       await temporary.rename(file.path);
-      await _syncLauncherIcon(savedColor);
     });
     _writes = next.catchError((Object _) {});
     return next;
