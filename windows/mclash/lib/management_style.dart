@@ -91,24 +91,28 @@ class ManagementMenuTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final color = destructive ? colors.error : colors.primary;
     return ListTile(
-      minTileHeight: 60,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+      minTileHeight: 52,
+      horizontalTitleGap: 12,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       leading: Container(
-        width: 38,
-        height: 38,
+        width: 32,
+        height: 32,
         decoration: BoxDecoration(
           color: color.withValues(alpha: enabled ? 0.09 : 0.04),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon,
-            size: 21,
+            size: 18,
             color: enabled ? color : colors.onSurface.withValues(alpha: 0.38)),
       ),
       title: Text(title,
-          style: TextStyle(
-              fontSize: 16,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontWeight: FontWeight.w500,
-              color: enabled && destructive ? colors.error : null)),
+              color: !enabled
+                  ? colors.onSurface.withValues(alpha: 0.38)
+                  : destructive
+                      ? colors.error
+                      : colors.onSurface)),
       enabled: enabled,
       onTap: onTap,
     );
