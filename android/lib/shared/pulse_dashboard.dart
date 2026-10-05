@@ -2,45 +2,75 @@ import 'package:flutter/material.dart';
 import 'pulse_icons.dart';
 
 PreferredSizeWidget pulseAppBar(BuildContext context,
-    {required String badge, String title = 'Mclash'}) {
+    {String badge = '',
+    String title = 'Mclash',
+    List<Widget> actions = const [],
+    PreferredSizeWidget? bottom}) {
   final colors = Theme.of(context).colorScheme;
   final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
   return PreferredSize(
-      preferredSize: Size.fromHeight(22 + titleHeight + 14),
-      child: SafeArea(
-          bottom: false,
-          child: Padding(
+    preferredSize: Size.fromHeight(
+        22 + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
+    child: SafeArea(
+        bottom: false,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
               padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
-              child: Row(children: [
-                Text(title,
-                    style: TextStyle(
-                        fontFamily:
-                            Theme.of(context).textTheme.titleMedium?.fontFamily,
-                        fontSize: 23,
-                        height: 1.45,
-                        fontWeight: FontWeight.lerp(
-                            FontWeight.w600, FontWeight.w700, .5),
-                        letterSpacing: -.5,
-                        color: colors.onSurface)),
-                if (title == 'Mclash') ...[
-                  const SizedBox(width: 9),
-                  Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(
-                          color: colors.primaryContainer,
-                          borderRadius: BorderRadius.circular(10)),
-                      child: Text(badge,
-                          style: TextStyle(
-                              fontFamily: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.fontFamily,
-                              fontSize: 11,
-                              height: 1.45,
-                              color: colors.primary)))
-                ],
-              ]))));
+              child: SizedBox(
+                  height: titleHeight,
+                  child: Row(children: [
+                    Expanded(
+                        child: Row(children: [
+                      Flexible(
+                          child: Text(title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontFamily: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.fontFamily,
+                                  fontSize: 23,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.lerp(
+                                      FontWeight.w600, FontWeight.w700, .5),
+                                  letterSpacing: -.5,
+                                  color: colors.onSurface))),
+                      if (title == 'Mclash') ...[
+                        const SizedBox(width: 9),
+                        Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: colors.primaryContainer,
+                                borderRadius: BorderRadius.circular(10)),
+                            child: Text(badge,
+                                style: TextStyle(
+                                    fontFamily: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.fontFamily,
+                                    fontSize: 11,
+                                    height: 1.45,
+                                    color: colors.primary))),
+                      ],
+                    ])),
+                    if (actions.isNotEmpty)
+                      Theme(
+                          data: Theme.of(context).copyWith(
+                              iconButtonTheme: IconButtonThemeData(
+                                  style: IconButton.styleFrom(
+                                      minimumSize: const Size(40, 32),
+                                      padding: EdgeInsets.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap))),
+                          child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions)),
+                  ]))),
+          if (bottom != null) bottom,
+        ])),
+  );
 }
 
 class PulseDashboard extends StatelessWidget {
@@ -105,17 +135,34 @@ class PulseDashboard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis),
                       ])),
                   const SizedBox(width: 10),
-                  Material(
-                      color: colors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
-                      child: IconButton(
-                          onPressed: busy ? null : onToggle,
-                          tooltip: running ? '停止服务' : '启动服务',
-                          constraints: const BoxConstraints.tightFor(
-                              width: 48, height: 48),
-                          padding: EdgeInsets.zero,
-                          icon: PulseIcon(Icons.power_settings_new,
-                              color: colors.primary))),
+                  Semantics(
+                    toggled: running,
+                    child: Material(
+                        key: const ValueKey('service-toggle'),
+                        color: running && !busy
+                            ? colors.primary
+                            : colors.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(16),
+                        child: IconButton(
+                            onPressed: busy ? null : onToggle,
+                            tooltip: busy
+                                ? '处理中'
+                                : running
+                                    ? '停止服务'
+                                    : '启动服务',
+                            constraints: const BoxConstraints.tightFor(
+                                width: 48, height: 48),
+                            padding: EdgeInsets.zero,
+                            icon: busy
+                                ? SizedBox.square(
+                                    dimension: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: colors.primary))
+                                : PulseIcon(Icons.power_settings_new,
+                                    color: running
+                                        ? colors.onPrimary
+                                        : colors.onSurfaceVariant))),
+                  ),
                 ]),
               ),
               const SizedBox(height: 14),

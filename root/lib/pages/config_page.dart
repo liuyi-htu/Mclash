@@ -43,6 +43,12 @@ class _ConfigPageState extends State<ConfigPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant ConfigPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.proxyRunning) _profilesExpanded = false;
+  }
+
   Future<void> _load() async {
     try {
       final profiles = await _service.getConfigs();
@@ -1069,8 +1075,8 @@ class _ConfigPageState extends State<ConfigPage> {
                   setState(() => _profilesExpanded = false);
                   return;
                 }
-                if (stacked) {
-                  setState(() => _profilesExpanded = true);
+                if (stacked || _profiles.length == 1) {
+                  _showActions(profile);
                   return;
                 }
                 if (widget.proxyRunning || profile.active) {
@@ -1079,7 +1085,6 @@ class _ConfigPageState extends State<ConfigPage> {
                   _select(profile);
                 }
               },
-        onLongPress: _working ? null : () => _showActions(profile),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child:
@@ -1102,10 +1107,16 @@ class _ConfigPageState extends State<ConfigPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           textStyle: Theme.of(context).textTheme.bodyMedium),
-                      onPressed: _working
+                      onPressed: _working || widget.proxyRunning
                           ? null
                           : () => setState(() => _profilesExpanded = true),
                       child: const Text('展开'),
+                    ),
+                  if (!stacked && _profiles.length > 1)
+                    IconButton(
+                      tooltip: '管理配置',
+                      icon: const Icon(Icons.more_horiz, size: 20),
+                      onPressed: _working ? null : () => _showActions(profile),
                     ),
                 ])),
             const SizedBox(height: 4),
@@ -1117,8 +1128,8 @@ class _ConfigPageState extends State<ConfigPage> {
                   Expanded(
                     child: Text(
                         profile.isSubscription
-                            ? '${_airportLinks(profile).length} 个机场 · 长按管理'
-                            : '本地 YAML · 长按管理',
+                            ? '${_airportLinks(profile).length} 个机场${stacked || _profiles.length == 1 ? ' · 点按管理' : ''}'
+                            : '本地 YAML${stacked || _profiles.length == 1 ? ' · 点按管理' : ''}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall),
@@ -1141,7 +1152,7 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget _configCards() {
     final profiles = _displayProfiles;
     if (profiles.length == 1) return _configCard(profiles.first);
-    if (_profilesExpanded) {
+    if (_profilesExpanded && !widget.proxyRunning) {
       return Column(children: [
         for (var i = 0; i < profiles.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),

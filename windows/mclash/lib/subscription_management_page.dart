@@ -192,9 +192,7 @@ class _SubscriptionManagementPageState
                           child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Text(
-                                  subscriptionUsageSummary(_profile
-                                          .subscriptionInfoFor(links[i]))
-                                      .replaceAll('\n', ' · '),
+                                  '${i + 1}. ${subscriptionUsageSummary(_profile.subscriptionInfoFor(links[i])).replaceAll('\n', ' · ')}',
                                   maxLines: 1,
                                   softWrap: false,
                                   style: TextStyle(

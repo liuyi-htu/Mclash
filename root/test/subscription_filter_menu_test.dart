@@ -104,7 +104,7 @@ rules: ["MATCH,DIRECT"]
       await tester.pumpWidget(MaterialApp(
           key: ValueKey(index), home: const ConfigPage(proxyRunning: false)));
       await tester.pumpAndSettle();
-      await tester.longPress(find.text('Airport').first);
+      await tester.tap(find.text('Airport').first);
       await tester.pumpAndSettle();
       final expected =
           index == 1 ? ['规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点'] : defaults;
@@ -139,7 +139,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.text('修改配置名称')).dy,
         greaterThan(tester.getTopLeft(find.byType(Divider).first).dy));
@@ -178,7 +178,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
     await tester.ensureVisible(find.text('规则管理').last);
@@ -204,13 +204,13 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: true)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('修改配置文件'), findsNothing);
     expect(
         find.descendant(
             of: find.byType(BottomSheet),
-            matching: find.text('剩余流量：1.00 GB · 到期时间：不限时')),
+            matching: find.text('1. 剩余流量：1.00 GB · 到期时间：不限时')),
         findsNothing);
     expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
@@ -243,7 +243,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
@@ -289,7 +289,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     expect(find.text('国内正则表达式'), findsNothing);
     expect(find.text('国外正则表达式'), findsNothing);
@@ -352,7 +352,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('修改 Host'));
     await tester.tap(find.text('修改 Host'));
@@ -403,7 +403,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
@@ -441,7 +441,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加节点'));
     await tester.pumpAndSettle();
@@ -498,7 +498,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('链式节点').last);
     await tester.tap(find.text('链式节点').last);
@@ -583,7 +583,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('链式节点').last);
     await tester.tap(find.text('链式节点').last);
@@ -622,7 +622,7 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Airport').first);
+    await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('订阅管理'));
     await tester.tap(find.text('订阅管理'));
@@ -679,7 +679,7 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('修改订阅'), findsNothing);
     expect(find.text('更新订阅'), findsNothing);
     expect(find.text('检测订阅链接'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
+    expect(find.text('1. 剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
     await tester.tap(find.text('Airport').last);
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNWidgets(2));
@@ -715,8 +715,8 @@ rules: ["MATCH,DIRECT"]
     await openAirports(tester);
     expect(find.text('第一机场'), findsOneWidget);
     expect(find.text('第二机场'), findsOneWidget);
-    expect(find.text('剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
-    expect(find.text('剩余流量：2.00 GB · 到期时间：不限时'), findsOneWidget);
+    expect(find.text('1. 剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
+    expect(find.text('2. 剩余流量：2.00 GB · 到期时间：不限时'), findsOneWidget);
     await tester.tap(find.text('第二机场'));
     await tester.pumpAndSettle();
     expect(
@@ -796,7 +796,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.text('第一机场'), findsOneWidget);
     expect(find.text('第二机场'), findsNothing);
-    expect(find.text('剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
+    expect(find.text('1. 剩余流量：1.00 GB · 到期时间：不限时'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

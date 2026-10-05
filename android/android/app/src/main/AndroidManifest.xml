@@ -36,11 +36,72 @@
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+
+        </activity>
+
+        <activity-alias android:name=".ThemeLauncherBlue" android:targetActivity=".MainActivity"
+            android:enabled="true" android:exported="true"
+            android:icon="@drawable/launcher_blue">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherPurple" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_purple">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherGreen" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_green">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherOrange" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_orange">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherPink" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_pink">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherCyan" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_cyan">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias android:name=".ThemeLauncherGray" android:targetActivity=".MainActivity"
+            android:enabled="false" android:exported="true"
+            android:icon="@drawable/launcher_gray">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
 
         <service

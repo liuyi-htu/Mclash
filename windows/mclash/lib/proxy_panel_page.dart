@@ -1,3 +1,4 @@
+import 'pulse_dashboard.dart';
 import 'app_appearance.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -650,6 +651,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                           context,
                                           constraints.maxWidth,
                                           spacing: 10,
+                                          nodeCards: true,
                                         ),
                                         itemBuilder: (context, index) {
                                           final liveGroup = _groups.firstWhere(
@@ -703,8 +705,9 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     final busy = _loading || _testingAllNodes;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('代理面板'),
+      appBar: pulseAppBar(
+        context,
+        title: '代理面板',
         bottom: widget.proxyRunning && _testingAllNodes
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(30),
@@ -862,8 +865,12 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
   double width, {
   required double spacing,
   double extraHeight = 0,
+  bool nodeCards = false,
 }) {
-  final textScale = MediaQuery.textScalerOf(context).scale(15) / 15;
+  final baseline = nodeCards && AppearanceScope.maybeOf(context) != null
+      ? AppearanceController.fontSizeBaseline
+      : 1.0;
+  final textScale = MediaQuery.textScalerOf(context).scale(15) / 15 / baseline;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
   final columns =
       ((width + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
@@ -957,7 +964,7 @@ class _SelectedNodeDetails extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),

@@ -103,14 +103,15 @@ void main() {
     final toggle = find.byKey(const ValueKey('toggle-config-stack'));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(find.text('配置0'), findsOneWidget);
-    expect(
-        tester.getSize(find.byKey(const ValueKey('config-card-0'))).height,
-        closeTo(
-            tester.getSize(find.byKey(const ValueKey('config-card-29'))).height,
-            .1));
-    await tester.tap(find.text('配置29'));
-    await tester.pumpAndSettle();
+    expect(find.text('配置0'), findsNothing);
+    expect(tester.widget<TextButton>(toggle).onPressed, isNull);
+    final cardInk = find
+        .descendant(
+            of: find.byKey(const ValueKey('config-card-29')),
+            matching: find.byType(InkWell))
+        .first;
+    expect(tester.widget<InkWell>(cardInk).onLongPress, isNull);
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(find.text('配置0'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -147,6 +148,68 @@ void main() {
     expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(find.text('配置1'), findsOneWidget);
     expect(find.text('配置2'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'starting proxy collapses an already expanded configuration stack',
+      (tester) async {
+    const channel = MethodChannel('mclash/native');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            channel,
+            (call) async => call.method == 'getConfigs'
+                ? [profile(1, active: true), profile(2)]
+                : null);
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-config-stack')));
+    await tester.pumpAndSettle();
+    expect(find.text('配置2'), findsOneWidget);
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: true)));
+    await tester.pumpAndSettle();
+    expect(find.text('配置2'), findsNothing);
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('stack body opens management and only top right button expands',
+      (tester) async {
+    const channel = MethodChannel('mclash/native');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            channel,
+            (call) async => call.method == 'getConfigs'
+                ? [profile(1, active: true), profile(2)]
+                : call.method == 'getConfigContent'
+                    ? 'proxies: []'
+                    : null);
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+    await tester
+        .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
+    await tester.pumpAndSettle();
+    final toggle = find.byKey(const ValueKey('toggle-config-stack'));
+    final card = find.byKey(const ValueKey('config-card-1'));
+    expect(tester.getCenter(toggle).dx, greaterThan(tester.getCenter(card).dx));
+    expect(tester.getTopLeft(toggle).dy - tester.getTopLeft(card).dy,
+        lessThan(30));
+    await tester.tap(find.text('配置1'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
+    expect(find.text('配置2'), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.text('配置2'), findsOneWidget);
+    expect(find.byTooltip('管理配置'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 }

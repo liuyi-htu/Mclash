@@ -71,6 +71,11 @@ class MainActivity : FlutterActivity() {
             if (call.method in MUTATING_METHODS) requireProxyStopped()
             when (call.method) {
                 "getAppDataDirectory" -> result.success(filesDir.absolutePath)
+                "setThemeIcon" -> {
+                    val color = call.argument<Number>("color")?.toInt() ?: error("缺少主题颜色")
+                    LauncherThemeIcon.apply(this, color)
+                    result.success(null)
+                }
                 "getUsageNoticeAccepted" -> result.success(
                     preferences.acceptedUsageNoticeVersion >= USAGE_NOTICE_VERSION,
                 )
