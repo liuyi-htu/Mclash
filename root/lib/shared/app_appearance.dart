@@ -96,12 +96,14 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
   );
 }
 
-Color pulsePanelCardColor(BuildContext context, {bool selected = false}) {
+Color pulsePanelCardColor(BuildContext context,
+    {bool selected = false, double unselectedTint = .65}) {
   final colors = Theme.of(context).colorScheme;
   if (selected) return colors.primaryContainer;
   return Theme.of(context).brightness == Brightness.dark
       ? colors.surfaceContainerLow
-      : Color.lerp(colors.surfaceContainerLow, colors.primaryContainer, .65)!;
+      : Color.lerp(
+          colors.surfaceContainerLow, colors.primaryContainer, unselectedTint)!;
 }
 
 ShapeBorder pulsePanelCardShape(BuildContext context, {bool selected = false}) {

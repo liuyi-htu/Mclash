@@ -1003,7 +1003,8 @@ class _NodeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background = pulsePanelCardColor(context, selected: selected);
+    final background =
+        pulsePanelCardColor(context, selected: selected, unselectedTint: .30);
     final foreground = selected ? colors.primary : colors.onSurface;
 
     return Material(
