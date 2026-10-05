@@ -21,10 +21,12 @@ void main() {
     ));
     expect(find.text('添加节点（0）'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
-    final position = tester.getCenter(find.byType(AddActionButton));
-    expect(position.dx, greaterThan(700));
-    // Align with the configuration tab button above its navigation bar.
-    expect(position.dy, closeTo(475, 1));
+    final buttonRect = tester.getRect(find.byType(AddActionButton));
+    final pageRect = tester.getRect(find.byType(Scaffold));
+    expect(buttonRect.center.dx, greaterThan(700));
+    // Reserve navigation bar space independently of the button's size.
+    expect(pageRect.bottom - buttonRect.bottom,
+        closeTo(80 + kFloatingActionButtonMargin, 1));
     await tester.tap(find.byTooltip('添加节点'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'bad');
