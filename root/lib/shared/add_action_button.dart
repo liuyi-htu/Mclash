@@ -6,29 +6,21 @@ class AddActionIcon extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => Opacity(
-        opacity: enabled ? 0.84 : 0.45,
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF3167F4), Color(0xFF4938EE)],
-            ),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF3167F4).withValues(alpha: 0.25),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Opacity(
+      opacity: enabled ? 1 : .4,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: colors.primaryContainer,
+          borderRadius: BorderRadius.circular(16),
         ),
-      );
+        child: Icon(Icons.add_rounded, color: colors.primary, size: 24),
+      ),
+    );
+  }
 }
 
 class AddActionButton extends StatelessWidget {

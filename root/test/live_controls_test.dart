@@ -1,3 +1,4 @@
+import 'package:mclash/shared/pulse_dashboard.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -116,9 +117,11 @@ class _Response extends Stream<List<int>> implements HttpClientResponse {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Set<String> selectedMode(WidgetTester tester) => tester
-    .widget<SegmentedButton<String>>(find.byType(SegmentedButton<String>))
-    .selected;
+Set<String> selectedMode(WidgetTester tester) {
+  final mode =
+      tester.widget<PulseModeControl>(find.byType(PulseModeControl)).mode;
+  return mode == null ? {} : {mode};
+}
 
 void main() {
   const channel = MethodChannel('mclash/native');

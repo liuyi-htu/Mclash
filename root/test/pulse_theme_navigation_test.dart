@@ -1,3 +1,4 @@
+import 'package:mclash/shared/pulse_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,20 +34,16 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    expect(
-        tester
-            .widget<NavigationBar>(find.byType(NavigationBar))
-            .destinations
-            .length,
-        4);
+    expect(find.byType(PulseBottomBar), findsOneWidget);
+    expect(PulseBottomBar.labels.length, 4);
     expect(find.text('平台连接检测'), findsNothing);
     expect(find.text('代理规则'), findsNothing);
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     expect(find.text('Pulse'), findsOneWidget);
     expect(find.text('Simple'), findsNothing);
-    expect(find.byType(SettingsCard), findsNWidgets(5));
-    expect(find.byType(ListTile), findsNWidgets(6));
+    expect(find.byType(SettingsCard), findsNWidgets(6));
+    expect(find.byType(ListTile), findsNothing);
     expect(find.byIcon(Icons.chevron_right), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
     await tester.tap(find.text('配置'));

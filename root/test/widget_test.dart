@@ -82,7 +82,8 @@ void main() {
     await tester.pumpWidget(const MclashApp());
     await tester.pump();
 
-    expect(find.text('Mclash Root'), findsOneWidget);
+    expect(find.text('Mclash'), findsOneWidget);
+    expect(find.text('ROOT'), findsOneWidget);
     expect(find.text('代理'), findsOneWidget);
     expect(find.text('规则'), findsOneWidget);
   });
@@ -102,7 +103,7 @@ void main() {
     proxyStatus = 'stopped';
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
-    expect(find.text('未启动'), findsOneWidget);
+    expect(find.text('服务已停止'), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -158,19 +159,19 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pump();
-    expect(find.text('未启动'), findsOneWidget);
+    expect(find.text('服务已停止'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     running = true;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump();
-    expect(find.text('运行中'), findsOneWidget);
+    expect(find.text('服务运行中'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     running = false;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump();
-    expect(find.text('未启动'), findsOneWidget);
+    expect(find.text('服务已停止'), findsOneWidget);
   });
 
   testWidgets('developer menu opens device registration and exports JSON',

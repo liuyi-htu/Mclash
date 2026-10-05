@@ -984,18 +984,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      appBar: tab == 3
-          ? null
-          : AppBar(
-              title: Text(
-                'Mclash',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.6,
-                ),
-              ),
-            ),
+      appBar: tab == 3 ? null : pulseAppBar(context, badge: 'VPN'),
       body: PulseNavigation(
         index: navIndex,
         onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
@@ -1006,7 +995,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               running: running,
               busy: busy,
               status: _statusText,
+              detail: 'VPN · ${_config.fileName ?? '未选择配置'}',
               download: _formatSpeed(_downloadBytesPerSecond),
+              downloadTotal: _formatSpeed((_lastRxBytes ?? 0).toDouble())
+                  .replaceAll('/s', ''),
+              uploadTotal: _formatSpeed((_lastTxBytes ?? 0).toDouble())
+                  .replaceAll('/s', ''),
               upload: _formatSpeed(_uploadBytesPerSecond),
               mode: _proxyMode,
               changingMode: _changingProxyMode,
@@ -1031,27 +1025,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
       bottomNavigationBar: MediaQuery.sizeOf(context).width >= 720
           ? null
-          : NavigationBar(
-              selectedIndex: navIndex,
-              onDestinationSelected: (index) =>
+          : PulseBottomBar(
+              index: navIndex,
+              onSelected: (index) =>
                   handleDestination(const [0, 3, 1, 2][index]),
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
-                  label: '首页',
-                ),
-                const NavigationDestination(
-                    icon: Icon(Icons.hub_outlined), label: '代理'),
-                NavigationDestination(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  label: '配置',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  label: '设置',
-                ),
-              ],
             ),
     );
   }
@@ -1077,33 +1054,40 @@ class _SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+      padding: EdgeInsets.fromLTRB(
+          MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+          0,
+          MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+          18),
       children: [
-        const AppearanceTile(),
-        const SizedBox(height: 16),
-        ...[
+        Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 12),
+            child: Text('设置', style: Theme.of(context).textTheme.titleMedium)),
+        const PulseSectionLabel('代理接管'),
+        PulseSettingsGroup(children: [
           SettingsCard(
               icon: Icons.tune_rounded, title: 'VPN 参数', onTap: onVpnSettings),
-          const SizedBox(height: 12),
           SettingsCard(
               icon: Icons.apps_rounded, title: '分应用代理', onTap: onAppSelector),
-          const SizedBox(height: 12),
+        ]),
+        const PulseSectionLabel('工具'),
+        PulseSettingsGroup(children: [
           SettingsCard(
               icon: Icons.article_outlined, title: '调试日志', onTap: onDebugLogs),
-          const SizedBox(height: 12),
-          if (developerModeEnabled) ...[
+          if (developerModeEnabled)
             SettingsCard(
                 icon: Icons.developer_mode_rounded,
                 title: '开发者模式',
                 onTap: onDeveloperSettings),
-            const SizedBox(height: 12)
-          ],
+        ]),
+        const PulseSectionLabel('外观与应用'),
+        PulseSettingsGroup(children: [
+          const AppearanceTile(),
           SettingsCard(
               icon: Icons.info_outline_rounded,
               title: '关于 Mclash',
               onTap: onAbout),
-          const SizedBox(height: 12),
-        ],
+        ]),
       ],
     );
   }

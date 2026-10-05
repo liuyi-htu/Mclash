@@ -53,10 +53,10 @@ void main() {
       await tester
           .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
       await tester.pumpAndSettle();
-      await tester.longPress(find.text('Airport'));
+      await tester.longPress(find.text('Airport').first);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('链式节点'));
-      await tester.tap(find.text('链式节点'));
+      await tester.ensureVisible(find.text('链式节点').last);
+      await tester.tap(find.text('链式节点').last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('链式节点 1'));
       await tester.pumpAndSettle();

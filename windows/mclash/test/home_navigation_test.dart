@@ -1,3 +1,4 @@
+import 'package:mclash/pulse_dashboard.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -245,7 +246,7 @@ void main() {
     service.statusGate = null;
     gate.complete(ProxyStatus.running);
     await tester.pumpAndSettle();
-    expect(find.text('运行中'), findsOneWidget);
+    expect(find.text('服务运行中'), findsOneWidget);
     service.failStatus = true;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
@@ -259,7 +260,7 @@ void main() {
     service.statusOverride = ProxyStatus.running;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
-    expect(find.text('运行中'), findsOneWidget);
+    expect(find.text('服务运行中'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   });
@@ -342,7 +343,7 @@ void main() {
           home: HomePage(service: _Service()),
         ));
         await tester.pumpAndSettle();
-        expect(find.byType(NavigationBar),
+        expect(find.byType(PulseBottomBar),
             width < 720 ? findsOneWidget : findsNothing);
         expect(find.byType(NavigationRail),
             width >= 720 ? findsOneWidget : findsNothing);

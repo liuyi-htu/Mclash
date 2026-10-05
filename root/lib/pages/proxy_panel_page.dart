@@ -887,17 +887,16 @@ class _ProxyGroupButton extends StatelessWidget {
     var tapOrigin = MediaQuery.sizeOf(context).center(Offset.zero);
 
     return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(8),
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         onTapDown: (details) => tapOrigin = details.globalPosition,
         onTap: () => onTap(tapOrigin),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -910,8 +909,8 @@ class _ProxyGroupButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    height: 1.15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
                   ),
                 ),
               ),
@@ -956,7 +955,7 @@ class _SelectedNodeDetails extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
@@ -993,14 +992,14 @@ class _NodeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final background =
-        selected ? colors.primary : colors.surfaceContainerHighest;
-    final foreground = selected ? colors.onPrimary : colors.onSurface;
+        selected ? colors.primaryContainer : colors.surfaceContainerLow;
+    final foreground = selected ? colors.primary : colors.onSurface;
 
     return Material(
       color: background,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1016,8 +1015,8 @@ class _NodeButton extends StatelessWidget {
                   style: TextStyle(
                     color: foreground,
                     fontSize: 15,
-                    fontWeight: FontWeight.normal,
-                    height: 1.15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.45,
                   ),
                 ),
               ),
@@ -1031,8 +1030,7 @@ class _NodeButton extends StatelessWidget {
                         ? Icons.check_circle_rounded
                         : Icons.flash_on_rounded,
                     size: 19,
-                    color:
-                        selected ? colors.onPrimary : colors.onSurfaceVariant,
+                    color: selected ? colors.primary : colors.onSurfaceVariant,
                   ),
                 ],
               ),
@@ -1066,7 +1064,7 @@ class _DelayBadge extends StatelessWidget {
         style: TextStyle(
           color: _delayColor(colors, delay),
           fontSize: 12,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -1088,9 +1086,9 @@ class _DelayText extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-        color: selected ? colors.onPrimary : _delayColor(colors, delay),
+        color: selected ? colors.primary : _delayColor(colors, delay),
         fontSize: 12,
-        fontWeight: FontWeight.w800,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
