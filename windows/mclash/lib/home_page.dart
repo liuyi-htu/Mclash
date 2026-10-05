@@ -1235,7 +1235,11 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             tab == 3
-                ? ProxyPanelPage(proxyRunning: running, service: _service)
+                ? ProxyPanelPage(
+                    proxyRunning: running,
+                    proxyMode: _proxyMode,
+                    service: _service,
+                  )
                 : const SizedBox.shrink(),
           ],
         ),

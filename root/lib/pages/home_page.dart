@@ -964,7 +964,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onAbout: _showAbout,
             ),
             tab == 3
-                ? ProxyPanelPage(proxyRunning: running)
+                ? ProxyPanelPage(proxyRunning: running, proxyMode: _proxyMode)
                 : const SizedBox.shrink(),
           ],
         ),
