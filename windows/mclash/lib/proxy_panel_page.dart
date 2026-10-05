@@ -977,8 +977,9 @@ class _SelectedNodeDetails extends StatelessWidget {
             label,
             maxLines: 1,
             softWrap: false,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.normal,
                 ),
           ),
         ),
@@ -1026,8 +1027,8 @@ class _NodeButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.normal,
                     height: 1.45,
                   ),
                 ),
@@ -1099,8 +1100,8 @@ class _DelayText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         color: selected ? colors.primary : _delayColor(colors, delay),
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
+        fontSize: 11,
+        fontWeight: FontWeight.normal,
       ),
     );
   }
