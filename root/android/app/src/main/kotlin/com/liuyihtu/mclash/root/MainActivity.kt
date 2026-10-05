@@ -65,6 +65,7 @@ class MainActivity : FlutterActivity() {
         try {
             if (call.method in MUTATING_METHODS) requireProxyStopped()
             when (call.method) {
+                "getAppDataDirectory" -> result.success(filesDir.absolutePath)
                 "getUsageNoticeAccepted" -> result.success(
                     preferences.acceptedUsageNoticeVersion >= USAGE_NOTICE_VERSION,
                 )

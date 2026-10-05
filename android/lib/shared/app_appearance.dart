@@ -1,11 +1,18 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
 /// The explicit light/dark tokens from the compact-console reference.
-ThemeData buildPulseTheme(Brightness brightness) {
+ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
   final dark = brightness == Brightness.dark;
-  final accent = dark ? const Color(0xFFA8C9F3) : const Color(0xFF315F95);
-  final tint = dark ? const Color(0xFF283A52) : const Color(0xFFDFEBFB);
+  final custom = seedColor != null && seedColor != const Color(0xFF315F95);
+  final accent = custom
+      ? (dark ? Color.lerp(seedColor, Colors.white, .45)! : seedColor)
+      : (dark ? const Color(0xFFA8C9F3) : const Color(0xFF315F95));
+  final tint = custom
+      ? Color.lerp(accent, dark ? const Color(0xFF161A20) : Colors.white, .85)!
+      : (dark ? const Color(0xFF283A52) : const Color(0xFFDFEBFB));
   final background = dark ? const Color(0xFF161A20) : const Color(0xFFF3F6FA);
   final colors =
       (dark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
@@ -89,14 +96,228 @@ ThemeData buildPulseTheme(Brightness brightness) {
   );
 }
 
+class AppearanceController extends ChangeNotifier {
+  AppearanceController({Future<File?> Function()? fileProvider})
+      : _fileProvider = fileProvider ?? _defaultFile;
+  final Future<File?> Function() _fileProvider;
+  static const defaultColor = Color(0xFF315F95);
+  Color color = defaultColor;
+  double fontScale = 1;
+  bool _disposed = false;
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  Future<void> _writes = Future.value();
+
+  static Future<File?> _defaultFile() async {
+    if (Platform.isWindows) {
+      final directory = Platform.environment['LOCALAPPDATA'] ??
+          Platform.environment['APPDATA'];
+      if (directory == null) return null;
+      return File(
+          '$directory${Platform.pathSeparator}Mclash${Platform.pathSeparator}appearance.json');
+    }
+    final directory = await const MethodChannel('mclash/native')
+        .invokeMethod<String>('getAppDataDirectory');
+    return directory == null ? null : File('$directory/appearance.json');
+  }
+
+  Future<void> load() async {
+    try {
+      final file = await _fileProvider();
+      if (file == null || !await file.exists()) return;
+      final data = jsonDecode(await file.readAsString()) as Map;
+      final savedColor = data['color'];
+      final savedScale = data['fontScale'];
+      if (savedColor is int &&
+          savedColor >= 0xFF000000 &&
+          savedColor <= 0xFFFFFFFF) {
+        color = Color(savedColor);
+      }
+      if (savedScale is num && savedScale.isFinite) {
+        fontScale = savedScale.toDouble().clamp(.85, 1.3);
+      }
+      if (!_disposed) notifyListeners();
+    } catch (_) {
+      // Missing or damaged preferences leave the default appearance usable.
+    }
+  }
+
+  void preview({Color? color, double? fontScale}) {
+    if (color != null) this.color = color;
+    if (fontScale != null) this.fontScale = fontScale.clamp(.85, 1.3);
+    notifyListeners();
+  }
+
+  Future<void> save() {
+    final data =
+        jsonEncode({'color': color.toARGB32(), 'fontScale': fontScale});
+    final next = _writes.then((_) async {
+      final file = await _fileProvider();
+      if (file == null) throw const FileSystemException('无法保存外观设置');
+      await file.parent.create(recursive: true);
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(data, flush: true);
+      await temporary.rename(file.path);
+    });
+    _writes = next.catchError((Object _) {});
+    return next;
+  }
+}
+
+class AppearanceScope extends InheritedNotifier<AppearanceController> {
+  const AppearanceScope(
+      {super.key,
+      required AppearanceController controller,
+      required super.child})
+      : super(notifier: controller);
+  static AppearanceController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppearanceScope>()?.notifier;
+}
+
+class AppearanceTextScaler extends TextScaler {
+  const AppearanceTextScaler(this.system, this.factor);
+  final TextScaler system;
+  final double factor;
+  @override
+  double scale(double fontSize) => system.scale(fontSize) * factor;
+  @override
+  double get textScaleFactor => scale(14) / 14;
+  @override
+  bool operator ==(Object other) =>
+      other is AppearanceTextScaler &&
+      other.system == system &&
+      other.factor == factor;
+  @override
+  int get hashCode => Object.hash(system, factor);
+}
+
 class AppearanceTile extends StatelessWidget {
   const AppearanceTile({super.key});
   @override
-  Widget build(BuildContext context) => const SettingsCard(
+  Widget build(BuildContext context) {
+    final controller = AppearanceScope.maybeOf(context);
+    return SettingsCard(
       icon: Icons.palette_outlined,
       title: '主题',
-      subtitle: 'Pulse',
-      readOnly: true);
+      onTap: controller == null
+          ? null
+          : () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => AppearanceScope(
+                  controller: controller,
+                  child: const _AppearanceSheet(),
+                ),
+              ),
+    );
+  }
+}
+
+class _AppearanceSheet extends StatelessWidget {
+  const _AppearanceSheet();
+  static const colors = [
+    AppearanceController.defaultColor,
+    Color(0xFF7356A6),
+    Color(0xFF26745A),
+    Color(0xFFA75B29),
+    Color(0xFFAD476B),
+    Color(0xFF357C85),
+    Color(0xFF675F71)
+  ];
+  @override
+  Widget build(BuildContext context) {
+    final controller = AppearanceScope.maybeOf(context)!;
+    final hue = HSVColor.fromColor(controller.color).hue;
+    Future<void> save() async {
+      try {
+        await controller.save();
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('主题设置保存失败，请重试')));
+        }
+      }
+    }
+
+    return SafeArea(
+        child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('主题', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 16),
+        Text('主题颜色', style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 12, children: [
+          for (var i = 0; i < colors.length; i++)
+            Semantics(
+                label: '主题颜色 ${i + 1}',
+                button: true,
+                selected: controller.color == colors[i],
+                child: InkWell(
+                  key: ValueKey('theme-color-$i'),
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    controller.preview(color: colors[i]);
+                    save();
+                  },
+                  child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                          child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                  color: colors[i], shape: BoxShape.circle),
+                              child: controller.color == colors[i]
+                                  ? const Icon(Icons.check,
+                                      color: Colors.white, size: 18)
+                                  : null))),
+                )),
+        ]),
+        Slider(
+            key: const ValueKey('theme-hue-slider'),
+            min: 0,
+            max: 360,
+            value: hue,
+            label: '色相 ${hue.round()}',
+            onChanged: (value) => controller.preview(
+                color: HSVColor.fromAHSV(1, value, .65, .6).toColor()),
+            onChangeEnd: (_) => save()),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+              child:
+                  Text('全局字号', style: Theme.of(context).textTheme.bodyMedium)),
+          Text('${(controller.fontScale * 100).round()}%',
+              style: Theme.of(context).textTheme.bodySmall),
+        ]),
+        Slider(
+            key: const ValueKey('global-font-slider'),
+            min: .85,
+            max: 1.3,
+            divisions: 9,
+            value: controller.fontScale,
+            label: '${(controller.fontScale * 100).round()}%',
+            onChanged: (value) => controller.preview(fontScale: value),
+            onChangeEnd: (_) => save()),
+        Text('左右拖动，调整所有页面和按钮的字号', style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: 12),
+        TextButton(
+            onPressed: () {
+              controller.preview(
+                  color: AppearanceController.defaultColor, fontScale: 1);
+              save();
+            },
+            child: const Text('恢复默认')),
+      ]),
+    ));
+  }
 }
 
 class SettingsCard extends StatelessWidget {

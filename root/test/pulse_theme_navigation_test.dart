@@ -40,7 +40,8 @@ void main() {
     expect(find.text('代理规则'), findsNothing);
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    expect(find.text('Pulse'), findsOneWidget);
+    expect(find.text('Pulse'), findsNothing);
+    expect(find.text('设置'), findsNWidgets(2));
     expect(find.text('Simple'), findsNothing);
     expect(find.byType(SettingsCard), findsNWidgets(6));
     expect(find.byType(ListTile), findsNothing);

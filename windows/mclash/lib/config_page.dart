@@ -1169,6 +1169,10 @@ class _ConfigPageState extends State<ConfigPage> {
         onTap: _working
             ? null
             : () {
+                if (!stacked && profile.active && _profiles.length > 1) {
+                  setState(() => _profilesExpanded = false);
+                  return;
+                }
                 if (stacked) {
                   setState(() => _profilesExpanded = true);
                   return;
@@ -1184,51 +1188,56 @@ class _ConfigPageState extends State<ConfigPage> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(
-                  child: Text(profile.name,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis)),
-              if (profile.active && !stacked) ...[
-                const SizedBox(width: 8),
-                Text('当前使用',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFFA6D7B8)
-                            : const Color(0xFF367151))),
-              ],
-              if (stacked)
-                TextButton(
-                  key: const ValueKey('toggle-config-stack'),
-                  onPressed: _working
-                      ? null
-                      : () => setState(() => _profilesExpanded = true),
-                  child: const Text('展开'),
-                ),
-            ]),
-            SizedBox(height: stacked ? 4 : 6),
-            Row(children: [
-              Expanded(
-                child: Text(
-                    profile.isSubscription
-                        ? '${_airportLinks(profile).length} 个机场 · 长按管理'
-                        : '本地 YAML · 长按管理',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall),
-              ),
-              if (stacked && profile.active) ...[
-                const SizedBox(width: 8),
-                Text('当前使用',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFFA6D7B8)
-                            : const Color(0xFF367151))),
-              ],
-            ]),
+            ConstrainedBox(
+                constraints: BoxConstraints(
+                    minHeight:
+                        (MediaQuery.textScalerOf(context).scale(14) * 1.45 + 16)
+                            .clamp(48, double.infinity)),
+                child: Row(children: [
+                  Expanded(
+                      child: Text(profile.name,
+                          style: Theme.of(context).textTheme.titleMedium,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis)),
+                  if (stacked)
+                    TextButton(
+                      key: const ValueKey('toggle-config-stack'),
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          textStyle: Theme.of(context).textTheme.bodyMedium),
+                      onPressed: _working
+                          ? null
+                          : () => setState(() => _profilesExpanded = true),
+                      child: const Text('展开'),
+                    ),
+                ])),
+            const SizedBox(height: 4),
+            ConstrainedBox(
+                constraints: BoxConstraints(
+                    minHeight:
+                        MediaQuery.textScalerOf(context).scale(12) * 1.45),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(
+                        profile.isSubscription
+                            ? '${_airportLinks(profile).length} 个机场 · 长按管理'
+                            : '本地 YAML · 长按管理',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ),
+                  if (profile.active) ...[
+                    const SizedBox(width: 8),
+                    Text('当前使用',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFFA6D7B8)
+                                    : const Color(0xFF367151))),
+                  ],
+                ])),
           ]),
         ),
       ));
@@ -1287,27 +1296,6 @@ class _ConfigPageState extends State<ConfigPage> {
                           MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
                           88),
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Row(children: [
-                            Expanded(
-                                child: Text('配置与订阅',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium)),
-                            Text('${_profiles.length} 个配置',
-                                style: Theme.of(context).textTheme.bodySmall),
-                            if (_profiles.length > 1 && _profilesExpanded)
-                              TextButton(
-                                key: const ValueKey('toggle-config-stack'),
-                                onPressed: _working
-                                    ? null
-                                    : () => setState(() =>
-                                        _profilesExpanded = !_profilesExpanded),
-                                child: Text(_profilesExpanded ? '收起' : '展开'),
-                              ),
-                          ]),
-                        ),
                         if (_profiles.isEmpty)
                           Card(
                               child: Padding(

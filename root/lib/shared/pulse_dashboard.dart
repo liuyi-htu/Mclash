@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'pulse_icons.dart';
 
-PreferredSizeWidget pulseAppBar(BuildContext context, {required String badge}) {
+PreferredSizeWidget pulseAppBar(BuildContext context,
+    {required String badge, String title = 'Mclash'}) {
   final colors = Theme.of(context).colorScheme;
   final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
   return PreferredSize(
@@ -11,7 +12,7 @@ PreferredSizeWidget pulseAppBar(BuildContext context, {required String badge}) {
           child: Padding(
               padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
               child: Row(children: [
-                Text('Mclash',
+                Text(title,
                     style: TextStyle(
                         fontFamily:
                             Theme.of(context).textTheme.titleMedium?.fontFamily,
@@ -21,22 +22,24 @@ PreferredSizeWidget pulseAppBar(BuildContext context, {required String badge}) {
                             FontWeight.w600, FontWeight.w700, .5),
                         letterSpacing: -.5,
                         color: colors.onSurface)),
-                const SizedBox(width: 9),
-                Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: colors.primaryContainer,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Text(badge,
-                        style: TextStyle(
-                            fontFamily: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.fontFamily,
-                            fontSize: 11,
-                            height: 1.45,
-                            color: colors.primary)))
+                if (title == 'Mclash') ...[
+                  const SizedBox(width: 9),
+                  Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: colors.primaryContainer,
+                          borderRadius: BorderRadius.circular(10)),
+                      child: Text(badge,
+                          style: TextStyle(
+                              fontFamily: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.fontFamily,
+                              fontSize: 11,
+                              height: 1.45,
+                              color: colors.primary)))
+                ],
               ]))));
 }
 

@@ -984,7 +984,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      appBar: tab == 3 ? null : pulseAppBar(context, badge: 'VPN'),
+      appBar: tab == 3
+          ? null
+          : pulseAppBar(context,
+              badge: 'VPN',
+              title: tab == 1
+                  ? '配置与订阅'
+                  : tab == 2
+                      ? '设置'
+                      : 'Mclash'),
       body: PulseNavigation(
         index: navIndex,
         onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
@@ -1060,9 +1068,6 @@ class _SettingsPage extends StatelessWidget {
           MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
           18),
       children: [
-        Padding(
-            padding: const EdgeInsets.only(top: 6, bottom: 12),
-            child: Text('设置', style: Theme.of(context).textTheme.titleMedium)),
         const PulseSectionLabel('代理接管'),
         PulseSettingsGroup(children: [
           SettingsCard(
