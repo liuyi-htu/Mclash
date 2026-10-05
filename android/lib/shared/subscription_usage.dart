@@ -1,4 +1,4 @@
-String subscriptionUsageSummary(String? header) {
+Map<String, int> _usageValues(String? header) {
   final values = <String, int>{};
   for (final part in (header ?? '').split(';')) {
     final separator = part.indexOf('=');
@@ -7,6 +7,23 @@ String subscriptionUsageSummary(String? header) {
     final value = int.tryParse(part.substring(separator + 1).trim());
     if (value != null && value >= 0) values[key] = value;
   }
+  return values;
+}
+
+/// Null means the provider did not publish a usable quota.
+double? subscriptionRemainingFraction(String? header) {
+  final values = _usageValues(header);
+  final total = values['total'];
+  final upload = values['upload'];
+  final download = values['download'];
+  if (total == null || total <= 0 || upload == null || download == null) {
+    return null;
+  }
+  return ((total - upload).clamp(0, total) - download).clamp(0, total) / total;
+}
+
+String subscriptionUsageSummary(String? header) {
+  final values = _usageValues(header);
   String remaining = '未提供';
   final total = values['total'];
   final upload = values['upload'];

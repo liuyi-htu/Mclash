@@ -1,4 +1,44 @@
 import 'package:flutter/material.dart';
+import 'pulse_icons.dart';
+
+PreferredSizeWidget pulseAppBar(BuildContext context, {required String badge}) {
+  final colors = Theme.of(context).colorScheme;
+  final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
+  return PreferredSize(
+      preferredSize: Size.fromHeight(22 + titleHeight + 14),
+      child: SafeArea(
+          bottom: false,
+          child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 22, 18, 14),
+              child: Row(children: [
+                Text('Mclash',
+                    style: TextStyle(
+                        fontFamily:
+                            Theme.of(context).textTheme.titleMedium?.fontFamily,
+                        fontSize: 23,
+                        height: 1.45,
+                        fontWeight: FontWeight.lerp(
+                            FontWeight.w600, FontWeight.w700, .5),
+                        letterSpacing: -.5,
+                        color: colors.onSurface)),
+                const SizedBox(width: 9),
+                Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                        color: colors.primaryContainer,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text(badge,
+                        style: TextStyle(
+                            fontFamily: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.fontFamily,
+                            fontSize: 11,
+                            height: 1.45,
+                            color: colors.primary)))
+              ]))));
+}
 
 class PulseDashboard extends StatelessWidget {
   const PulseDashboard(
@@ -7,6 +47,8 @@ class PulseDashboard extends StatelessWidget {
       required this.busy,
       required this.status,
       this.detail,
+      this.downloadTotal,
+      this.uploadTotal,
       required this.download,
       required this.upload,
       required this.mode,
@@ -16,8 +58,7 @@ class PulseDashboard extends StatelessWidget {
       required this.onRefresh});
   final bool running, busy, changingMode;
   final String status, download, upload;
-  final String? mode;
-  final String? detail;
+  final String? mode, detail, downloadTotal, uploadTotal;
   final VoidCallback onToggle;
   final ValueChanged<String> onMode;
   final Future<void> Function() onRefresh;
@@ -25,80 +66,266 @@ class PulseDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-        children: [
-          Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(children: [
-                    Icon(Icons.circle,
-                        size: 10,
-                        color: running ? colors.primary : colors.outline),
-                    const SizedBox(width: 12),
-                    Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Text(status,
-                              style: Theme.of(context).textTheme.titleMedium),
-                          Text(detail ?? 'Mihomo',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall),
-                        ])),
-                    IconButton.filledTonal(
-                        onPressed: busy ? null : onToggle,
-                        tooltip: running ? '停止服务' : '启动服务',
-                        icon: const Icon(Icons.power_settings_new)),
-                  ]))),
-          const SizedBox(height: 20),
-          Row(children: [
-            Expanded(
-                child: _Speed(
-                    label: '下载', value: download, icon: Icons.south_rounded)),
-            Expanded(
-                child: _Speed(
-                    label: '上传', value: upload, icon: Icons.north_rounded)),
-          ]),
-          const SizedBox(height: 20),
-          SegmentedButton<String>(
-            emptySelectionAllowed: true,
-            segments: const [
-              ButtonSegment(value: 'rule', label: Text('规则')),
-              ButtonSegment(value: 'global', label: Text('全局')),
-              ButtonSegment(value: 'direct', label: Text('直连'))
-            ],
-            selected: mode == null ? <String>{} : {mode!},
-            onSelectionChanged: running && !busy && !changingMode
-                ? (value) {
-                    if (value.isNotEmpty) onMode(value.first);
-                  }
-                : null,
-          ),
-        ],
-      ),
-    );
+        onRefresh: onRefresh,
+        child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+                MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                0,
+                MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                18),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(20)),
+                child: Row(children: [
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(
+                            status == '运行中'
+                                ? '服务运行中'
+                                : status == '未启动'
+                                    ? '服务已停止'
+                                    : status,
+                            style: TextStyle(
+                                fontSize: 19,
+                                height: 1.45,
+                                fontWeight: FontWeight.w600,
+                                color: colors.primary)),
+                        Text(detail ?? 'Mihomo',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                      ])),
+                  const SizedBox(width: 10),
+                  Material(
+                      color: colors.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(16),
+                      child: IconButton(
+                          onPressed: busy ? null : onToggle,
+                          tooltip: running ? '停止服务' : '启动服务',
+                          constraints: const BoxConstraints.tightFor(
+                              width: 48, height: 48),
+                          padding: EdgeInsets.zero,
+                          icon: PulseIcon(Icons.power_settings_new,
+                              color: colors.primary))),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: Text('运行模式',
+                      style: Theme.of(context).textTheme.bodySmall)),
+              const SizedBox(height: 8),
+              PulseModeControl(
+                  mode: mode,
+                  onChanged: running && !busy && !changingMode ? onMode : null),
+              const SizedBox(height: 12),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(
+                    child: _SpeedCard(
+                        label: '下载速度',
+                        value: download,
+                        total: downloadTotal == null
+                            ? null
+                            : '↓ 本次 $downloadTotal')),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _SpeedCard(
+                        label: '上传速度',
+                        value: upload,
+                        total:
+                            uploadTotal == null ? null : '↑ 本次 $uploadTotal')),
+              ]),
+              const SizedBox(height: 12),
+            ]));
   }
 }
 
-class _Speed extends StatelessWidget {
-  const _Speed({required this.label, required this.value, required this.icon});
-  final String label, value;
-  final IconData icon;
+class PulseModeControl extends StatelessWidget {
+  const PulseModeControl({super.key, required this.mode, this.onChanged});
+  final String? mode;
+  final ValueChanged<String>? onChanged;
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: 6),
-          Text(label)
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Row(children: [
+              for (final item in const [
+                ('rule', '规则'),
+                ('global', '全局'),
+                ('direct', '直连')
+              ]) ...[
+                if (item.$1 != 'rule') const SizedBox(width: 4),
+                Expanded(
+                    child: Semantics(
+                        selected: mode == item.$1,
+                        button: true,
+                        enabled: onChanged != null,
+                        child: Opacity(
+                            opacity: onChanged == null ? .4 : 1,
+                            child: Material(
+                                color: mode == item.$1
+                                    ? colors.primaryContainer
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(11),
+                                child: InkWell(
+                                    borderRadius: BorderRadius.circular(11),
+                                    onTap: onChanged == null
+                                        ? null
+                                        : () => onChanged!(item.$1),
+                                    child: ConstrainedBox(
+                                        constraints:
+                                            const BoxConstraints(minHeight: 44),
+                                        child: Center(
+                                            child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 4),
+                                                child: Text(item.$2,
+                                                    style: TextStyle(
+                                                        fontSize: 13,
+                                                        height: 1.45,
+                                                        fontWeight: mode == item.$1
+                                                            ? FontWeight.w600
+                                                            : FontWeight.w400,
+                                                        color: mode == item.$1
+                                                            ? colors.primary
+                                                            : colors.onSurfaceVariant)))))))))),
+              ],
+            ])));
+  }
+}
+
+class _SpeedCard extends StatelessWidget {
+  const _SpeedCard({required this.label, required this.value, this.total});
+  final String label, value;
+  final String? total;
+  @override
+  Widget build(BuildContext context) => Card(
+          child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _Speed(label: label, value: value),
+          if (total != null)
+            Text(total!,
+                style: Theme.of(context).textTheme.bodySmall,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
         ]),
-        const SizedBox(height: 6),
-        Text(value, style: Theme.of(context).textTheme.titleLarge),
-      ]);
+      ));
+}
+
+class _Speed extends StatelessWidget {
+  const _Speed({required this.label, required this.value});
+  final String label, value;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final parts = value.trim().split(RegExp(r'\s+'));
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 4),
+      Text.rich(
+          TextSpan(children: [
+            TextSpan(
+                text: parts.first,
+                style: TextStyle(
+                    fontSize: 23,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.6,
+                    color: colors.onSurface)),
+            if (parts.length > 1)
+              TextSpan(
+                  text: ' ${parts.skip(1).join(' ')}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      height: 1.45,
+                      color: colors.onSurfaceVariant))
+          ]),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 4),
+    ]);
+  }
+}
+
+class PulseBottomBar extends StatelessWidget {
+  const PulseBottomBar(
+      {super.key, required this.index, required this.onSelected});
+  final int index;
+  final ValueChanged<int> onSelected;
+  static const icons = [
+    Icons.home_outlined,
+    Icons.hub_outlined,
+    Icons.inventory_2_outlined,
+    Icons.settings_outlined
+  ];
+  static const labels = ['首页', '代理', '配置', '设置'];
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+        decoration: BoxDecoration(
+            color: colors.surfaceContainerLow,
+            border: Border(top: BorderSide(color: colors.outlineVariant))),
+        child: SafeArea(
+            top: false,
+            child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 7, 6, 9),
+                child: Row(children: [
+                  for (var i = 0; i < labels.length; i++)
+                    Expanded(
+                        child: Semantics(
+                            selected: index == i,
+                            button: true,
+                            child: InkWell(
+                                onTap: () => onSelected(i),
+                                child: Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 5),
+                                    child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                              width: 48,
+                                              height: 28,
+                                              alignment: Alignment.center,
+                                              decoration: BoxDecoration(
+                                                  color: index == i
+                                                      ? colors.primaryContainer
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          15)),
+                                              child: PulseIcon(icons[i],
+                                                  color: index == i
+                                                      ? colors.primary
+                                                      : colors
+                                                          .onSurfaceVariant)),
+                                          const SizedBox(height: 3),
+                                          Text(labels[i],
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  height: 1.45,
+                                                  color: index == i
+                                                      ? colors.primary
+                                                      : colors.onSurfaceVariant,
+                                                  fontWeight: index == i
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w400)),
+                                        ])))))
+                ]))));
+  }
 }
 
 class PulseNavigation extends StatelessWidget {
@@ -110,13 +337,6 @@ class PulseNavigation extends StatelessWidget {
   final int index;
   final ValueChanged<int> onSelected;
   final Widget child;
-  static const icons = [
-    Icons.home_outlined,
-    Icons.hub_outlined,
-    Icons.inventory_2_outlined,
-    Icons.settings_outlined
-  ];
-  static const labels = ['首页', '代理', '配置', '设置'];
   @override
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
@@ -127,9 +347,10 @@ class PulseNavigation extends StatelessWidget {
               labelType: NavigationRailLabelType.all,
               onDestinationSelected: onSelected,
               destinations: [
-                for (var i = 0; i < labels.length; i++)
+                for (var i = 0; i < PulseBottomBar.labels.length; i++)
                   NavigationRailDestination(
-                      icon: Icon(icons[i]), label: Text(labels[i]))
+                      icon: PulseIcon(PulseBottomBar.icons[i]),
+                      label: Text(PulseBottomBar.labels[i]))
               ]),
           const VerticalDivider(width: 1),
           Expanded(child: child)

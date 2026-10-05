@@ -25,4 +25,21 @@ void main() {
     expect(subscriptionUsageSummary('expire=$seconds'),
         '剩余流量：未提供\n到期时间：${date.year}-${pad(date.month)}-${pad(date.day)} ${pad(date.hour)}:${pad(date.minute)}');
   });
+  test('remaining fraction uses real quota and clamps provider overruns', () {
+    expect(
+        subscriptionRemainingFraction('upload=10;download=50;total=100'), .4);
+    expect(subscriptionRemainingFraction('upload=10;download=100;total=20'), 0);
+    expect(
+        subscriptionRemainingFraction(
+            'upload=9223372036854775807;download=9223372036854775807;total=20'),
+        0);
+    for (final header in [
+      null,
+      'total=0',
+      'total=20',
+      'upload=-1;download=0;total=20'
+    ]) {
+      expect(subscriptionRemainingFraction(header), isNull);
+    }
+  });
 }

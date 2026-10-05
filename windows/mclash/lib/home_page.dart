@@ -1156,18 +1156,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      appBar: tab == 3
-          ? null
-          : AppBar(
-              title: Text(
-                'Mclash',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.6,
-                ),
-              ),
-            ),
+      appBar: tab == 3 ? null : pulseAppBar(context, badge: 'WINDOWS'),
       body: PulseNavigation(
         index: navIndex,
         onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
@@ -1178,7 +1167,9 @@ class _HomePageState extends State<HomePage> {
               running: running,
               busy: busy || !_canOperate,
               status: _statusText,
-              detail: _statusError == null ? null : '状态检测失败：$_statusError',
+              detail: _statusError == null
+                  ? '${_networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'} · ${_config.fileName ?? '未选择配置'}'
+                  : '状态检测失败：$_statusError',
               download: _formatSpeed(_downloadBytesPerSecond),
               upload: _formatSpeed(_uploadBytesPerSecond),
               mode: _proxyMode,
@@ -1192,39 +1183,49 @@ class _HomePageState extends State<HomePage> {
                 service: _service,
                 proxyStatus: _statusNotifier),
             ListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              padding: EdgeInsets.fromLTRB(
+                  MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                  0,
+                  MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                  18),
               children: [
-                const AppearanceTile(),
-                const SizedBox(height: 16),
-                ...[
+                Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 12),
+                    child: Text('设置',
+                        style: Theme.of(context).textTheme.titleMedium)),
+                const PulseSectionLabel('代理接管'),
+                PulseSettingsGroup(children: [
                   SettingsCard(
                       icon: Icons.tune_rounded,
                       title: '常规设置',
                       onTap: _canEditSettings ? _showGeneralSettings : null),
-                  const SizedBox(height: 12),
                   SettingsCard(
                       icon: Icons.swap_horiz_rounded,
                       title: '运行模式',
-                      onTap: _canEditSettings ? _showRunModeDialog : null,
                       subtitle:
-                          _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'),
-                  const SizedBox(height: 12),
+                          _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN',
+                      onTap: _canEditSettings ? _showRunModeDialog : null),
+                ]),
+                const PulseSectionLabel('工具'),
+                PulseSettingsGroup(children: [
+                  SettingsCard(
+                      icon: Icons.system_update_alt_rounded,
+                      title: '更新内核',
+                      subtitle: 'Mihomo',
+                      onTap: _showCoreUpdate),
                   SettingsCard(
                       icon: Icons.article_outlined,
                       title: '调试日志',
                       onTap: _showDebugLogSettings),
-                  const SizedBox(height: 12),
-                  SettingsCard(
-                      icon: Icons.system_update_alt_rounded,
-                      title: '更新内核',
-                      onTap: _showCoreUpdate),
-                  const SizedBox(height: 12),
+                ]),
+                const PulseSectionLabel('外观与应用'),
+                PulseSettingsGroup(children: [
+                  const AppearanceTile(),
                   SettingsCard(
                       icon: Icons.info_outline_rounded,
                       title: '关于 Mclash',
                       onTap: _showAbout),
-                  const SizedBox(height: 12),
-                ],
+                ]),
               ],
             ),
             tab == 3
@@ -1235,27 +1236,10 @@ class _HomePageState extends State<HomePage> {
       ),
       bottomNavigationBar: MediaQuery.sizeOf(context).width >= 720
           ? null
-          : NavigationBar(
-              selectedIndex: navIndex,
-              onDestinationSelected: (index) =>
+          : PulseBottomBar(
+              index: navIndex,
+              onSelected: (index) =>
                   handleDestination(const [0, 3, 1, 2][index]),
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home_rounded),
-                  label: '首页',
-                ),
-                const NavigationDestination(
-                    icon: Icon(Icons.hub_outlined), label: '代理'),
-                NavigationDestination(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  label: '配置',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  label: '设置',
-                ),
-              ],
             ),
     );
   }

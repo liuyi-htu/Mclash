@@ -1,3 +1,4 @@
+import 'pulse_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'app_appearance.dart';
@@ -5,6 +6,7 @@ import 'home_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  registerPulseIconLicenses();
   runApp(const MclashApp());
 }
 

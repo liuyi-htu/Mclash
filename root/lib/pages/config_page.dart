@@ -1,3 +1,4 @@
+import '../shared/app_appearance.dart';
 import '../shared/management_style.dart';
 import '../shared/add_action_button.dart';
 import '../shared/config_management.dart' show configActionOrder;
@@ -840,6 +841,13 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showSubscriptionActions(ConfigProfile profile) async {
+    await Navigator.of(context).push<void>(MaterialPageRoute(
+      builder: (_) => _subscriptionPanel(profile),
+    ));
+  }
+
+  SubscriptionManagementPage _subscriptionPanel(ConfigProfile profile,
+      {bool embedded = false}) {
     ConfigProfile? latestProfile() {
       for (final current in _profiles) {
         if (current.id == profile.id) return current;
@@ -847,34 +855,34 @@ class _ConfigPageState extends State<ConfigPage> {
       return null;
     }
 
-    await Navigator.of(context).push<void>(MaterialPageRoute(
-        builder: (_) => SubscriptionManagementPage(
-              profile: profile,
-              proxyRunning: widget.proxyRunning,
-              onEdit: (current, link) async {
-                await _showAirportDialog(current, link: link);
-                return latestProfile();
-              },
-              onUpdate: (current, link) async {
-                final links = subscriptionLinks(current.url ?? '');
-                final name =
-                    current.subscriptionNameFor(link, links.indexOf(link));
-                await _applyAirportChange(
-                    () => _service.editSubscriptionAirport(current.id,
-                        oldUrl: link, name: name, url: link),
-                    message: '“$name”已更新');
-                return latestProfile();
-              },
-              onDelete: (current, link) async {
-                await _removeAirport(current, link);
-                return latestProfile();
-              },
-              onReorder: (current, order) async {
-                await _applyAirportChange(() =>
-                    _service.editSubscriptionAirport(current.id, order: order));
-                return latestProfile();
-              },
-            )));
+    return SubscriptionManagementPage(
+      key: ValueKey(profile.id),
+      embedded: embedded,
+      profile: profile,
+      proxyRunning: widget.proxyRunning,
+      onEdit: (current, link) async {
+        await _showAirportDialog(current, link: link);
+        return latestProfile();
+      },
+      onUpdate: (current, link) async {
+        final links = subscriptionLinks(current.url ?? '');
+        final name = current.subscriptionNameFor(link, links.indexOf(link));
+        await _applyAirportChange(
+            () => _service.editSubscriptionAirport(current.id,
+                oldUrl: link, name: name, url: link),
+            message: '“$name”已更新');
+        return latestProfile();
+      },
+      onDelete: (current, link) async {
+        await _removeAirport(current, link);
+        return latestProfile();
+      },
+      onReorder: (current, order) async {
+        await _applyAirportChange(
+            () => _service.editSubscriptionAirport(current.id, order: order));
+        return latestProfile();
+      },
+    );
   }
 
   Future<void> _showActions(ConfigProfile profile) async {
@@ -1031,14 +1039,20 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
+  List<String> _airportLinks(ConfigProfile profile) {
+    try {
+      return subscriptionLinks(profile.url ?? '');
+    } on FormatException {
+      return const [];
+    }
+  }
+
   void _showError(Object error) {
     showErrorNotice(context, error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
     return Scaffold(
       body: Column(
         children: [
@@ -1050,179 +1064,134 @@ class _ConfigPageState extends State<ConfigPage> {
                     onRefresh: _load,
                     child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                      padding: EdgeInsets.fromLTRB(
+                          MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                          0,
+                          MediaQuery.sizeOf(context).width < 380 ? 12 : 16,
+                          88),
                       children: [
                         Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: Text('${_profiles.length} 个配置 · 点击切换 · 长按管理',
-                                style:
-                                    Theme.of(context).textTheme.titleMedium)),
-                        const SizedBox(height: 18),
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            Expanded(
+                                child: Text('配置与订阅',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium)),
+                            Text('${_profiles.length} 个配置',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ]),
+                        ),
                         if (_profiles.isEmpty)
                           Card(
+                              child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 24),
+                            child: Column(children: [
+                              Text('尚未添加配置',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: 6),
+                              Text('点击右下角“＋”导入 YAML或添加机场订阅',
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ]),
+                          )),
+                        for (final profile in _profiles) ...[
+                          Card(
+                              child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _working
+                                ? null
+                                : () {
+                                    if (widget.proxyRunning || profile.active) {
+                                      _showConfigDetails(profile);
+                                    } else {
+                                      _select(profile);
+                                    }
+                                  },
+                            onLongPress:
+                                _working ? null : () => _showActions(profile),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 22,
-                                vertical: 38,
-                              ),
+                                  horizontal: 14, vertical: 12),
                               child: Column(
-                                children: [
-                                  Container(
-                                    width: 72,
-                                    height: 72,
-                                    decoration: BoxDecoration(
-                                      color: colors.primaryContainer,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.note_add_outlined,
-                                      size: 34,
-                                      color: colors.onPrimaryContainer,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    '尚未添加配置',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 7),
-                                  Text(
-                                    '点击右下角“＋”导入 YAML\n或添加机场订阅',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      color: colors.onSurfaceVariant,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          for (final profile in _profiles) ...[
-                            Card(
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(22),
-                                onTap: _working
-                                    ? null
-                                    : () {
-                                        if (widget.proxyRunning ||
-                                            profile.active) {
-                                          _showConfigDetails(profile);
-                                        } else {
-                                          _select(profile);
-                                        }
-                                      },
-                                onLongPress: _working
-                                    ? null
-                                    : () => _showActions(profile),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(18),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 48,
-                                        height: 48,
-                                        decoration: BoxDecoration(
-                                          color: profile.active
-                                              ? colors.primaryContainer
-                                              : colors.surfaceContainerHighest,
-                                          borderRadius: BorderRadius.circular(
-                                            15,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          profile.isSubscription
-                                              ? Icons.cloud_outlined
-                                              : Icons.description_outlined,
-                                          color: profile.active
-                                              ? colors.onPrimaryContainer
-                                              : colors.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 15),
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(children: [
                                       Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    profile.name,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      fontSize: 18,
-                                                    ),
-                                                  ),
-                                                ),
-                                                if (profile.active)
-                                                  Container(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 9,
-                                                      vertical: 4,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: colors
-                                                          .primaryContainer,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                        20,
-                                                      ),
-                                                    ),
-                                                    child: Text(
-                                                      '当前',
-                                                      style: TextStyle(
-                                                        color: colors
-                                                            .onPrimaryContainer,
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 5),
-                                            Text(
-                                              widget.proxyRunning
-                                                  ? (profile.isSubscription
-                                                      ? '机场订阅 · 长按更新或修改'
-                                                      : '本地 YAML · 长按修改内容')
-                                                  : (profile.isSubscription
-                                                      ? '机场订阅 · 长按管理'
-                                                      : '本地 YAML · 长按管理'),
-                                              style: TextStyle(
-                                                color: colors.onSurfaceVariant,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                          child: Text(profile.name,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis)),
                                       if (profile.active) ...[
                                         const SizedBox(width: 8),
-                                        Icon(
-                                          Icons.check_circle_rounded,
-                                          color: colors.primary,
-                                        ),
+                                        Text('当前使用',
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                color: Theme.of(context)
+                                                            .brightness ==
+                                                        Brightness.dark
+                                                    ? const Color(0xFFA6D7B8)
+                                                    : const Color(0xFF367151))),
                                       ],
-                                    ],
-                                  ),
-                                ),
-                              ),
+                                    ]),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                        profile.isSubscription
+                                            ? '${_airportLinks(profile).length} 个机场 · 长按管理'
+                                            : '本地 YAML · 长按管理',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall),
+                                  ]),
                             ),
+                          )),
+                          const SizedBox(height: 10),
+                          if (profile.active &&
+                              profile.isSubscription &&
+                              _airportLinks(profile).isNotEmpty) ...[
+                            const PulseSectionLabel('机场订阅'),
+                            _subscriptionPanel(profile, embedded: true),
+                          ],
+                          if (profile.active) ...[
+                            const PulseSectionLabel('配置工具'),
+                            PulseSettingsGroup(children: [
+                              SettingsCard(
+                                  icon: Icons.add_link,
+                                  title: '手动节点',
+                                  onTap: widget.proxyRunning || _working
+                                      ? null
+                                      : () => _addNode(profile)),
+                              SettingsCard(
+                                  icon: Icons.link,
+                                  title: '链式节点',
+                                  onTap: widget.proxyRunning || _working
+                                      ? null
+                                      : () => _editProxyChain(profile)),
+                              SettingsCard(
+                                  icon: Icons.rule,
+                                  title: '规则管理',
+                                  onTap: widget.proxyRunning || _working
+                                      ? null
+                                      : () => _manageConfiguration(
+                                          profile, ConfigManagementMode.rules)),
+                              SettingsCard(
+                                  icon: Icons.account_tree_outlined,
+                                  title: '代理组管理',
+                                  onTap: widget.proxyRunning || _working
+                                      ? null
+                                      : () => _manageConfiguration(profile,
+                                          ConfigManagementMode.groups)),
+                            ]),
+                            const SizedBox(height: 10),
+                            Text('停止代理后可修改配置',
+                                style: Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: 10),
                           ],
+                        ],
                       ],
                     ),
                   ),
