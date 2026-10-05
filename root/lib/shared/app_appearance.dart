@@ -121,7 +121,10 @@ class AppearanceController extends ChangeNotifier {
   final Future<File?> Function() _fileProvider;
   static const defaultColor = Color(0xFF315F95);
   Color color = defaultColor;
+  static const fontSizeBaseline = 1.1;
   double fontScale = 1;
+  double get effectiveFontScale => fontScale * fontSizeBaseline;
+  ThemeMode themeMode = ThemeMode.system;
   bool _disposed = false;
   @override
   void dispose() {
@@ -151,13 +154,22 @@ class AppearanceController extends ChangeNotifier {
       final data = jsonDecode(await file.readAsString()) as Map;
       final savedColor = data['color'];
       final savedScale = data['fontScale'];
+      final savedMode = data['themeMode'];
+      themeMode = ThemeMode.values.firstWhere(
+        (mode) => mode.name == savedMode,
+        orElse: () => ThemeMode.system,
+      );
       if (savedColor is int &&
           savedColor >= 0xFF000000 &&
           savedColor <= 0xFFFFFFFF) {
         color = Color(savedColor);
       }
       if (savedScale is num && savedScale.isFinite) {
-        fontScale = savedScale.toDouble().clamp(.85, 1.3);
+        // Keep the previous visual size when adopting the larger 100% baseline.
+        final relativeScale = data['fontScaleVersion'] == 2
+            ? savedScale.toDouble()
+            : savedScale.toDouble() / fontSizeBaseline;
+        fontScale = relativeScale.clamp(.7, 1.3);
       }
       if (!_disposed) notifyListeners();
     } catch (_) {
@@ -165,15 +177,20 @@ class AppearanceController extends ChangeNotifier {
     }
   }
 
-  void preview({Color? color, double? fontScale}) {
+  void preview({Color? color, double? fontScale, ThemeMode? themeMode}) {
+    if (themeMode != null) this.themeMode = themeMode;
     if (color != null) this.color = color;
-    if (fontScale != null) this.fontScale = fontScale.clamp(.85, 1.3);
+    if (fontScale != null) this.fontScale = fontScale.clamp(.7, 1.3);
     notifyListeners();
   }
 
   Future<void> save() {
-    final data =
-        jsonEncode({'color': color.toARGB32(), 'fontScale': fontScale});
+    final data = jsonEncode({
+      'color': color.toARGB32(),
+      'fontScale': fontScale,
+      'fontScaleVersion': 2,
+      'themeMode': themeMode.name
+    });
     final next = _writes.then((_) async {
       final file = await _fileProvider();
       if (file == null) throw const FileSystemException('无法保存外观设置');
@@ -269,6 +286,26 @@ class _AppearanceSheet extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('主题', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 16),
+        Text('显示模式', style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final entry in const {
+            ThemeMode.system: '跟随系统',
+            ThemeMode.dark: '深色模式',
+            ThemeMode.light: '浅色模式',
+          }.entries)
+            ChoiceChip(
+              key: ValueKey('theme-mode-${entry.key.name}'),
+              label: Text(entry.value),
+              showCheckmark: false,
+              selected: controller.themeMode == entry.key,
+              onSelected: (_) {
+                controller.preview(themeMode: entry.key);
+                save();
+              },
+            ),
+        ]),
+        const SizedBox(height: 16),
         Text('主题颜色', style: Theme.of(context).textTheme.bodyMedium),
         const SizedBox(height: 12),
         Wrap(spacing: 12, runSpacing: 12, children: [
@@ -309,18 +346,16 @@ class _AppearanceSheet extends StatelessWidget {
                 color: HSVColor.fromAHSV(1, value, .65, .6).toColor()),
             onChangeEnd: (_) => save()),
         const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-              child:
-                  Text('全局字号', style: Theme.of(context).textTheme.bodyMedium)),
-          Text('${(controller.fontScale * 100).round()}%',
-              style: Theme.of(context).textTheme.bodySmall),
-        ]),
+        Text('全局字号', style: Theme.of(context).textTheme.bodyMedium),
+        Center(
+            child: Text('${(controller.fontScale * 100).round()}%',
+                key: const ValueKey('global-font-percentage'),
+                style: Theme.of(context).textTheme.bodySmall)),
         Slider(
             key: const ValueKey('global-font-slider'),
-            min: .85,
+            min: .7,
             max: 1.3,
-            divisions: 9,
+            divisions: 12,
             value: controller.fontScale,
             label: '${(controller.fontScale * 100).round()}%',
             onChanged: (value) => controller.preview(fontScale: value),
@@ -330,7 +365,9 @@ class _AppearanceSheet extends StatelessWidget {
         TextButton(
             onPressed: () {
               controller.preview(
-                  color: AppearanceController.defaultColor, fontScale: 1);
+                  color: AppearanceController.defaultColor,
+                  fontScale: 1,
+                  themeMode: ThemeMode.system);
               save();
             },
             child: const Text('恢复默认')),

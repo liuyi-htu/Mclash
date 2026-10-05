@@ -50,6 +50,12 @@ class _ConfigPageState extends State<ConfigPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant ConfigPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.proxyRunning) _profilesExpanded = false;
+  }
+
   Future<void> _load() async {
     try {
       final profiles = await _service.getConfigs();
@@ -1166,7 +1172,7 @@ class _ConfigPageState extends State<ConfigPage> {
       key: ValueKey('config-card-${profile.id}'),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: _working
+        onTap: _working || (stacked && widget.proxyRunning)
             ? null
             : () {
                 if (!stacked && profile.active && _profiles.length > 1) {
@@ -1206,7 +1212,7 @@ class _ConfigPageState extends State<ConfigPage> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           textStyle: Theme.of(context).textTheme.bodyMedium),
-                      onPressed: _working
+                      onPressed: _working || widget.proxyRunning
                           ? null
                           : () => setState(() => _profilesExpanded = true),
                       child: const Text('展开'),
@@ -1245,7 +1251,7 @@ class _ConfigPageState extends State<ConfigPage> {
   Widget _configCards() {
     final profiles = _displayProfiles;
     if (profiles.length == 1) return _configCard(profiles.first);
-    if (_profilesExpanded) {
+    if (_profilesExpanded && !widget.proxyRunning) {
       return Column(children: [
         for (var i = 0; i < profiles.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),

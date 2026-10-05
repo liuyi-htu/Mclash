@@ -1,3 +1,4 @@
+import '../shared/pulse_dashboard.dart';
 import '../shared/app_appearance.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -699,8 +700,9 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
     final busy = _loading || _testingAllNodes;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('代理面板'),
+      appBar: pulseAppBar(
+        context,
+        title: '代理面板',
         bottom: widget.proxyRunning && _testingAllNodes
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(30),
@@ -953,7 +955,7 @@ class _SelectedNodeDetails extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),

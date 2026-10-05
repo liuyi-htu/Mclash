@@ -28,14 +28,24 @@ void main() {
     expect(find.text('1 MB/s'), findsOneWidget);
     await tester.tap(find.text('全局'));
     expect(selected, 'global');
-    await tester.tap(find.byIcon(Icons.power_settings_new));
+    await tester.tap(find.descendant(
+        of: find.byKey(const ValueKey('service-toggle')),
+        matching: find.byType(IconButton)));
     expect(toggles, 1);
     selected = null;
     await tester.pumpWidget(dashboard(running: false));
     await tester.tap(find.text('直连'));
     expect(selected, isNull);
     await tester.pumpWidget(dashboard(busy: true));
-    await tester.tap(find.byIcon(Icons.power_settings_new));
+    expect(find.byIcon(Icons.power_settings_new), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(
+        tester
+            .widget<IconButton>(find.descendant(
+                of: find.byKey(const ValueKey('service-toggle')),
+                matching: find.byType(IconButton)))
+            .onPressed,
+        isNull);
     expect(toggles, 1);
   });
 

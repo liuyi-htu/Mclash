@@ -43,7 +43,7 @@ class _MclashAppState extends State<MclashApp> {
               supportedLocales: const [Locale('zh', 'CN')],
               localizationsDelegates: GlobalMaterialLocalizations.delegates,
               debugShowCheckedModeBanner: false,
-              themeMode: ThemeMode.system,
+              themeMode: _appearance.themeMode,
               theme: buildPulseTheme(Brightness.light,
                   seedColor: _appearance.color),
               darkTheme: buildPulseTheme(Brightness.dark,
@@ -52,7 +52,7 @@ class _MclashAppState extends State<MclashApp> {
                 data: MediaQuery.of(context).copyWith(
                     textScaler: AppearanceTextScaler(
                         MediaQuery.textScalerOf(context),
-                        _appearance.fontScale)),
+                        _appearance.effectiveFontScale)),
                 child: WindowSafeArea(child: child!),
               ),
               home: const HomePage(),

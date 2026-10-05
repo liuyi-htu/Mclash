@@ -99,14 +99,11 @@ void main() {
     final toggle = find.byKey(const ValueKey('toggle-config-stack'));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(find.text('配置0'), findsOneWidget);
-    expect(
-        tester.getSize(find.byKey(const ValueKey('config-card-0'))).height,
-        closeTo(
-            tester.getSize(find.byKey(const ValueKey('config-card-29'))).height,
-            .1));
+    expect(find.text('配置0'), findsNothing);
+    expect(tester.widget<TextButton>(toggle).onPressed, isNull);
     await tester.tap(find.text('配置29'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(find.text('配置0'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -132,6 +129,24 @@ void main() {
     expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(find.text('配置1'), findsOneWidget);
     expect(find.text('配置2'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'starting proxy collapses an already expanded configuration stack',
+      (tester) async {
+    final service =
+        _Service(() => [profile(1, active: true), profile(2)], (_) {});
+    await tester.pumpWidget(
+        MaterialApp(home: ConfigPage(proxyRunning: false, service: service)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-config-stack')));
+    await tester.pumpAndSettle();
+    expect(find.text('配置2'), findsOneWidget);
+    await tester.pumpWidget(
+        MaterialApp(home: ConfigPage(proxyRunning: true, service: service)));
+    await tester.pumpAndSettle();
+    expect(find.text('配置2'), findsNothing);
+    expect(find.byKey(const ValueKey('config-profile-stack')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
