@@ -252,6 +252,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('检测失败'), findsOneWidget);
     expect(find.textContaining('状态检测失败：'), findsOneWidget);
+    final toggle = find.descendant(
+      of: find.byKey(const ValueKey('service-toggle')),
+      matching: find.byType(IconButton),
+    );
+    expect(tester.widget<IconButton>(toggle).onPressed, isNull);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
     service.failStatus = false;
     service.statusOverride = ProxyStatus.recovering;
     await tester.pump(const Duration(seconds: 3));
