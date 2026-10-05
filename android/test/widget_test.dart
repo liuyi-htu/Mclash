@@ -34,8 +34,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Mclash'), findsOneWidget);
-    expect(find.text('代理面板'), findsOneWidget);
-    expect(find.text('代理规则'), findsOneWidget);
+    expect(find.text('代理'), findsOneWidget);
+    expect(find.text('规则'), findsOneWidget);
   });
 
   testWidgets('shows embedded bottom navigation', (tester) async {
@@ -70,7 +70,7 @@ void main() {
     });
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(Switch));
+    await tester.tap(find.byIcon(Icons.power_settings_new));
     await tester.pump();
     await tester.tap(find.text('配置'));
     await tester.pump();

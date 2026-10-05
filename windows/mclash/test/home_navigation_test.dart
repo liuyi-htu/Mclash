@@ -245,7 +245,7 @@ void main() {
     service.statusGate = null;
     gate.complete(ProxyStatus.running);
     await tester.pumpAndSettle();
-    expect(find.text('已连接'), findsOneWidget);
+    expect(find.text('运行中'), findsOneWidget);
     service.failStatus = true;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
@@ -259,7 +259,7 @@ void main() {
     service.statusOverride = ProxyStatus.running;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
-    expect(find.text('已连接'), findsOneWidget);
+    expect(find.text('运行中'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   });
@@ -268,7 +268,7 @@ void main() {
     final service = _Service();
     await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('代理面板'));
+    await tester.tap(find.text('代理'));
     await tester.pumpAndSettle();
     expect(
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
@@ -342,12 +342,15 @@ void main() {
           home: HomePage(service: _Service()),
         ));
         await tester.pumpAndSettle();
-        expect(find.byType(NavigationBar), findsOneWidget);
-        expect(find.byType(Switch), findsOneWidget);
+        expect(find.byType(NavigationBar),
+            width < 720 ? findsOneWidget : findsNothing);
+        expect(find.byType(NavigationRail),
+            width >= 720 ? findsOneWidget : findsNothing);
+        expect(find.byIcon(Icons.power_settings_new), findsOneWidget);
         expect(find.text('0 B/s'), findsNWidgets(2));
         await tester.tap(find.text('配置'));
         await tester.pumpAndSettle();
-        expect(find.text('配置中心'), findsOneWidget);
+        expect(find.text('配置中心'), findsNothing);
         expect(find.byTooltip('添加配置'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('设置'));
@@ -409,7 +412,7 @@ void main() {
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('首页'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('代理面板'));
+        await tester.tap(find.text('代理'));
         await tester.pumpAndSettle();
         expect(find.byType(ProxyPanelPage), findsOneWidget);
         expect(tester.takeException(), isNull);

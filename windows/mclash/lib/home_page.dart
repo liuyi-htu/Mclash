@@ -1,3 +1,5 @@
+import 'app_appearance.dart';
+import 'pulse_dashboard.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -300,17 +302,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _openProxyPanel() async {
-    await Navigator.of(context).push<void>(MaterialPageRoute(
-      builder: (_) => ValueListenableBuilder<ProxyStatus>(
-        valueListenable: _statusNotifier,
-        builder: (_, status, child) => ProxyPanelPage(
-            proxyRunning: status == ProxyStatus.running, service: _service),
-      ),
-    ));
-    await _refresh();
-  }
-
   Future<void> _updateTrafficSpeed() async {
     if (_samplingTraffic || !mounted) return;
     if (_status != ProxyStatus.running) {
@@ -395,6 +386,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  String _normalProxyMode(String mode) => switch (mode) {
+        'global' => 'global',
+        'direct' => 'direct',
+        _ => 'rule',
+      };
+
   Future<void> _loadProxyMode() async {
     try {
       final configs = await _proxyControllerRequest('GET');
@@ -437,130 +434,6 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => _changingProxyMode = false);
     }
   }
-
-  Future<void> _showProxyModeDialog() async {
-    if (_changingProxyMode || _status != ProxyStatus.running) return;
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (_) => AnimatedBuilder(
-        animation:
-            Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
-        builder: (dialogContext, child) {
-          final colors = Theme.of(dialogContext).colorScheme;
-
-          Widget modeOption({
-            required String value,
-            required String title,
-            required IconData icon,
-          }) {
-            final selected = value == _proxyMode;
-            return Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Material(
-                color: selected
-                    ? colors.primary.withValues(alpha: 0.12)
-                    : colors.surfaceContainerHighest.withValues(alpha: 0.52),
-                borderRadius: BorderRadius.circular(18),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: _status != ProxyStatus.running || !_canOperate
-                      ? null
-                      : () => Navigator.of(dialogContext).pop(value),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 17,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: colors.primary.withValues(alpha: 0.11),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(icon, color: colors.primary, size: 23),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        if (selected)
-                          Icon(Icons.check_circle_rounded,
-                              color: colors.primary),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-
-          return Dialog(
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 24,
-              vertical: 32,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(26),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 430),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '选择代理规则',
-                      style:
-                          TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                    ),
-                    modeOption(
-                      value: 'rule',
-                      title: '规则模式',
-                      icon: Icons.route_outlined,
-                    ),
-                    modeOption(
-                      value: 'global',
-                      title: '全局模式',
-                      icon: Icons.public_rounded,
-                    ),
-                    modeOption(
-                      value: 'direct',
-                      title: '直连模式',
-                      icon: Icons.link_rounded,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    if (selected != null) await _setProxyMode(selected);
-  }
-
-  String _normalProxyMode(String mode) => switch (mode) {
-        'global' => 'global',
-        'direct' => 'direct',
-        _ => 'rule',
-      };
-
-  String get _proxyModeLabel => switch (_proxyMode) {
-        'global' => '全局',
-        'direct' => '直连',
-        _ => '规则',
-      };
 
   Future<bool> _confirmStopped() async {
     late final ProxyStatus status;
@@ -1271,8 +1144,10 @@ class _HomePageState extends State<HomePage> {
         (_status != ProxyStatus.running &&
             _status != ProxyStatus.stopped &&
             _status != ProxyStatus.failed);
-    final colors = Theme.of(context).colorScheme;
     final running = _status == ProxyStatus.running;
+
+    final tab = _selectedHomeTab;
+    final navIndex = const [0, 2, 3, 1][tab];
 
     void handleDestination(int index) {
       if (index == _selectedHomeTab) return;
@@ -1281,363 +1156,107 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Mclash',
-          style: TextStyle(
-            fontSize: 29,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.6,
-          ),
-        ),
-      ),
-      body: IndexedStack(
-        index: _selectedHomeTab,
-        children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
+      appBar: tab == 3
+          ? null
+          : AppBar(
+              title: Text(
+                'Mclash',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.6,
+                ),
+              ),
+            ),
+      body: PulseNavigation(
+        index: navIndex,
+        onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
+        child: IndexedStack(
+          index: tab,
+          children: [
+            PulseDashboard(
+              running: running,
+              busy: busy || !_canOperate,
+              status: _statusText,
+              detail: _statusError == null ? null : '状态检测失败：$_statusError',
+              download: _formatSpeed(_downloadBytesPerSecond),
+              upload: _formatSpeed(_uploadBytesPerSecond),
+              mode: _proxyMode,
+              changingMode: _changingProxyMode,
+              onToggle: _toggle,
+              onMode: _setProxyMode,
+              onRefresh: _refresh,
+            ),
+            ConfigPage(
+                proxyRunning: _status != ProxyStatus.stopped,
+                service: _service,
+                proxyStatus: _statusNotifier),
+            ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
               children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 18, 18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: running
-                          ? const [Color(0xFF3167F4), Color(0xFF4938EE)]
-                          : const [Color(0xFF51627E), Color(0xFF303B55)],
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (running
-                                ? const Color(0xFF356AE6)
-                                : const Color(0xFF202B45))
-                            .withValues(alpha: 0.20),
-                        blurRadius: 26,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Icon(
-                                  running
-                                      ? Icons.verified_user_rounded
-                                      : Icons.shield_outlined,
-                                  color: Colors.white,
-                                  size: 29,
-                                ),
-                              ),
-                              const SizedBox(width: 13),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      running ? '已连接' : _statusText,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _config.exists
-                                          ? (_config.fileName ?? '未命名配置')
-                                          : '尚未选择配置',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.72,
-                                        ),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (busy)
-                                const SizedBox.square(
-                                  dimension: 26,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              else
-                                Switch(
-                                  value: running,
-                                  onChanged:
-                                      _canOperate ? (_) => _toggle() : null,
-                                  activeThumbColor: const Color(0xFF315FE8),
-                                  activeTrackColor: Colors.white,
-                                  inactiveThumbColor: Colors.white,
-                                  inactiveTrackColor: Colors.white.withValues(
-                                    alpha: 0.28,
-                                  ),
-                                  trackOutlineColor:
-                                      const WidgetStatePropertyAll(
-                                    Colors.transparent,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 19),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _TrafficSpeed(
-                                    icon: Icons.arrow_downward_rounded,
-                                    value: _formatSpeed(
-                                      _downloadBytesPerSecond,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: 1,
-                                  height: 26,
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                ),
-                                Expanded(
-                                  child: _TrafficSpeed(
-                                    icon: Icons.arrow_upward_rounded,
-                                    value: _formatSpeed(_uploadBytesPerSecond),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                if (_statusError != null) ...[
-                  const SizedBox(height: 12),
-                  Text('状态检测失败：$_statusError'),
-                  TextButton(onPressed: _pollStatus, child: const Text('重新检测')),
-                ],
+                const AppearanceTile(),
                 const SizedBox(height: 16),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      _HomeActionTile(
-                        icon: Icons.hub_outlined,
-                        title: '代理面板',
-                        onTap: _openProxyPanel,
-                      ),
-                      const Divider(height: 1, indent: 64),
-                      _HomeActionTile(
-                        icon: Icons.route_outlined,
-                        title: '代理规则',
-                        trailing: _changingProxyMode
-                            ? const SizedBox.square(
-                                dimension: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                running ? '$_proxyModeLabel模式' : '启动代理后可切换',
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                        onTap: running && !_changingProxyMode
-                            ? _showProxyModeDialog
-                            : null,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ConfigPage(
-              proxyRunning: _status != ProxyStatus.stopped,
-              service: _service,
-              proxyStatus: _statusNotifier),
-          ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-            children: [
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(children: [
-                  _HomeActionTile(
+                ...[
+                  SettingsCard(
                       icon: Icons.tune_rounded,
                       title: '常规设置',
                       onTap: _canEditSettings ? _showGeneralSettings : null),
-                  const Divider(height: 1, indent: 64),
-                  _HomeActionTile(
+                  const SizedBox(height: 12),
+                  SettingsCard(
                       icon: Icons.swap_horiz_rounded,
                       title: '运行模式',
-                      trailing: Text(
+                      onTap: _canEditSettings ? _showRunModeDialog : null,
+                      subtitle:
                           _networkMode == NetworkMode.proxy ? '系统代理' : 'TUN'),
-                      onTap: _canEditSettings ? _showRunModeDialog : null),
-                  const Divider(height: 1, indent: 64),
-                  _HomeActionTile(
+                  const SizedBox(height: 12),
+                  SettingsCard(
                       icon: Icons.article_outlined,
                       title: '调试日志',
                       onTap: _showDebugLogSettings),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                child: Column(children: [
-                  _HomeActionTile(
+                  const SizedBox(height: 12),
+                  SettingsCard(
                       icon: Icons.system_update_alt_rounded,
                       title: '更新内核',
                       onTap: _showCoreUpdate),
-                  const Divider(height: 1, indent: 64),
-                  _HomeActionTile(
+                  const SizedBox(height: 12),
+                  SettingsCard(
                       icon: Icons.info_outline_rounded,
                       title: '关于 Mclash',
                       onTap: _showAbout),
-                ]),
-              ),
-            ],
-          ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedHomeTab,
-        onDestinationSelected: handleDestination,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: '首页',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            label: '配置',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: '设置',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrafficSpeed extends StatelessWidget {
-  const _TrafficSpeed({required this.icon, required this.value});
-
-  final IconData icon;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 17, color: Colors.white.withValues(alpha: 0.76)),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+                  const SizedBox(height: 12),
+                ],
+              ],
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HomeActionTile extends StatelessWidget {
-  const _HomeActionTile({
-    this.icon,
-    this.leading,
-    required this.title,
-    this.trailing,
-    this.onTap,
-  }) : assert(icon != null || leading != null);
-
-  final IconData? icon;
-  final Widget? leading;
-  final String title;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Opacity(
-      opacity: onTap == null ? 0.45 : 1,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 15, 18),
-          child: Row(
-            children: [
-              leading ??
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: colors.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Icon(icon, color: colors.primary, size: 25),
-                  ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-            ],
-          ),
+            tab == 3
+                ? ProxyPanelPage(proxyRunning: running, service: _service)
+                : const SizedBox.shrink(),
+          ],
         ),
       ),
+      bottomNavigationBar: MediaQuery.sizeOf(context).width >= 720
+          ? null
+          : NavigationBar(
+              selectedIndex: navIndex,
+              onDestinationSelected: (index) =>
+                  handleDestination(const [0, 3, 1, 2][index]),
+              destinations: [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: '首页',
+                ),
+                const NavigationDestination(
+                    icon: Icon(Icons.hub_outlined), label: '代理'),
+                NavigationDestination(
+                  icon: Icon(Icons.inventory_2_outlined),
+                  label: '配置',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  label: '设置',
+                ),
+              ],
+            ),
     );
   }
 }

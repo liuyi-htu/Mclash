@@ -1052,68 +1052,11 @@ class _ConfigPageState extends State<ConfigPage> {
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF3167F4), Color(0xFF4938EE)],
-                            ),
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF356AE6,
-                                ).withValues(alpha: 0.20),
-                                blurRadius: 26,
-                                offset: const Offset(0, 12),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 54,
-                                height: 54,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                  borderRadius: BorderRadius.circular(17),
-                                ),
-                                child: const Icon(
-                                  Icons.folder_copy_outlined,
-                                  color: Colors.white,
-                                  size: 29,
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      '配置中心',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${_profiles.length} 个配置 · 点击切换 · 长按管理',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.80,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text('${_profiles.length} 个配置 · 点击切换 · 长按管理',
+                                style:
+                                    Theme.of(context).textTheme.titleMedium)),
                         const SizedBox(height: 18),
                         if (_profiles.isEmpty)
                           Card(

@@ -116,6 +116,10 @@ class _Response extends Stream<List<int>> implements HttpClientResponse {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+Set<String> selectedMode(WidgetTester tester) => tester
+    .widget<SegmentedButton<String>>(find.byType(SegmentedButton<String>))
+    .selected;
+
 void main() {
   const channel = MethodChannel('mclash/native');
   late _Controller controller;
@@ -163,7 +167,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('代理面板'));
+    await tester.tap(find.text('代理'));
     await tester.pumpAndSettle();
     expect(
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
@@ -263,9 +267,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    for (final label in ['全局模式', '直连模式', '规则模式']) {
-      await tester.tap(find.text('代理规则'));
-      await tester.pumpAndSettle();
+    for (final label in ['全局', '直连', '规则']) {
       await tester.tap(find.text(label).last);
       await tester.pumpAndSettle();
     }
@@ -296,7 +298,7 @@ void main() {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
     expect(rememberedModes, contains('global'));
-    expect(find.text('全局模式'), findsOneWidget);
+    expect(selectedMode(tester), {'global'});
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -305,19 +307,19 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    expect(find.text('规则模式'), findsOneWidget);
+    expect(selectedMode(tester), {'rule'});
     await tester.pumpWidget(const SizedBox());
     controller.mode = 'global'; // Dashboard changes the still-running core.
     controller.failedModeReads = 2;
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    expect(find.text('规则模式'), findsNothing);
-    expect(find.text('读取模式中…'), findsOneWidget);
+    expect(selectedMode(tester), isNot(contains('rule')));
+    expect(selectedMode(tester), isEmpty);
     for (var i = 0; i < 3; i++) {
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
     }
-    expect(find.text('全局模式'), findsOneWidget);
+    expect(selectedMode(tester), {'global'});
     expect(controller.mode, 'global');
     expect(controller.writes, isEmpty);
     expect(nativeCalls, isNot(contains('start')));
@@ -334,10 +336,7 @@ void main() {
       controller.mode = mode;
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
-      expect(
-          find.text(
-              {'global': '全局模式', 'direct': '直连模式', 'rule': '规则模式'}[mode]!),
-          findsOneWidget);
+      expect(selectedMode(tester), {mode});
     }
     expect(controller.writes, isEmpty);
     await tester.pumpWidget(const SizedBox());
@@ -349,8 +348,8 @@ void main() {
     controller.failPersistence = true;
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    expect(find.text('直连模式'), findsOneWidget);
-    expect(find.text('规则模式'), findsNothing);
+    expect(selectedMode(tester), {'direct'});
+    expect(selectedMode(tester), isNot(contains('rule')));
     expect(controller.writes, isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
@@ -359,17 +358,15 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('代理规则'));
-    await tester.pumpAndSettle();
     controller.pendingModeRead = Completer<Map<String, Object>>();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
-    await tester.tap(find.text('全局模式'));
+    await tester.tap(find.text('全局'));
     await tester.pumpAndSettle();
     controller.pendingModeRead!.complete({'mode': 'rule'});
     controller.pendingModeRead = null;
     await tester.pumpAndSettle();
-    expect(find.text('全局模式'), findsOneWidget);
+    expect(selectedMode(tester), {'global'});
     expect(controller.mode, 'global');
     expect(rememberedModes.last, 'global');
     expect(controller.writes.single['body'], {'mode': 'global'});
@@ -380,12 +377,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('代理规则'));
-    await tester.pumpAndSettle();
     controller.failPersistence = true;
-    await tester.tap(find.text('全局模式'));
+    await tester.tap(find.text('全局'));
     await tester.pumpAndSettle();
-    expect(find.text('全局模式'), findsOneWidget);
+    expect(selectedMode(tester), {'global'});
     expect(controller.mode, 'global');
     expect(controller.writes.single['body'], {'mode': 'global'});
     await tester.pumpWidget(const SizedBox());
@@ -396,12 +391,10 @@ void main() {
     controller.mode = 'invalid';
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
-    expect(find.text('规则模式'), findsNothing);
+    expect(selectedMode(tester), isNot(contains('rule')));
     expect(rememberedModes, isEmpty);
-    await tester.tap(find.text('代理规则'));
-    await tester.pumpAndSettle();
     expect(find.text('选择运行模式'), findsNothing);
-    expect(find.textContaining('无法读取当前运行模式'), findsOneWidget);
+    expect(selectedMode(tester), isEmpty);
     expect(controller.writes, isEmpty);
     await tester.pump(const Duration(seconds: 7));
     await tester.pumpAndSettle();

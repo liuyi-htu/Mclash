@@ -83,8 +83,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Mclash Root'), findsOneWidget);
-    expect(find.text('代理面板'), findsOneWidget);
-    expect(find.text('代理规则'), findsOneWidget);
+    expect(find.text('代理'), findsOneWidget);
+    expect(find.text('规则'), findsOneWidget);
   });
 
   testWidgets('detects restoration state without showing a loading dialog',
@@ -125,6 +125,8 @@ void main() {
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
     expect(find.text('开发者模式'), findsNothing);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -160));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('关于 Mclash Root'));
     await tester.pumpAndSettle();
     final title = find.descendant(
@@ -162,7 +164,7 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump();
-    expect(find.text('已连接'), findsOneWidget);
+    expect(find.text('运行中'), findsOneWidget);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     running = false;
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);

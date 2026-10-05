@@ -1,3 +1,5 @@
+import '../shared/app_appearance.dart';
+import '../shared/pulse_dashboard.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -341,18 +343,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     ).push<bool>(MaterialPageRoute(builder: (_) => const AppSelectorPage()));
   }
 
-  Future<void> _openProxyPanel() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ValueListenableBuilder<ProxyStatus>(
-          valueListenable: _proxyStatus,
-          builder: (_, status, child) =>
-              ProxyPanelPage(proxyRunning: status == ProxyStatus.running),
-        ),
-      ),
-    );
-  }
-
   Future<Map<String, dynamic>> _proxyControllerRequest(
     String method, {
     Map<String, Object>? body,
@@ -443,125 +433,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (mounted) setState(() => _changingProxyMode = false);
     }
   }
-
-  Future<void> _showProxyModeDialog() async {
-    if (_changingProxyMode || _status != ProxyStatus.running) return;
-    final loaded = await _loadProxyMode();
-    if (!mounted || _status != ProxyStatus.running || _changingProxyMode) {
-      return;
-    }
-    if (!loaded) {
-      _showError('无法读取当前运行模式，请稍后重试');
-      return;
-    }
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final colors = Theme.of(dialogContext).colorScheme;
-
-        Widget modeOption({
-          required String value,
-          required String title,
-          required IconData icon,
-        }) {
-          final selected = value == _proxyMode;
-          return Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Material(
-              color: selected
-                  ? colors.primary.withValues(alpha: 0.12)
-                  : colors.surfaceContainerHighest.withValues(alpha: 0.52),
-              borderRadius: BorderRadius.circular(18),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => Navigator.of(dialogContext).pop(value),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 17,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: colors.primary.withValues(alpha: 0.11),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(icon, color: colors.primary, size: 23),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      if (selected)
-                        Icon(Icons.check_circle_rounded, color: colors.primary),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 32,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(26),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '选择运行模式',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                  ),
-                  modeOption(
-                    value: 'rule',
-                    title: '规则模式',
-                    icon: Icons.route_outlined,
-                  ),
-                  modeOption(
-                    value: 'global',
-                    title: '全局模式',
-                    icon: Icons.public_rounded,
-                  ),
-                  modeOption(
-                    value: 'direct',
-                    title: '直连模式',
-                    icon: Icons.link_rounded,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    if (selected != null) await _setProxyMode(selected);
-  }
-
-  String get _proxyModeLabel => switch (_proxyMode) {
-        'global' => '全局模式',
-        'direct' => '直连模式',
-        'rule' => '规则模式',
-        _ => '读取模式中…',
-      };
 
   Future<void> _loadDeveloperMode() async {
     try {
@@ -1031,8 +902,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final busy =
         _status == ProxyStatus.starting || _status == ProxyStatus.stopping;
-    final colors = Theme.of(context).colorScheme;
     final running = _status == ProxyStatus.running;
+
+    final tab = _selectedHomeTab;
+    final navIndex = const [0, 2, 3, 1][tab];
 
     void handleDestination(int index) {
       if (index == _selectedHomeTab) return;
@@ -1041,269 +914,83 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Mclash Root',
-          style: TextStyle(
-            fontSize: 29,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.6,
-          ),
+      appBar: tab == 3
+          ? null
+          : AppBar(
+              title: Text(
+                'Mclash Root',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.6,
+                ),
+              ),
+            ),
+      body: PulseNavigation(
+        index: navIndex,
+        onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
+        child: IndexedStack(
+          index: tab,
+          children: [
+            PulseDashboard(
+              running: running,
+              busy: busy,
+              status: _statusText,
+              download: _formatSpeed(_downloadBytesPerSecond),
+              upload: _formatSpeed(_uploadBytesPerSecond),
+              mode: _proxyMode,
+              changingMode: _changingProxyMode,
+              onToggle: _toggle,
+              onMode: _setProxyMode,
+              onRefresh: _refresh,
+            ),
+            ConfigPage(proxyRunning: _status != ProxyStatus.stopped),
+            _SettingsPage(
+              locked: _status != ProxyStatus.stopped,
+              developerModeEnabled: _developerModeEnabled,
+              onRootSettings: _showRootSettings,
+              onCoreUpdate: () async {
+                await showDialog<void>(
+                  context: context,
+                  builder: (_) => CoreUpdateDialog(proxyStatus: _proxyStatus),
+                );
+                await _refresh();
+              },
+              onAppSelector: _openAppSelector,
+              onDebugLogs: _showDebugLogSettings,
+              onDeveloperSettings: _showDeveloperSettings,
+              onAbout: _showAbout,
+            ),
+            tab == 3
+                ? ProxyPanelPage(proxyRunning: running)
+                : const SizedBox.shrink(),
+          ],
         ),
       ),
-      body: IndexedStack(
-        index: _selectedHomeTab,
-        children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 18, 18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: running
-                          ? const [Color(0xFF3167F4), Color(0xFF4938EE)]
-                          : const [Color(0xFF51627E), Color(0xFF303B55)],
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (running
-                                ? const Color(0xFF356AE6)
-                                : const Color(0xFF202B45))
-                            .withValues(alpha: 0.20),
-                        blurRadius: 26,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Icon(
-                                  running
-                                      ? Icons.verified_user_rounded
-                                      : Icons.shield_outlined,
-                                  color: Colors.white,
-                                  size: 29,
-                                ),
-                              ),
-                              const SizedBox(width: 13),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      running ? '已连接' : _statusText,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _config.exists
-                                          ? (_config.fileName ?? '未命名配置')
-                                          : '尚未选择配置',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.72,
-                                        ),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (busy)
-                                const SizedBox.square(
-                                  dimension: 26,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              else
-                                Switch(
-                                  value: running,
-                                  onChanged: (_) => _toggle(),
-                                  activeThumbColor: const Color(0xFF315FE8),
-                                  activeTrackColor: Colors.white,
-                                  inactiveThumbColor: Colors.white,
-                                  inactiveTrackColor: Colors.white.withValues(
-                                    alpha: 0.28,
-                                  ),
-                                  trackOutlineColor:
-                                      const WidgetStatePropertyAll(
-                                    Colors.transparent,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 19),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _TrafficSpeed(
-                                    icon: Icons.arrow_downward_rounded,
-                                    value: _formatSpeed(
-                                      _downloadBytesPerSecond,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  width: 1,
-                                  height: 26,
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                ),
-                                Expanded(
-                                  child: _TrafficSpeed(
-                                    icon: Icons.arrow_upward_rounded,
-                                    value: _formatSpeed(_uploadBytesPerSecond),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+      bottomNavigationBar: MediaQuery.sizeOf(context).width >= 720
+          ? null
+          : NavigationBar(
+              selectedIndex: navIndex,
+              onDestinationSelected: (index) =>
+                  handleDestination(const [0, 3, 1, 2][index]),
+              destinations: [
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home_rounded),
+                  label: '首页',
                 ),
-                const SizedBox(height: 16),
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      _HomeActionTile(
-                        icon: Icons.hub_outlined,
-                        title: '代理面板',
-                        onTap: _openProxyPanel,
-                      ),
-                      const Divider(height: 1, indent: 64),
-                      _HomeActionTile(
-                        icon: Icons.route_outlined,
-                        title: '代理规则',
-                        trailing: _changingProxyMode
-                            ? const SizedBox.square(
-                                dimension: 17,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                running ? _proxyModeLabel : '启动代理后可切换',
-                                style: TextStyle(
-                                  color: colors.onSurfaceVariant,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                        onTap: running && !_changingProxyMode
-                            ? _showProxyModeDialog
-                            : null,
-                      ),
-                    ],
-                  ),
+                const NavigationDestination(
+                    icon: Icon(Icons.hub_outlined), label: '代理'),
+                NavigationDestination(
+                  icon: Icon(Icons.inventory_2_outlined),
+                  label: '配置',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  label: '设置',
                 ),
               ],
             ),
-          ),
-          ConfigPage(proxyRunning: _status != ProxyStatus.stopped),
-          _SettingsPage(
-            locked: _status != ProxyStatus.stopped,
-            developerModeEnabled: _developerModeEnabled,
-            onRootSettings: _showRootSettings,
-            onCoreUpdate: () async {
-              await showDialog<void>(
-                context: context,
-                builder: (_) => CoreUpdateDialog(proxyStatus: _proxyStatus),
-              );
-              await _refresh();
-            },
-            onAppSelector: _openAppSelector,
-            onDebugLogs: _showDebugLogSettings,
-            onDeveloperSettings: _showDeveloperSettings,
-            onAbout: _showAbout,
-          ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedHomeTab,
-        onDestinationSelected: handleDestination,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: '首页',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            label: '配置',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: '设置',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TrafficSpeed extends StatelessWidget {
-  const _TrafficSpeed({required this.icon, required this.value});
-
-  final IconData icon;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 17, color: Colors.white.withValues(alpha: 0.76)),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 1,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1334,175 +1021,41 @@ class _SettingsPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
       children: [
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              _SettingsActionTile(
-                icon: Icons.tune_rounded,
-                title: 'TProxy 参数',
-                onTap: locked ? null : onRootSettings,
-              ),
-              const Divider(height: 1, indent: 64),
-              _SettingsActionTile(
-                icon: Icons.apps_rounded,
-                title: '分应用代理',
-                onTap: locked ? null : onAppSelector,
-              ),
-              const Divider(height: 1, indent: 64),
-              _SettingsActionTile(
-                icon: Icons.article_outlined,
-                title: '调试日志',
-                onTap: onDebugLogs,
-              ),
-            ],
-          ),
-        ),
+        const AppearanceTile(),
         const SizedBox(height: 16),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              if (developerModeEnabled) ...[
-                _SettingsActionTile(
-                  icon: Icons.developer_mode_rounded,
-                  title: '开发者模式',
-                  onTap: locked ? null : onDeveloperSettings,
-                ),
-                const Divider(height: 1, indent: 64),
-              ],
-              _SettingsActionTile(
-                icon: Icons.system_update_alt_rounded,
-                title: '更新内核',
-                onTap: onCoreUpdate,
-              ),
-              const Divider(height: 1, indent: 64),
-              _SettingsActionTile(
-                icon: Icons.info_outline_rounded,
-                title: '关于 Mclash Root',
-                onTap: onAbout,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsActionTile extends StatelessWidget {
-  const _SettingsActionTile({
-    required this.icon,
-    required this.title,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final enabled = onTap != null;
-    final accent =
-        enabled ? colors.primary : colors.onSurface.withValues(alpha: 0.38);
-    return Semantics(
-      container: true,
-      button: true,
-      enabled: enabled,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(icon, color: accent, size: 25),
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: enabled ? null : accent,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeActionTile extends StatelessWidget {
-  const _HomeActionTile({
-    this.icon,
-    this.leading,
-    required this.title,
-    this.trailing,
-    this.onTap,
-  }) : assert(icon != null || leading != null);
-
-  final IconData? icon;
-  final Widget? leading;
-  final String title;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 15, 18),
-        child: Row(
-          children: [
-            leading ??
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: colors.primary.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Icon(icon, color: colors.primary, size: 25),
-                ),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ...[
+          SettingsCard(
+              icon: Icons.tune_rounded,
+              title: 'TProxy 参数',
+              onTap: locked ? null : onRootSettings),
+          const SizedBox(height: 12),
+          SettingsCard(
+              icon: Icons.apps_rounded,
+              title: '分应用代理',
+              onTap: locked ? null : onAppSelector),
+          const SizedBox(height: 12),
+          SettingsCard(
+              icon: Icons.article_outlined, title: '调试日志', onTap: onDebugLogs),
+          const SizedBox(height: 12),
+          SettingsCard(
+              icon: Icons.system_update_alt_rounded,
+              title: '更新内核',
+              onTap: onCoreUpdate),
+          const SizedBox(height: 12),
+          if (developerModeEnabled) ...[
+            SettingsCard(
+                icon: Icons.developer_mode_rounded,
+                title: '开发者模式',
+                onTap: locked ? null : onDeveloperSettings),
+            const SizedBox(height: 12)
           ],
-        ),
-      ),
+          SettingsCard(
+              icon: Icons.info_outline_rounded,
+              title: '关于 Mclash Root',
+              onTap: onAbout),
+          const SizedBox(height: 12),
+        ],
+      ],
     );
   }
 }
