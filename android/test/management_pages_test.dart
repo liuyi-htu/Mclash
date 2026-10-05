@@ -6,6 +6,69 @@ import 'package:mclash/shared/add_node_page.dart';
 import 'package:mclash/shared/subscription_management_page.dart';
 
 void main() {
+  testWidgets('node dialog uses compact type and fits large text and keyboard',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 100);
+    addTearDown(tester.view.resetViewInsets);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    for (final scenario in [
+      (const Size(320, 640), 1.0),
+      (const Size(320, 640), 1.8),
+      (const Size(900, 360), 1.4),
+    ]) {
+      tester.view.physicalSize = scenario.$1;
+      await tester.pumpWidget(MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(scenario.$2),
+          ),
+          child: child!,
+        ),
+        home: AddNodePage(
+          nodes: const [],
+          onDelete: (_) async => [],
+          onSave: (_) async =>
+              throw const FormatException('节点链接无效，请检查协议、地址和端口后重新粘贴完整的节点链接。'),
+        ),
+      ));
+      await tester.tap(find.byTooltip('添加节点'));
+      await tester.pumpAndSettle();
+      final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+      expect(dialog.titleTextStyle!.fontSize, 18);
+      expect(
+          tester.widget<TextField>(find.byType(TextField)).style!.fontSize, 14);
+      expect(
+          tester
+              .getCenter(find
+                  .descendant(
+                      of: find.byType(AlertDialog),
+                      matching: find.byType(Material))
+                  .first)
+              .dx,
+          closeTo(scenario.$1.width / 2, 1));
+      expect(
+          tester
+              .getCenter(find
+                  .descendant(
+                      of: find.byType(AlertDialog),
+                      matching: find.byType(Material))
+                  .first)
+              .dy,
+          closeTo((scenario.$1.height - 100) / 2, 1));
+      await tester.enterText(find.byType(TextField), 'invalid://node');
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('节点链接无效'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
   testWidgets(
       'node page adds through its floating button and refreshes its list',
       (tester) async {

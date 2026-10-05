@@ -5,8 +5,7 @@
 #include "flutter_window.h"
 #include "utils.h"
 
-void MoveWindowToRightSide(Win32Window& window) {
-  HWND handle = window.GetHandle();
+void CenterWindow(HWND handle) {
   if (handle == nullptr) {
     return;
   }
@@ -22,9 +21,8 @@ void MoveWindowToRightSide(Win32Window& window) {
 
   const int width = window_rect.right - window_rect.left;
   const int height = window_rect.bottom - window_rect.top;
-  const int margin = ::MulDiv(16, ::GetDpiForWindow(handle), 96);
   const RECT& work_area = monitor_info.rcWork;
-  int x = work_area.right - width - margin;
+  int x = work_area.left + ((work_area.right - work_area.left - width) / 2);
   int y = work_area.top + ((work_area.bottom - work_area.top - height) / 2);
   if (x < work_area.left) {
     x = work_area.left;
@@ -48,6 +46,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (::GetLastError() == ERROR_ALREADY_EXISTS) {
     if (HWND existing_window = ::FindWindowW(nullptr, L"Mclash")) {
       ::ShowWindow(existing_window, SW_RESTORE);
+      CenterWindow(existing_window);
       ::SetForegroundWindow(existing_window);
     }
     ::CloseHandle(instance_mutex);
@@ -73,13 +72,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(360, 720);
+  Win32Window::Size size(960, 640);
   if (!window.Create(L"Mclash", origin, size)) {
     ::ReleaseMutex(instance_mutex);
     ::CloseHandle(instance_mutex);
     return EXIT_FAILURE;
   }
-  MoveWindowToRightSide(window);
   window.SetQuitOnClose(true);
 
   ::MSG msg;

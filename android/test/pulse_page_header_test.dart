@@ -91,4 +91,61 @@ void main() {
     expect(calls, 2);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('landscape page headers keep navigation fixed and usable',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 420);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final insets in [
+      const EdgeInsets.fromLTRB(28, 24, 48, 0),
+      const EdgeInsets.fromLTRB(48, 24, 28, 0),
+    ]) {
+      Rect? initialRail;
+      for (final title in ['Mclash', '配置与订阅', '设置', '代理面板']) {
+        int? selected;
+        await tester.pumpWidget(MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(
+              size: const Size(900, 420),
+              padding: insets,
+              viewPadding: insets,
+            ),
+            child: Builder(builder: (context) {
+              final header = pulseAppBar(context, title: title);
+              const body = SizedBox.expand(key: ValueKey('page-body'));
+              return Scaffold(
+                body: PulseNavigation(
+                  index: 0,
+                  onSelected: (index) => selected = index,
+                  appBar: title == '代理面板' ? null : header,
+                  child: title == '代理面板'
+                      ? Scaffold(appBar: header, body: body)
+                      : body,
+                ),
+              );
+            }),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        final rail = tester.getRect(find.byType(NavigationRail));
+        initialRail ??= rail;
+        expect(rail, initialRail);
+        expect(rail.left, insets.left);
+        expect(rail.top, insets.top);
+        final page = tester.getRect(find.byKey(const ValueKey('page-body')));
+        expect(page.left, greaterThanOrEqualTo(rail.right));
+        expect(page.right, 900 - insets.right);
+        expect(tester.getTopLeft(find.text(title).last).dx,
+            greaterThan(rail.right));
+        for (var i = 0; i < PulseBottomBar.labels.length; i++) {
+          await tester.tap(find.descendant(
+              of: find.byType(NavigationRail),
+              matching: find.text(PulseBottomBar.labels[i])));
+          expect(selected, i);
+        }
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
 }

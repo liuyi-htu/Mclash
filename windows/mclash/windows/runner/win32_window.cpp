@@ -1,5 +1,7 @@
 #include "win32_window.h"
 
+#include <algorithm>
+
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
@@ -25,6 +27,28 @@ constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
+
+// Store both logical dimensions as one value, independent of screen DPI.
+constexpr const wchar_t kWindowSettingsKey[] = L"Software\\Mclash";
+constexpr const wchar_t kWindowSizeValue[] = L"WindowSize";
+struct SavedWindowSize {
+  DWORD width;
+  DWORD height;
+};
+
+Win32Window::Size LoadWindowSize(const Win32Window::Size& fallback) {
+  SavedWindowSize saved{};
+  DWORD bytes = sizeof(saved);
+  const LSTATUS result = RegGetValueW(
+      HKEY_CURRENT_USER, kWindowSettingsKey, kWindowSizeValue,
+      RRF_RT_REG_BINARY, nullptr, &saved, &bytes);
+  if (result != ERROR_SUCCESS || bytes != sizeof(saved) ||
+      saved.width < 360 || saved.height < 400 ||
+      saved.width > 16384 || saved.height > 16384) {
+    return fallback;
+  }
+  return Win32Window::Size(saved.width, saved.height);
+}
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -134,10 +158,28 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
+  const Size restored_size = LoadWindowSize(size);
+  // Restore the remembered size, centered before the first Flutter frame.
+  // Fit the outer frame inside the work area at high DPI or on small displays.
+  int width = Scale(restored_size.width, scale_factor);
+  int height = Scale(restored_size.height, scale_factor);
+  int x = Scale(origin.x, scale_factor);
+  int y = Scale(origin.y, scale_factor);
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (GetMonitorInfoW(monitor, &monitor_info)) {
+    const RECT& work_area = monitor_info.rcWork;
+    const int work_width = work_area.right - work_area.left;
+    const int work_height = work_area.bottom - work_area.top;
+    const int margin = Scale(16, scale_factor);
+    width = std::min(width, std::max(1, work_width - 2 * margin));
+    height = std::min(height, std::max(1, work_height - 2 * margin));
+    x = work_area.left + (work_width - width) / 2;
+    y = work_area.top + (work_height - height) / 2;
+  }
+  constexpr DWORD window_style = WS_OVERLAPPEDWINDOW;
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      window_class, title.c_str(), window_style, x, y, width, height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -179,6 +221,19 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_EXITSIZEMOVE:
+    case WM_CLOSE:
+      SaveWindowSize();
+      break;
+
+    case WM_GETMINMAXINFO: {
+      const UINT dpi = GetDpiForWindow(hwnd);
+      auto* limits = reinterpret_cast<MINMAXINFO*>(lparam);
+      limits->ptMinTrackSize.x = MulDiv(360, dpi, 96);
+      limits->ptMinTrackSize.y = MulDiv(400, dpi, 96);
+      return 0;
+    }
+
     case WM_DESTROY:
       window_handle_ = nullptr;
       Destroy();
@@ -198,6 +253,16 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
     case WM_SIZE: {
+      // Keep the normal size when minimized or maximized, so a new launch
+      // always opens as a centered normal window at the user's chosen size.
+      if (wparam == SIZE_RESTORED) {
+        RECT bounds{};
+        const UINT dpi = GetDpiForWindow(hwnd);
+        if (dpi != 0 && GetWindowRect(hwnd, &bounds)) {
+          normal_size_.width = MulDiv(bounds.right - bounds.left, 96, dpi);
+          normal_size_.height = MulDiv(bounds.bottom - bounds.top, 96, dpi);
+        }
+      }
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
         // Size and position the child window.
@@ -219,6 +284,16 @@ Win32Window::MessageHandler(HWND hwnd,
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
+}
+
+void Win32Window::SaveWindowSize() {
+  if (normal_size_.width < 360 || normal_size_.height < 400) {
+    return;
+  }
+  const SavedWindowSize saved{normal_size_.width, normal_size_.height};
+  // Per-user preference only; an unavailable registry must not block closing.
+  RegSetKeyValueW(HKEY_CURRENT_USER, kWindowSettingsKey, kWindowSizeValue,
+                  REG_BINARY, &saved, sizeof(saved));
 }
 
 void Win32Window::Destroy() {

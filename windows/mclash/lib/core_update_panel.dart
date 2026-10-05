@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'package:flutter/material.dart';
 
 class CoreUpdatePanel extends StatelessWidget {
@@ -31,7 +32,7 @@ class CoreUpdatePanel extends StatelessWidget {
               width: 76, child: Text(label, style: theme.textTheme.bodySmall)),
           Expanded(
               child: Text(value ?? '尚未检测',
-                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13))),
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14))),
         ]));
     return Column(
         mainAxisSize: MainAxisSize.min,
@@ -48,7 +49,7 @@ class CoreUpdatePanel extends StatelessWidget {
                 children: [
                   Text('mihomo',
                       style:
-                          theme.textTheme.titleMedium?.copyWith(fontSize: 15)),
+                          theme.textTheme.titleMedium?.copyWith(fontSize: 14)),
                   const SizedBox(height: 10),
                   version('当前版本', currentVersion),
                   version('最新版本', latestVersion),
@@ -116,58 +117,27 @@ class CoreUpdatePanel extends StatelessWidget {
   }
 }
 
-class CoreUpdateSheetContent extends StatelessWidget {
-  const CoreUpdateSheetContent(
+class CoreUpdateDialogContent extends StatelessWidget {
+  const CoreUpdateDialogContent(
       {super.key, required this.panel, this.onClose, this.busy = false});
   final Widget panel;
   final VoidCallback? onClose;
   final bool busy;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SafeArea(
-      top: false,
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-              maxWidth: 440,
-              maxHeight: MediaQuery.sizeOf(context).height * 0.85),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                        child: Container(
-                            width: 32,
-                            height: 4,
-                            decoration: BoxDecoration(
-                                color: theme.colorScheme.onSurfaceVariant
-                                    .withValues(alpha: 0.4),
-                                borderRadius: BorderRadius.circular(2)))),
-                    const SizedBox(height: 16),
-                    Text('更新内核',
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontSize: 18)),
-                    const SizedBox(height: 12),
-                    panel,
-                    if (onClose != null) ...[
-                      const SizedBox(height: 12),
-                      Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton(
-                              onPressed: busy ? null : onClose,
-                              child: const Text('关闭'))),
-                    ],
-                  ]),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => DialogTypography(
+          child: AlertDialog(
+        alignment: Alignment.center,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        title: const Text('更新内核', style: TextStyle(fontSize: 18)),
+        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        content:
+            SizedBox(width: 400, child: SingleChildScrollView(child: panel)),
+        actions: onClose == null
+            ? null
+            : [
+                FilledButton(
+                    onPressed: busy ? null : onClose, child: const Text('关闭')),
+              ],
+      ));
 }

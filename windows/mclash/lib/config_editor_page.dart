@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -171,7 +172,8 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     final input = _jumpController..clear();
     final line = await showDialog<int>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogTypography(
+          child: AlertDialog(
         title: Text('跳转到行（1–$_lineCount）'),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         content: TextField(
@@ -192,7 +194,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
               onPressed: () => Navigator.pop(context, int.tryParse(input.text)),
               child: const Text('跳转'))
         ],
-      ),
+      )),
     );
     if (line == null || !mounted) return;
     _selectLine(line.clamp(1, _lineCount));
@@ -312,7 +314,8 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     if (!_dirty || _saving) return true;
     return await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => DialogTypography(
+              child: AlertDialog(
             title: const Text('放弃修改？'),
             content: const Text('配置内容尚未保存，确定放弃修改吗？'),
             actions: [
@@ -325,7 +328,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                 child: const Text('放弃修改'),
               ),
             ],
-          ),
+          )),
         ) ??
         false;
   }

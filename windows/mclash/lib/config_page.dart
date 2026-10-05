@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'rule_provider_page.dart';
 import 'app_appearance.dart';
 import 'proxy_edit_access.dart';
@@ -152,7 +153,8 @@ class _ConfigPageState extends State<ConfigPage> {
       builder: (dialogContext) => _watchAccess((dialogContext) =>
           StatefulBuilder(
             builder: (dialogContext, setDialogState) =>
-                _watchAccess((dialogContext) => AlertDialog(
+                _watchAccess((dialogContext) => DialogTypography(
+                        child: AlertDialog(
                       title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
                       content: SizedBox(
                         width: 480,
@@ -363,7 +365,7 @@ class _ConfigPageState extends State<ConfigPage> {
                           child: Text(existing == null ? '添加并下载' : '保存并更新'),
                         ),
                       ],
-                    )),
+                    ))),
           )),
     );
     final save =
@@ -430,7 +432,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) =>
-              _watchAccess((dialogContext) => AlertDialog(
+              _watchAccess((dialogContext) => DialogTypography(
+                      child: AlertDialog(
                     title: const Text('删除配置'),
                     content: Text('确定删除“${profile.name}”吗？'),
                     actions: [
@@ -445,7 +448,7 @@ class _ConfigPageState extends State<ConfigPage> {
                         child: const Text('删除'),
                       ),
                     ],
-                  )),
+                  ))),
         ) ??
         false;
     if (!confirmed) return;
@@ -480,99 +483,103 @@ class _ConfigPageState extends State<ConfigPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => _watchAccess((sheetContext) => SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+      builder: (sheetContext) => DialogTypography(
+          child: _watchAccess((sheetContext) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: profile.active
-                              ? colors.primaryContainer
-                              : colors.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: Icon(
-                          profile.isSubscription
-                              ? Icons.cloud_outlined
-                              : Icons.description_outlined,
-                          color: profile.active
-                              ? colors.onPrimaryContainer
-                              : colors.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              profile.name,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: profile.active
+                                  ? colors.primaryContainer
+                                  : colors.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Icon(
+                              profile.isSubscription
+                                  ? Icons.cloud_outlined
+                                  : Icons.description_outlined,
+                              color: profile.active
+                                  ? colors.onPrimaryContainer
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  profile.name,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  profile.isSubscription
+                                      ? '机场订阅'
+                                      : '本地 YAML 配置',
+                                  style:
+                                      TextStyle(color: colors.onSurfaceVariant),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (profile.active)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.primaryContainer,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '当前使用',
+                                style: TextStyle(
+                                  color: colors.onPrimaryContainer,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              profile.isSubscription ? '机场订阅' : '本地 YAML 配置',
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
-                      if (profile.active)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colors.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            '当前使用',
-                            style: TextStyle(
-                              color: colors.onPrimaryContainer,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
+                      if (profile.isSubscription && profile.url != null) ...[
+                        const SizedBox(height: 18),
+                        const Text(
+                          '订阅链接',
+                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          profile.url!,
+                          style: TextStyle(
+                              color: colors.onSurfaceVariant, height: 1.4),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      Text(
+                        _locked
+                            ? '代理运行中：当前页面仅供查看，停止代理后可切换或管理配置。'
+                            : '点击非当前配置可切换，长按可管理。',
+                        style: TextStyle(
+                            color: colors.onSurfaceVariant, height: 1.4),
+                      ),
                     ],
                   ),
-                  if (profile.isSubscription && profile.url != null) ...[
-                    const SizedBox(height: 18),
-                    const Text(
-                      '订阅链接',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      profile.url!,
-                      style: TextStyle(
-                          color: colors.onSurfaceVariant, height: 1.4),
-                    ),
-                  ],
-                  const SizedBox(height: 18),
-                  Text(
-                    _locked
-                        ? '代理运行中：当前页面仅供查看，停止代理后可切换或管理配置。'
-                        : '点击非当前配置可切换，长按可管理。',
-                    style:
-                        TextStyle(color: colors.onSurfaceVariant, height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-          )),
+                ),
+              ))),
     );
   }
 
@@ -587,7 +594,8 @@ class _ConfigPageState extends State<ConfigPage> {
       builder: (dialogContext) => _watchAccess((dialogContext) =>
           StatefulBuilder(
             builder: (dialogContext, setDialogState) =>
-                _watchAccess((dialogContext) => AlertDialog(
+                _watchAccess((dialogContext) => DialogTypography(
+                        child: AlertDialog(
                       title: Text('配置名称',
                           style: Theme.of(dialogContext)
                               .textTheme
@@ -631,7 +639,7 @@ class _ConfigPageState extends State<ConfigPage> {
                           child: const Text('保存'),
                         ),
                       ],
-                    )),
+                    ))),
           )),
     );
     final shouldSave =
@@ -839,7 +847,8 @@ class _ConfigPageState extends State<ConfigPage> {
     final confirmed = await showDialog<bool>(
             context: context,
             builder: (dialogContext) =>
-                _watchAccess((dialogContext) => AlertDialog(
+                _watchAccess((dialogContext) => DialogTypography(
+                        child: AlertDialog(
                       title: const Text('删除机场'),
                       content: Text(
                           '确定删除“$name”吗？${links.length == 1 ? '\n这是最后一个机场，会同时删除该配置。' : ''}'),
@@ -853,7 +862,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 Navigator.of(dialogContext).pop(true),
                             child: const Text('删除')),
                       ],
-                    ))) ??
+                    )))) ??
         false;
     if (!confirmed || !mounted) return;
     await _applyAirportChange(() => links.length == 1
@@ -873,7 +882,8 @@ class _ConfigPageState extends State<ConfigPage> {
         builder: (dialogContext) => _watchAccess((dialogContext) =>
             StatefulBuilder(
               builder: (dialogContext, setDialogState) =>
-                  _watchAccess((dialogContext) => AlertDialog(
+                  _watchAccess((dialogContext) => DialogTypography(
+                          child: AlertDialog(
                         title: Text(link == null ? '添加机场' : '编辑机场',
                             style: Theme.of(dialogContext)
                                 .textTheme
@@ -972,7 +982,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                     },
                               child: Text(link == null ? '添加' : '保存并更新')),
                         ],
-                      )),
+                      ))),
             )));
     final action = await Navigator.of(context, rootNavigator: true).push(route);
     await route.completed;
@@ -1058,70 +1068,73 @@ class _ConfigPageState extends State<ConfigPage> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (sheetContext) => _watchAccess((sheetContext) => SafeArea(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!profile.isSubscription) ...[
-                      ListTile(
-                        leading: const Icon(Icons.description_outlined),
-                        title: Text(profile.name),
-                        subtitle: const Text('本地 YAML 配置'),
-                      ),
-                      const Divider(height: 1),
-                    ],
-                    for (final action in orderedActions)
-                      if (action != 'host' || profile.isSubscription)
+      builder: (sheetContext) => DialogTypography(
+          child: _watchAccess((sheetContext) => SafeArea(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!profile.isSubscription) ...[
+                          ListTile(
+                            leading: const Icon(Icons.description_outlined),
+                            title: Text(profile.name),
+                            subtitle: const Text('本地 YAML 配置'),
+                          ),
+                          const Divider(height: 1),
+                        ],
+                        for (final action in orderedActions)
+                          if (action != 'host' || profile.isSubscription)
+                            ManagementMenuTile(
+                              icon: editingActions[action]!.$2,
+                              title: editingActions[action]!.$1,
+                              enabled: !_locked,
+                              onTap: () =>
+                                  Navigator.of(sheetContext).pop(action),
+                            ),
+                        const Divider(height: 1),
                         ManagementMenuTile(
-                          icon: editingActions[action]!.$2,
-                          title: editingActions[action]!.$1,
+                          icon: Icons.drive_file_rename_outline,
+                          title: '修改配置名称',
                           enabled: !_locked,
-                          onTap: () => Navigator.of(sheetContext).pop(action),
+                          onTap: () => Navigator.of(sheetContext).pop('rename'),
                         ),
-                    const Divider(height: 1),
-                    ManagementMenuTile(
-                      icon: Icons.drive_file_rename_outline,
-                      title: '修改配置名称',
-                      enabled: !_locked,
-                      onTap: () => Navigator.of(sheetContext).pop('rename'),
+                        if (profile.isSubscription)
+                          ManagementMenuTile(
+                            icon: Icons.cloud_outlined,
+                            title: '订阅管理',
+                            onTap: () =>
+                                Navigator.of(sheetContext).pop('subscription'),
+                          ),
+                        if (!profile.isSubscription)
+                          ManagementMenuTile(
+                            icon: Icons.code_outlined,
+                            title: '修改配置文件',
+                            enabled: !_locked,
+                            onTap: () =>
+                                Navigator.of(sheetContext).pop('editContent'),
+                          ),
+                        ManagementMenuTile(
+                          icon: Icons.visibility_outlined,
+                          title: '查看当前运行配置',
+                          onTap: () =>
+                              Navigator.of(sheetContext).pop('runtime'),
+                        ),
+                        ManagementMenuTile(
+                          icon: Icons.delete_outline,
+                          title: '删除',
+                          destructive: true,
+                          enabled: !_locked,
+                          onTap: () => Navigator.of(sheetContext).pop('delete'),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
-                    if (profile.isSubscription)
-                      ManagementMenuTile(
-                        icon: Icons.cloud_outlined,
-                        title: '订阅管理',
-                        onTap: () =>
-                            Navigator.of(sheetContext).pop('subscription'),
-                      ),
-                    if (!profile.isSubscription)
-                      ManagementMenuTile(
-                        icon: Icons.code_outlined,
-                        title: '修改配置文件',
-                        enabled: !_locked,
-                        onTap: () =>
-                            Navigator.of(sheetContext).pop('editContent'),
-                      ),
-                    ManagementMenuTile(
-                      icon: Icons.visibility_outlined,
-                      title: '查看当前运行配置',
-                      onTap: () => Navigator.of(sheetContext).pop('runtime'),
-                    ),
-                    ManagementMenuTile(
-                      icon: Icons.delete_outline,
-                      title: '删除',
-                      destructive: true,
-                      enabled: !_locked,
-                      onTap: () => Navigator.of(sheetContext).pop('delete'),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          )),
+              ))),
     );
 
     if (!mounted) return;

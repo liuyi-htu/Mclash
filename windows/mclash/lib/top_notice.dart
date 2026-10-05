@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -94,7 +95,8 @@ void showErrorNotice(BuildContext context, Object error) {
           if (!context.mounted) return;
           showDialog<void>(
             context: context,
-            builder: (dialogContext) => AlertDialog(
+            builder: (dialogContext) => DialogTypography(
+                child: AlertDialog(
               title: const Text('错误详情'),
               content: SingleChildScrollView(child: SelectableText(details)),
               actions: [
@@ -107,7 +109,7 @@ void showErrorNotice(BuildContext context, Object error) {
                   child: const Text('确定'),
                 ),
               ],
-            ),
+            )),
           );
         },
       ),

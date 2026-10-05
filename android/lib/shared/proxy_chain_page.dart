@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +65,8 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
   Future<void> _delete(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogTypography(
+          child: AlertDialog(
         title: Text('删除链式节点 $id？'),
         actions: [
           TextButton(
@@ -74,7 +76,7 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('删除')),
         ],
-      ),
+      )),
     );
     if (confirmed != true || !mounted) return;
     try {

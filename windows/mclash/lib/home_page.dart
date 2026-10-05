@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'core_update_panel.dart';
 import 'app_appearance.dart';
 import 'pulse_dashboard.dart';
@@ -149,7 +150,8 @@ class _HomePageState extends State<HomePage> {
         builder: (dialogContext) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => PopScope(
             canPop: false,
-            child: AlertDialog(
+            child: DialogTypography(
+                child: AlertDialog(
               icon: Container(
                 width: 58,
                 height: 58,
@@ -256,7 +258,7 @@ class _HomePageState extends State<HomePage> {
                       : const Text('同意并继续'),
                 ),
               ],
-            ),
+            )),
           ),
         ),
       );
@@ -497,7 +499,8 @@ class _HomePageState extends State<HomePage> {
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
         builder: (_, child) => PopScope(
           canPop: !_settingsBusy.value,
-          child: AlertDialog(
+          child: DialogTypography(
+              child: AlertDialog(
             title: const Text('常规设置'),
             content: SizedBox(
               width: 440,
@@ -564,7 +567,7 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('关闭'),
               )
             ],
-          ),
+          )),
         ),
       ),
     );
@@ -581,7 +584,8 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) => AnimatedBuilder(
         animation:
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
-        builder: (_, child) => AlertDialog(
+        builder: (_, child) => DialogTypography(
+            child: AlertDialog(
           title: const Text('选择运行模式'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -608,7 +612,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-        ),
+        )),
       ),
     );
     if (selected == null || !mounted || !_canEditSettings) return;
@@ -620,20 +624,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCoreUpdate() async {
-    await showModalBottomSheet<void>(
+    await showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      enableDrag: false,
-      showDragHandle: false,
-      builder: (sheetContext) => AnimatedBuilder(
+      builder: (dialogContext) => AnimatedBuilder(
         animation: Listenable.merge([_statusNotifier, _coreBusy]),
         builder: (_, child) => PopScope(
           canPop: !_coreBusy.value,
-          child: CoreUpdateSheetContent(
+          child: CoreUpdateDialogContent(
             panel: _coreUpdateCard(),
             busy: _coreBusy.value,
             onClose: () {
-              if (!_coreBusy.value) Navigator.of(sheetContext).pop();
+              if (!_coreBusy.value) Navigator.of(dialogContext).pop();
             },
           ),
         ),
@@ -718,7 +719,8 @@ class _HomePageState extends State<HomePage> {
 
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DialogTypography(
+          child: AlertDialog(
         title: Text('$name 内核更新失败',
             style: Theme.of(dialogContext)
                 .textTheme
@@ -751,7 +753,7 @@ class _HomePageState extends State<HomePage> {
             child: const Text('关闭'),
           ),
         ],
-      ),
+      )),
     );
   }
 
@@ -762,7 +764,8 @@ class _HomePageState extends State<HomePage> {
         packageInfo.buildNumber.isEmpty ? '' : '+${packageInfo.buildNumber}';
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => DialogTypography(
+          child: AlertDialog(
         title: Text('关于',
             style: Theme.of(dialogContext)
                 .textTheme
@@ -781,7 +784,7 @@ class _HomePageState extends State<HomePage> {
               padding: EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 'Mclash',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 8),
@@ -796,7 +799,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: Text(
                     '本项目完全透明开源，构建脚本与完整源码均随发布包提供。',
-                    style: TextStyle(fontSize: 13, height: 1.45),
+                    style: TextStyle(fontSize: 14, height: 1.45),
                   ),
                 ),
               ],
@@ -831,7 +834,7 @@ class _HomePageState extends State<HomePage> {
             child: const Text('关闭'),
           ),
         ],
-      ),
+      )),
     );
   }
 
@@ -895,7 +898,8 @@ class _HomePageState extends State<HomePage> {
         barrierDismissible: false,
         builder: (dialogContext) => PopScope(
           canPop: false,
-          child: AlertDialog(
+          child: DialogTypography(
+              child: AlertDialog(
             content: Row(
               children: [
                 const CircularProgressIndicator(),
@@ -916,7 +920,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
-          ),
+          )),
         ),
       ).whenComplete(() => _operationDialogOpen = false),
     );
@@ -945,7 +949,8 @@ class _HomePageState extends State<HomePage> {
         animation:
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
         builder: (_, child) => StatefulBuilder(
-          builder: (dialogContext, setDialogState) => AlertDialog(
+          builder: (dialogContext, setDialogState) => DialogTypography(
+              child: AlertDialog(
             title: Text('调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
@@ -1024,7 +1029,7 @@ class _HomePageState extends State<HomePage> {
                 child: const Text('关闭'),
               ),
             ],
-          ),
+          )),
         ),
       ),
     );
@@ -1042,7 +1047,8 @@ class _HomePageState extends State<HomePage> {
           builder: (dialogContext) => AnimatedBuilder(
             animation:
                 Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
-            builder: (_, child) => AlertDialog(
+            builder: (_, child) => DialogTypography(
+                child: AlertDialog(
               title: Text('清除调试日志',
                   style: Theme.of(dialogContext)
                       .textTheme
@@ -1059,7 +1065,7 @@ class _HomePageState extends State<HomePage> {
               content: const Text(
                 '将清空服务日志、mihomo 日志和内核更新日志。'
                 '此操作不会删除配置文件。',
-                style: TextStyle(fontSize: 13, height: 1.45),
+                style: TextStyle(fontSize: 14, height: 1.45),
               ),
               actions: [
                 TextButton(
@@ -1083,7 +1089,7 @@ class _HomePageState extends State<HomePage> {
                   child: const Text('清除'),
                 ),
               ],
-            ),
+            )),
           ),
         ) ??
         false;
@@ -1104,7 +1110,8 @@ class _HomePageState extends State<HomePage> {
 
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
+        builder: (dialogContext) => DialogTypography(
+            child: AlertDialog(
           title: Text(file.displayName,
               style: Theme.of(dialogContext)
                   .textTheme
@@ -1152,7 +1159,7 @@ class _HomePageState extends State<HomePage> {
               child: const Text('关闭'),
             ),
           ],
-        ),
+        )),
       );
     } catch (error) {
       if (!mounted) return;
@@ -1192,16 +1199,16 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
-      appBar: tab == 3
-          ? null
-          : pulseAppBar(context,
-              badge: 'WINDOWS',
-              title: tab == 1
-                  ? '配置与订阅'
-                  : tab == 2
-                      ? '设置'
-                      : 'Mclash'),
       body: PulseNavigation(
+        appBar: tab == 3
+            ? null
+            : pulseAppBar(context,
+                badge: 'WINDOWS',
+                title: tab == 1
+                    ? '配置与订阅'
+                    : tab == 2
+                        ? '设置'
+                        : 'Mclash'),
         index: navIndex,
         onSelected: (index) => handleDestination(const [0, 3, 1, 2][index]),
         child: IndexedStack(
@@ -1278,13 +1285,6 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      bottomNavigationBar: MediaQuery.sizeOf(context).width >= 720
-          ? null
-          : PulseBottomBar(
-              index: navIndex,
-              onSelected: (index) =>
-                  handleDestination(const [0, 3, 1, 2][index]),
-            ),
     );
   }
 }

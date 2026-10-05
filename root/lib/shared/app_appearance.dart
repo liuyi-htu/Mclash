@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/services.dart';
@@ -247,10 +248,11 @@ class AppearanceTile extends StatelessWidget {
                 context: context,
                 isScrollControlled: true,
                 showDragHandle: true,
-                builder: (_) => AppearanceScope(
+                builder: (_) => DialogTypography(
+                    child: AppearanceScope(
                   controller: controller,
                   child: const _AppearanceSheet(),
-                ),
+                )),
               ),
     );
   }
@@ -286,7 +288,7 @@ class _AppearanceSheet extends StatelessWidget {
         child: SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('主题', style: Theme.of(context).textTheme.titleMedium),
+        Text('主题', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
         Text('显示模式', style: Theme.of(context).textTheme.bodyMedium),
         const SizedBox(height: 8),

@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'management_style.dart';
 import 'package:flutter/material.dart';
 
@@ -16,7 +17,8 @@ Future<bool> showSubscriptionHostDialog({
           builder: (context) => StatefulBuilder(
             builder: (context, setDialogState) => PopScope(
               canPop: !saving,
-              child: AlertDialog(
+              child: DialogTypography(
+                  child: AlertDialog(
                 title: Text('修改 Host',
                     style: Theme.of(context)
                         .textTheme
@@ -94,7 +96,7 @@ Future<bool> showSubscriptionHostDialog({
                     child: Text(saving ? '保存中…' : '保存'),
                   ),
                 ],
-              ),
+              )),
             ),
           ),
         ) ??

@@ -28,11 +28,10 @@ class Win32Window {
   Win32Window();
   virtual ~Win32Window();
 
-  // Creates a win32 window with |title| that is positioned and sized using
-  // |origin| and |size|. New windows are created on the default monitor. Window
-  // sizes are specified to the OS in physical pixels, hence to ensure a
-  // consistent size this function will scale the inputted width and height as
-  // as appropriate for the default monitor. The window is invisible until
+  // Creates a centered window on the monitor selected by |origin|, restoring
+  // the remembered logical size or using |size| on the first launch. Dimensions
+  // are scaled for the monitor DPI and fitted to its work area.
+  // The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
@@ -89,6 +88,10 @@ class Win32Window {
 
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
+
+  // Persist the last restored (not minimized/maximized) logical dimensions.
+  void SaveWindowSize();
+  Size normal_size_{0, 0};
 
   bool quit_on_close_ = false;
 

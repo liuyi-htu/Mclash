@@ -49,7 +49,8 @@ void main() {
     expect(toggles, 1);
   });
 
-  testWidgets('desktop rail adapts to wide and narrow screens', (tester) async {
+  testWidgets('desktop keeps the rail in wide and narrow windows',
+      (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: SizedBox(
             width: 900,
@@ -63,7 +64,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         home: PulseNavigation(
             index: 0, onSelected: (_) {}, child: const Text('Body'))));
-    expect(find.byType(NavigationRail), findsNothing);
+    expect(find.byType(NavigationRail), findsOneWidget);
   });
 
   testWidgets('small screen and enlarged text have no overflow',

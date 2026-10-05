@@ -213,7 +213,7 @@ void main() {
     await tester.tapAt(const Offset(5, 5));
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
     expect(service.updates, 1);
     service.updateGate!.complete();
     await tester.pumpAndSettle();
@@ -336,11 +336,12 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   });
-  for (final width in [320.0, 360.0, 900.0]) {
+  for (final width in [320.0, 360.0, 900.0, 960.0]) {
+    final height = width == 960 ? 600.0 : 800.0;
     for (final brightness in Brightness.values) {
       testWidgets('Windows navigation at $width in $brightness',
           (tester) async {
-        tester.view.physicalSize = Size(width, 800);
+        tester.view.physicalSize = Size(width, height);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
@@ -349,10 +350,8 @@ void main() {
           home: HomePage(service: _Service()),
         ));
         await tester.pumpAndSettle();
-        expect(find.byType(PulseBottomBar),
-            width < 720 ? findsOneWidget : findsNothing);
-        expect(find.byType(NavigationRail),
-            width >= 720 ? findsOneWidget : findsNothing);
+        expect(find.byType(PulseBottomBar), findsNothing);
+        expect(find.byType(NavigationRail), findsOneWidget);
         expect(find.byIcon(Icons.power_settings_new), findsOneWidget);
         expect(find.text('0 B/s'), findsNWidgets(2));
         await tester.tap(find.text('配置'));
@@ -370,7 +369,7 @@ void main() {
         final sheet = find.byType(AlertDialog);
         expect(sheet, findsOneWidget);
         expect(find.byType(BottomSheet), findsNothing);
-        expect(tester.getCenter(sheet).dy, closeTo(400, 1));
+        expect(tester.getCenter(sheet).dy, closeTo(height / 2, 1));
         expect(
             find.descendant(of: sheet, matching: find.byType(SwitchListTile)),
             findsNWidgets(3));
@@ -387,10 +386,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('更新内核'));
         await tester.pumpAndSettle();
-        expect(find.byType(AlertDialog), findsNothing);
-        expect(find.byType(BottomSheet), findsOneWidget);
-        expect(
-            tester.getBottomLeft(find.byType(BottomSheet)).dy, closeTo(800, 1));
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.byType(AlertDialog), findsOneWidget);
+        expect(tester.getCenter(find.byType(AlertDialog)).dy,
+            closeTo(height / 2, 1));
         expect(find.text('检测版本'), findsOneWidget);
         for (final button in [
           find.widgetWithText(OutlinedButton, '检测版本'),

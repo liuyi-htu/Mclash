@@ -1,3 +1,4 @@
+import 'dialog_typography.dart';
 import 'proxy_edit_access.dart';
 import 'package:flutter/material.dart';
 import 'add_action_button.dart';
@@ -46,7 +47,8 @@ class _RuleProviderPageState extends State<RuleProviderPage> {
   Future<void> _delete(String name) async {
     final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (context) => DialogTypography(
+                child: AlertDialog(
               title: Text('删除规则集 $name？',
                   style: Theme.of(context)
                       .textTheme
@@ -60,7 +62,7 @@ class _RuleProviderPageState extends State<RuleProviderPage> {
                     onPressed: () => Navigator.pop(context, true),
                     child: const Text('删除')),
               ],
-            ));
+            )));
     if (confirmed != true || !mounted) return;
     try {
       await _save(deleteConfigRuleProvider(_content, name));
@@ -197,7 +199,8 @@ Future<void> _providerDialog(
                                     : null));
                     return PopScope(
                         canPop: !saving,
-                        child: AlertDialog(
+                        child: DialogTypography(
+                            child: AlertDialog(
                           title: Text(initialName == null ? '新增规则集' : '编辑规则集',
                               style: Theme.of(context)
                                   .textTheme
@@ -317,7 +320,7 @@ Future<void> _providerDialog(
                                       },
                                 child: Text(saving ? '保存中…' : '保存')),
                           ],
-                        ));
+                        )));
                   },
                 )));
   } finally {
