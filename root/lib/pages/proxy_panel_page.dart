@@ -66,6 +66,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   @override
   void initState() {
     super.initState();
+    _loading = widget.proxyRunning;
     if (widget.proxyRunning) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadProxies());
     }

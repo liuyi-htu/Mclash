@@ -15,6 +15,7 @@ class _Controller extends HttpOverrides {
   int failedModeReads = 0;
   bool failPersistence = false;
   Completer<Map<String, Object>>? pendingModeRead;
+  Completer<Map<String, Object>>? pendingProxyRead;
 
   @override
   HttpClient createHttpClient(SecurityContext? context) => _Client(this);
@@ -99,6 +100,11 @@ class _Request extends Fake implements HttpClientRequest {
         controller.pendingModeRead != null) {
       return _Response(await controller.pendingModeRead!.future);
     }
+    if (method == 'GET' &&
+        url.path == '/proxies' &&
+        controller.pendingProxyRead != null) {
+      return _Response(await controller.pendingProxyRead!.future);
+    }
     return _Response(controller.respond(method, url, body.toString()));
   }
 }
@@ -165,6 +171,30 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
+
+  for (final empty in [false, true]) {
+    testWidgets('first proxy frame waits for controller before empty=$empty',
+        (tester) async {
+      final gate = Completer<Map<String, Object>>();
+      controller.pendingProxyRead = gate;
+      await tester.pumpWidget(
+        const MaterialApp(home: ProxyPanelPage(proxyRunning: true)),
+      );
+      expect(find.text('没有可选择的代理组'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('没有可选择的代理组'), findsNothing);
+      gate.complete(empty
+          ? {'proxies': <String, Object>{}}
+          : controller.respond('GET', Uri.parse('/proxies'), ''));
+      controller.pendingProxyRead = null;
+      await tester.pumpAndSettle();
+      expect(find.text('没有可选择的代理组'), empty ? findsOneWidget : findsNothing);
+      expect(find.text('Test group'), empty ? findsNothing : findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    });
+  }
 
   testWidgets('open panel follows an external stop and reconnect',
       (tester) async {
