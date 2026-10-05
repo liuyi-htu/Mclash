@@ -39,7 +39,6 @@ class _SubscriptionManagementPageState
     extends State<SubscriptionManagementPage> {
   late ConfigProfile _profile = widget.profile;
   bool _working = false;
-  bool _airportsExpanded = false;
   String? _error;
   String? _updatingLink;
 
@@ -74,7 +73,6 @@ class _SubscriptionManagementPageState
   @override
   void didUpdateWidget(covariant SubscriptionManagementPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.profile.id != widget.profile.id) _airportsExpanded = false;
     if (oldWidget.profile != widget.profile) _profile = widget.profile;
   }
 
@@ -223,74 +221,9 @@ class _SubscriptionManagementPageState
             padding: const EdgeInsets.all(16),
             child: Text(_error!, style: TextStyle(color: colors.error)));
     if (widget.embedded) {
-      final multiple = links.length > 1;
-      final stackDepth = (links.length - 1).clamp(0, 2).toInt();
-      void toggleAirports() =>
-          setState(() => _airportsExpanded = !_airportsExpanded);
       return Column(children: [
         if (error != null) error,
-        if (multiple && !_airportsExpanded)
-          Stack(children: [
-            for (var layer = stackDepth; layer > 0; layer--)
-              Positioned(
-                left: layer * 6.0,
-                right: layer * 6.0,
-                top: layer * 8.0,
-                bottom: (stackDepth - layer) * 8.0,
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                  color: colors.primaryContainer
-                      .withValues(alpha: layer == 2 ? .45 : .75),
-                  borderRadius: BorderRadius.circular(20),
-                )),
-              ),
-            Padding(
-              padding: EdgeInsets.only(bottom: stackDepth * 8.0),
-              child: Card(
-                  child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: _working ? null : toggleAirports,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(children: [
-                          Expanded(
-                              child: Text('${links.length} 个机场',
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium)),
-                          TextButton(
-                              onPressed: _working ? null : toggleAirports,
-                              child: const Text('展开')),
-                        ]),
-                        const SizedBox(height: 4),
-                        Text(
-                            [
-                              for (var i = 0; i < links.length; i++)
-                                _profile.subscriptionNameFor(links[i], i)
-                            ].join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ]),
-                ),
-              )),
-            ),
-          ])
-        else ...[
-          if (multiple)
-            Row(children: [
-              Expanded(
-                  child: Text('共 ${links.length} 个机场',
-                      style: Theme.of(context).textTheme.bodySmall)),
-              TextButton(
-                  onPressed: _working ? null : toggleAirports,
-                  child: const Text('收起')),
-            ]),
-          cards,
-        ],
+        cards,
       ]);
     }
     return PopScope(

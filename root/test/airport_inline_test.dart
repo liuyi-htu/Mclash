@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mclash/models.dart';
-import 'package:mclash/app_appearance.dart';
-import 'package:mclash/subscription_management_page.dart';
+import 'package:mclash/core/models.dart';
+import 'package:mclash/shared/app_appearance.dart';
+import 'package:mclash/shared/subscription_management_page.dart';
 
 ConfigProfile airports(List<String> links) => ConfigProfile(
       id: 'stack',
@@ -27,7 +27,7 @@ const links = [
 
 void main() {
   testWidgets(
-      'embedded stack expands for actions and keeps reordered airports on collapse',
+      'embedded airports display immediately and keep their reordered actions',
       (tester) async {
     List<String>? order;
     String? updated;
@@ -51,15 +51,12 @@ void main() {
             return current;
           },
         )))));
-    expect(find.text('3 个机场'), findsOneWidget);
-    expect(find.byTooltip('更新机场'), findsNothing);
-    final collapsedHeight =
-        tester.getSize(find.byType(SubscriptionManagementPage)).height;
-    await tester.tap(find.text('展开'));
-    await tester.pumpAndSettle();
+    expect(find.text('展开'), findsNothing);
+    expect(find.text('收起'), findsNothing);
     expect(find.byTooltip('更新机场'), findsNWidgets(3));
-    expect(tester.getSize(find.byType(SubscriptionManagementPage)).height,
-        greaterThan(collapsedHeight));
+    for (final name in ['机场甲', '机场乙', '机场丙']) {
+      expect(find.text(name), findsOneWidget);
+    }
     await tester.tap(find.byTooltip('更新机场').last);
     await tester.pumpAndSettle();
     expect(updated, links.last);
@@ -73,21 +70,14 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
     expect(order, [links[2], links[0], links[1]]);
-    await tester.tap(find.text('收起'));
-    await tester.pumpAndSettle();
-    expect(find.text('机场丙 · 机场甲 · 机场乙'), findsOneWidget);
-    expect(find.byTooltip('更新机场'), findsNothing);
-    expect(tester.getSize(find.byType(SubscriptionManagementPage)).height,
-        collapsedHeight);
-    await tester.tap(find.text('展开'));
-    await tester.pumpAndSettle();
+    expect(find.byTooltip('更新机场'), findsNWidgets(3));
     expect(tester.getTopLeft(find.text('机场丙')).dy,
         lessThan(tester.getTopLeft(find.text('机场甲')).dy));
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'pending update cannot collapse and deletion to one airport removes stack controls',
+      'pending update disables actions and deletion keeps the remaining airport visible',
       (tester) async {
     final pending = Completer<ConfigProfile?>();
     await tester.pumpWidget(MaterialApp(
@@ -102,15 +92,12 @@ void main() {
       onDelete: (profile, link) async => airports([links.first]),
       onReorder: (profile, value) async => profile,
     )))));
-    await tester.tap(find.text('展开'));
-    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('更新机场').first);
     await tester.pump();
-    expect(
-        tester
-            .widget<TextButton>(find.widgetWithText(TextButton, '收起'))
-            .onPressed,
-        isNull);
+    for (final button
+        in tester.widgetList<IconButton>(find.byType(IconButton))) {
+      expect(button.onPressed, isNull);
+    }
     pending.complete(airports(links.take(2).toList()));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('删除机场').last);
@@ -123,7 +110,7 @@ void main() {
   });
 
   testWidgets(
-      'many airports stay compact at narrow width and large text while running',
+      'many airports display at narrow width and large text while running',
       (tester) async {
     tester.view.physicalSize = const Size(320, 900);
     tester.view.devicePixelRatio = 1;
@@ -142,11 +129,7 @@ void main() {
               onUpdate: (profile, link) async => profile,
               onReorder: (profile, value) async => profile,
             ))))));
-    expect(tester.getSize(find.byType(SubscriptionManagementPage)).height,
-        lessThan(200));
-    expect(find.byTooltip('更新机场'), findsNothing);
-    await tester.tap(find.text('展开'));
-    await tester.pumpAndSettle();
+    expect(find.text('展开'), findsNothing);
     expect(find.byTooltip('更新机场'), findsNWidgets(30));
     for (final button
         in tester.widgetList<IconButton>(find.byType(IconButton))) {
