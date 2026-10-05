@@ -1,3 +1,4 @@
+import '../shared/app_appearance.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -887,8 +888,8 @@ class _ProxyGroupButton extends StatelessWidget {
     var tapOrigin = MediaQuery.sizeOf(context).center(Offset.zero);
 
     return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(20),
+      color: pulsePanelCardColor(context),
+      shape: pulsePanelCardShape(context),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTapDown: (details) => tapOrigin = details.globalPosition,
@@ -991,13 +992,12 @@ class _NodeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background =
-        selected ? colors.primaryContainer : colors.surfaceContainerLow;
+    final background = pulsePanelCardColor(context, selected: selected);
     final foreground = selected ? colors.primary : colors.onSurface;
 
     return Material(
       color: background,
-      borderRadius: BorderRadius.circular(20),
+      shape: pulsePanelCardShape(context, selected: selected),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,

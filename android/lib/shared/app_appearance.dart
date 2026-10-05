@@ -96,6 +96,25 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
   );
 }
 
+Color pulsePanelCardColor(BuildContext context, {bool selected = false}) {
+  final colors = Theme.of(context).colorScheme;
+  if (selected) return colors.primaryContainer;
+  return Theme.of(context).brightness == Brightness.dark
+      ? colors.surfaceContainerLow
+      : Color.lerp(colors.surfaceContainerLow, colors.primaryContainer, .65)!;
+}
+
+ShapeBorder pulsePanelCardShape(BuildContext context, {bool selected = false}) {
+  final colors = Theme.of(context).colorScheme;
+  return RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(20),
+    side: Theme.of(context).brightness == Brightness.dark
+        ? BorderSide.none
+        : BorderSide(
+            color: colors.primary.withValues(alpha: selected ? .55 : .18)),
+  );
+}
+
 class AppearanceController extends ChangeNotifier {
   AppearanceController({Future<File?> Function()? fileProvider})
       : _fileProvider = fileProvider ?? _defaultFile;
