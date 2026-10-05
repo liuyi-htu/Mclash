@@ -40,7 +40,7 @@ void main() {
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNotNull);
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -97,7 +97,7 @@ void main() {
         tester.view.viewInsets = const FakeViewPadding(bottom: 180);
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        await tester.tap(find.text('取消'));
+        await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
         tester.view.viewInsets = const FakeViewPadding();
       }

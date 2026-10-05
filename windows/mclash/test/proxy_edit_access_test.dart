@@ -97,7 +97,7 @@ void main() {
             .onPressed,
         isNull);
     expect(saves, 0);
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(
         tester.widget<AddActionButton>(find.byType(AddActionButton)).onPressed,

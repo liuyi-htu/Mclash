@@ -189,8 +189,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
                     borderSide: BorderSide.none))),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          TextButton(
               onPressed: () => Navigator.pop(context, int.tryParse(input.text)),
               child: const Text('跳转'))
         ],

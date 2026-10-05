@@ -118,11 +118,8 @@ class CoreUpdatePanel extends StatelessWidget {
 }
 
 class CoreUpdateDialogContent extends StatelessWidget {
-  const CoreUpdateDialogContent(
-      {super.key, required this.panel, this.onClose, this.busy = false});
+  const CoreUpdateDialogContent({super.key, required this.panel});
   final Widget panel;
-  final VoidCallback? onClose;
-  final bool busy;
 
   @override
   Widget build(BuildContext context) => DialogTypography(
@@ -133,11 +130,5 @@ class CoreUpdateDialogContent extends StatelessWidget {
         contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
         content:
             SizedBox(width: 400, child: SingleChildScrollView(child: panel)),
-        actions: onClose == null
-            ? null
-            : [
-                FilledButton(
-                    onPressed: busy ? null : onClose, child: const Text('关闭')),
-              ],
       ));
 }

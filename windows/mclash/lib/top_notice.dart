@@ -104,10 +104,6 @@ void showErrorNotice(BuildContext context, Object error) {
                     onPressed: () =>
                         Clipboard.setData(ClipboardData(text: details)),
                     child: const Text('复制')),
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('确定'),
-                ),
               ],
             )),
           );

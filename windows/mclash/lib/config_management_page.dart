@@ -88,9 +88,6 @@ class _ConfigManagementPageState extends State<ConfigManagementPage> {
                     child: AlertDialog(
                   title: Text('删除 $name？'),
                   actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('取消')),
                     DestructiveActionButton(
                         onPressed: !ProxyEditAccess.allowed(context)
                             ? null
@@ -445,9 +442,6 @@ Future<String?> _ruleDialog(
                                               .error)),
                               ]))),
                       actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('取消')),
                         FilledButton(
                             onPressed: !ProxyEditAccess.allowed(context)
                                 ? null
@@ -648,9 +642,6 @@ Future<String?> _groupDialog(
                                 ),
                               ]))),
                       actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('取消')),
                         FilledButton(
                             onPressed: !ProxyEditAccess.allowed(context)
                                 ? null

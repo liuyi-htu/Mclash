@@ -8,6 +8,8 @@
 #define MyPackageVersion MyAppVersion + "+" + MyBuildNumber
 #define MyFileVersion MyAppVersion + "." + MyBuildNumber
 #define MyAppExeName "Mclash.exe"
+// A new icon path prevents Explorer from reusing the previous release icon.
+#define MyAppIconName "Mclash-" + MyPackageVersion + ".ico"
 
 [Setup]
 AppId={{6C93D89B-75B0-4AE7-A8F3-A0F98048B215}
@@ -24,7 +26,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayIcon={app}\Mclash.ico
+UninstallDisplayIcon={app}\{#MyAppIconName}
 SetupIconFile=..\mclash\windows\runner\resources\app_icon.ico
 
 [Tasks]
@@ -43,11 +45,11 @@ Source: "..\windows-package\mihomo.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\windows-package\geosite.dat"; DestDir: "{app}\data"; DestName: "GeoSite.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\geoip.dat"; DestDir: "{app}\data"; DestName: "GeoIP.dat"; Flags: onlyifdoesntexist
 Source: "..\windows-package\country.mmdb"; DestDir: "{app}\data"; DestName: "Country.mmdb"; Flags: onlyifdoesntexist
-Source: "..\mclash\windows\runner\resources\app_icon.ico"; DestDir: "{app}"; DestName: "Mclash.ico"; Flags: ignoreversion
+Source: "..\mclash\windows\runner\resources\app_icon.ico"; DestDir: "{app}"; DestName: "{#MyAppIconName}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Mclash"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Mclash.ico"
-Name: "{autodesktop}\Mclash"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Mclash.ico"; Tasks: desktopicon
+Name: "{group}\Mclash"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"
+Name: "{autodesktop}\Mclash"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppIconName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\MclashService.exe"; Parameters: "install --base ""{app}"" --data-dir ""{app}\data"""; Flags: runhidden waituntilterminated

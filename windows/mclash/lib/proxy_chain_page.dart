@@ -75,9 +75,6 @@ class _ProxyChainPageState extends State<ProxyChainPage> {
                   child: AlertDialog(
                 title: Text('删除链式节点 $id？'),
                 actions: [
-                  TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('取消')),
                   DestructiveActionButton(
                       onPressed: !ProxyEditAccess.allowed(context)
                           ? null

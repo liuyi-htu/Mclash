@@ -62,7 +62,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('节点链接无效'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('取消'));
+      await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
       await tester.pumpWidget(const SizedBox());

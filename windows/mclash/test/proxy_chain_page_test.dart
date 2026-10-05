@@ -38,9 +38,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('选择前置节点'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消').last);
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(readProxyChains(saved!), {'北京': 'JP'});
     expect(find.text('链式节点 1'), findsOneWidget);
@@ -71,7 +71,7 @@ void main() {
     expect(find.byIcon(Icons.chevron_right), findsNothing);
     await tester.tap(find.byTooltip('删除链式节点').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('取消'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(attempts, 0);
     expect(find.text('链式节点 1'), findsOneWidget);

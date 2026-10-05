@@ -132,7 +132,7 @@ void main() {
                   .onPressed !=
               null,
           editable);
-      await tester.tap(find.text('关闭'));
+      await tester.tapAt(const Offset(5, 5));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -178,7 +178,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(service.ipv6Changes, 1);
-    await tester.tap(find.text('关闭'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpWidget(const SizedBox());
@@ -205,11 +205,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(service.updates, 1);
-    expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, '关闭'))
-            .onPressed,
-        isNull);
+    expect(find.text('关闭'), findsNothing);
     await tester.tapAt(const Offset(5, 5));
     await tester.binding.handlePopRoute();
     await tester.pump();
@@ -220,7 +216,7 @@ void main() {
     expect(find.text('2.0.0'), findsNWidgets(2));
     expect(find.text('mihomo 内核更新完成'), findsOneWidget);
     expect(service.versionChecks, 2);
-    await tester.tap(find.text('关闭'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     await tester.tap(find.text('更新内核'));
     await tester.pumpAndSettle();
@@ -352,15 +348,26 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(PulseBottomBar), findsNothing);
         expect(find.byType(NavigationRail), findsOneWidget);
+        void expectHeaderAligned(String title) {
+          final firstIcon = find.descendant(
+              of: find.byType(NavigationRail),
+              matching: find.byIcon(PulseBottomBar.icons.first));
+          expect(tester.getCenter(find.text(title).last).dy,
+              closeTo(tester.getCenter(firstIcon).dy, 1));
+        }
+
+        expectHeaderAligned('Mclash');
         expect(find.byIcon(Icons.power_settings_new), findsOneWidget);
         expect(find.text('0 B/s'), findsNWidgets(2));
         await tester.tap(find.text('配置'));
         await tester.pumpAndSettle();
+        expectHeaderAligned('配置与订阅');
         expect(find.text('配置中心'), findsNothing);
         expect(find.byTooltip('添加配置'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('设置'));
         await tester.pumpAndSettle();
+        expectHeaderAligned('设置');
         expect(find.text('常规设置'), findsOneWidget);
         expect(find.text('系统代理'), findsOneWidget);
         expect(find.text('更新内核'), findsOneWidget);
@@ -381,8 +388,8 @@ void main() {
           expect(find.descendant(of: sheet, matching: find.text(title)),
               findsNothing);
         }
-        expect(find.widgetWithText(FilledButton, '关闭'), findsOneWidget);
-        await tester.tap(find.text('关闭'));
+        expect(find.text('关闭'), findsNothing);
+        await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
         await tester.tap(find.text('更新内核'));
         await tester.pumpAndSettle();
@@ -413,8 +420,8 @@ void main() {
                 .onPressed,
             isNull);
         expect(tester.takeException(), isNull);
-        expect(find.widgetWithText(FilledButton, '关闭'), findsOneWidget);
-        await tester.tap(find.text('关闭'));
+        expect(find.text('关闭'), findsNothing);
+        await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('首页'));
@@ -422,6 +429,7 @@ void main() {
         await tester.tap(find.text('代理'));
         await tester.pumpAndSettle();
         expect(find.byType(ProxyPanelPage), findsOneWidget);
+        expectHeaderAligned('代理面板');
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
