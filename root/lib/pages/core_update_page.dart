@@ -1,3 +1,4 @@
+import '../shared/app_appearance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
@@ -86,6 +87,8 @@ class _CoreUpdateDialogState extends State<CoreUpdateDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Card(
+                      color: pulsePanelCardColor(context),
+                      shape: pulsePanelCardShape(context),
                       child: Padding(
                         padding: const EdgeInsets.all(18),
                         child: Column(

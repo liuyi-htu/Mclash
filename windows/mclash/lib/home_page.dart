@@ -691,6 +691,8 @@ class _HomePageState extends State<HomePage> {
   Widget _coreUpdateCard() {
     final enabled = _canOperate && _status == ProxyStatus.running;
     return Card(
+        color: pulsePanelCardColor(context),
+        shape: pulsePanelCardShape(context),
         child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
