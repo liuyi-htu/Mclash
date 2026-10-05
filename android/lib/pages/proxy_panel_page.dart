@@ -597,6 +597,11 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                       ),
                                       IconButton(
                                         tooltip: '测速当前代理组',
+                                        iconSize: 28,
+                                        style: IconButton.styleFrom(
+                                          fixedSize: const Size(48, 48),
+                                          padding: EdgeInsets.zero,
+                                        ),
                                         onPressed: _testingAllNodes ||
                                                 testingGroup
                                             ? null
@@ -624,7 +629,7 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
                                               },
                                         icon: testingGroup
                                             ? const SizedBox.square(
-                                                dimension: 20,
+                                                dimension: 24,
                                                 child:
                                                     CircularProgressIndicator(
                                                   strokeWidth: 2,
