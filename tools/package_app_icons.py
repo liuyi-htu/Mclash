@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRIMARY = '#315F95'
 SECONDARY = '#82A7D5'
 BACKGROUND = '#FFFFFF'
+ANDROID_OCCUPANCY = 3 / 5
 art = np.array(Image.open(ROOT / 'assets/app-icon.png').convert('RGBA'))
 size = art.shape[0]
 
@@ -49,7 +50,7 @@ def transform(occupancy):
 
 
 
-def svg(color, secondary, background=None, occupancy=.5):
+def svg(color, secondary, background=None, occupancy=ANDROID_OCCUPANCY):
     factor, x, y = transform(occupancy)
     tile = '' if background is None else f'<rect width="{size}" height="{size}" rx="{size * .24}" fill="{background}"/>'
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">{tile}<g transform="translate({x} {y}) scale({factor})"><path fill="{color}" fill-rule="evenodd" d="{outline}"/><path fill="{secondary}" fill-rule="evenodd" d="{light}"/></g></svg>'
@@ -57,8 +58,8 @@ def svg(color, secondary, background=None, occupancy=.5):
 
 def vector(color, secondary, monochrome=False):
     # Adaptive foregrounds use 108dp for a visible 72dp launcher tile.
-    # 1/3 of the foreground viewport occupies half of that visible tile.
-    factor, x, y = transform(1 / 3)
+    # Scale against the visible tile, keeping 3/5 occupancy on Android.
+    factor, x, y = transform(ANDROID_OCCUPANCY * 72 / 108)
     accents = '' if monochrome else f'<path android:fillColor="{secondary}" android:fillType="evenOdd" android:pathData="{light}"/>'
     return f'<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="{size}" android:viewportHeight="{size}"><group android:scaleX="{factor}" android:scaleY="{factor}" android:translateX="{x}" android:translateY="{y}"><path android:fillColor="{color}" android:fillType="evenOdd" android:pathData="{outline}"/>{accents}</group></vector>\n'
 
@@ -76,7 +77,7 @@ for client in ('android', 'root'):
     cairosvg.svg2png(bytestring=svg('#000000', '#000000').encode(), write_to=str(res / 'drawable-nodpi/ic_launcher_brand_monochrome.png'), output_width=1024, output_height=1024)
     for density, pixels in [('mdpi', 48), ('hdpi', 72), ('xhdpi', 96), ('xxhdpi', 144), ('xxxhdpi', 192)]:
         for suffix in ('', '_round'):
-            cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .5).encode(), write_to=str(res / f'mipmap-{density}/ic_launcher{suffix}.png'), output_width=pixels, output_height=pixels)
+            cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, ANDROID_OCCUPANCY).encode(), write_to=str(res / f'mipmap-{density}/ic_launcher{suffix}.png'), output_width=pixels, output_height=pixels)
 
 # Render the same fixed tile for the Windows launcher.
 image = Image.open(BytesIO(cairosvg.svg2png(bytestring=svg(PRIMARY, SECONDARY, BACKGROUND, .7).encode()))).convert('RGBA')
