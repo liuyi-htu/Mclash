@@ -15,12 +15,12 @@ on:
       version:
         description: x.y.z; clear the field to reuse the latest built version
         required: false
-        default: "2.3.0"
+        default: "2.3.1"
         type: string
       build_number:
         description: Latest build number; unchanged values advance automatically
         required: false
-        default: "10"
+        default: "11"
         type: string
       release_notes:
         description: Optional release notes shown below the Mihomo core version
