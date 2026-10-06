@@ -83,7 +83,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Mclash'), findsOneWidget);
-    expect(find.text('ROOT'), findsOneWidget);
+    expect(find.text('Root'), findsOneWidget);
     expect(find.text('代理'), findsOneWidget);
     expect(find.text('规则'), findsOneWidget);
   });

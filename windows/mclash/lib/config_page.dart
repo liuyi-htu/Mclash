@@ -60,7 +60,13 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _load() async {
     try {
-      final profiles = await _service.getConfigs();
+      var profiles = await _service.getConfigs();
+      if (profiles.isNotEmpty &&
+          !profiles.any((profile) => profile.active) &&
+          !_locked) {
+        await _service.selectConfig(profiles.first.id);
+        profiles = await _service.getConfigs();
+      }
       if (!mounted) return;
       setState(() {
         _profiles = profiles;

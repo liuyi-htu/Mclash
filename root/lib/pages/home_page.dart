@@ -1027,7 +1027,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         appBar: tab == 3
             ? null
             : pulseAppBar(context,
-                badge: 'ROOT',
+                badge: 'Root',
                 title: tab == 1
                     ? '配置与订阅'
                     : tab == 2
