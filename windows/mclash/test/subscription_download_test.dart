@@ -54,6 +54,8 @@ void main() {
           {first: '第一机场', second: '第二机场'});
       expect(state['profileSubscriptionInfos'][id],
           {first: firstUsage, second: secondUsage});
+      expect(state['activeProfile'], id);
+      expect(state['activeMihomoProfile'], id);
       final profile = File('${dir.path}\\profiles\\$id');
       final cache = File('${profile.path}.subscriptions.json');
       List<String> names(String content) =>
@@ -61,7 +63,7 @@ void main() {
               .map((node) => node['name'] as String)
               .toList();
       expect(names(await profile.readAsString()), ['1-香港', '2-香港']);
-      await service.selectConfig(id);
+      // The first subscription is selected and ready without an extra click.
       secondName = '日本';
       final savedFirstUsage = firstUsage;
       firstUsage =
@@ -229,7 +231,8 @@ void main() {
       expect(state['profileNames'][id], 'Manual');
       expect(state['profileTypes'][id], 'subscription');
       expect(state['profileUrls'][id], url);
-      await service.selectConfig(id);
+      expect(state['activeProfile'], id);
+      expect(state['activeMihomoProfile'], id);
       final runtime =
           loadYaml(await File('${dir.path}\\config.yaml').readAsString());
       expect(runtime['proxies'][0]['name'], 'KR default');

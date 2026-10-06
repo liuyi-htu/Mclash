@@ -509,8 +509,7 @@ class _HomePageState extends State<HomePage> {
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.power_settings_new_rounded),
-                    title: const Text('开机自启',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    title: const Text('开机自启'),
                     value: _serviceAutoStartEnabled,
                     onChanged: !_canEditSettings
                         ? null
@@ -526,8 +525,7 @@ class _HomePageState extends State<HomePage> {
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.language_rounded),
-                    title: const Text('启用 IPv6',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    title: const Text('启用 IPv6'),
                     subtitle: const Text('允许代理内核使用 IPv6 网络'),
                     value: _ipv6Enabled,
                     onChanged: !_canEditSettings
@@ -542,8 +540,7 @@ class _HomePageState extends State<HomePage> {
                   SwitchListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.lan_outlined),
-                    title: const Text('绕过局域网',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    title: const Text('绕过局域网'),
                     subtitle: const Text('局域网和私有地址不经过代理'),
                     value: _bypassLanEnabled,
                     onChanged: !_canEditSettings
@@ -1154,7 +1151,7 @@ class _HomePageState extends State<HomePage> {
         appBar: tab == 3
             ? null
             : pulseAppBar(context,
-                badge: 'WINDOWS',
+                badge: 'Windows',
                 title: tab == 1
                     ? '配置与订阅'
                     : tab == 2

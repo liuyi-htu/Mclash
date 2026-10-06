@@ -31,6 +31,66 @@ Map<String, Object> profile(int i, {bool active = false}) => {
     };
 
 void main() {
+  testWidgets('existing lone subscription without a selection shows airports',
+      (tester) async {
+    var profiles = [
+      {
+        ...profile(1),
+        'type': 'subscription',
+        'url': 'https://example.org/subscription',
+        'subscriptionNames': {'https://example.org/subscription': '已有机场'},
+      }
+    ];
+    final service = _Service(() => profiles, (id) {
+      profiles = [
+        for (final p in profiles) {...p, 'active': p['id'] == id}
+      ];
+    });
+    await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.windows),
+        home: ConfigPage(proxyRunning: false, service: service)));
+    await tester.pumpAndSettle();
+    expect(profiles.single['active'], isTrue);
+    expect(find.text('机场订阅'), findsOneWidget);
+    expect(find.text('已有机场'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Windows shows airport information after selecting a subscription',
+      (tester) async {
+    var profiles = [
+      profile(1, active: true),
+      {
+        ...profile(2),
+        'type': 'subscription',
+        'url': 'https://example.org/subscription',
+        'subscriptionNames': {'https://example.org/subscription': '测试机场'},
+        'subscriptionInfos': {
+          'https://example.org/subscription':
+              'upload=0; download=1073741824; total=10737418240; expire=1893456000'
+        },
+      },
+    ];
+    final service = _Service(() => profiles, (id) {
+      profiles = [
+        for (final p in profiles) {...p, 'active': p['id'] == id}
+      ];
+    });
+    await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.windows),
+        home: ConfigPage(proxyRunning: false, service: service)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('toggle-config-stack')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('配置2'));
+    await tester.pumpAndSettle();
+    expect(find.text('机场订阅'), findsOneWidget);
+    expect(find.text('测试机场'), findsOneWidget);
+    expect(find.textContaining('9.00 GB'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('active configuration leads the stack and switching collapses it',
       (tester) async {
     var profiles = [profile(1), profile(2, active: true), profile(3)];

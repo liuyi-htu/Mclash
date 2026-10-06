@@ -53,7 +53,7 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
                                       FontWeight.w600, FontWeight.w700, .5),
                                   letterSpacing: -.5,
                                   color: colors.onSurface))),
-                      if (title == 'Mclash') ...[
+                      if (title == 'Mclash' && badge.isNotEmpty) ...[
                         const SizedBox(width: 9),
                         Container(
                             padding: const EdgeInsets.symmetric(

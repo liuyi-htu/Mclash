@@ -1270,7 +1270,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final files = <File, String>{
       File(_profilePath(id)): download.content,
       _subscriptionCache(id): jsonEncode(download.sources),
-      if (state['activeProfile'] == id)
+      if ((changes['activeProfile'] ?? state['activeProfile']) == id)
         File(_configPath): await _runtimeConfigForCurrentMode(download.content),
     };
     final previous = <File, String?>{};
@@ -1322,6 +1322,11 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             _stateMap(state, 'profileSubscriptionNames')[id] as Map? ??
                 const {});
     await _saveSubscription(id, download, <String, dynamic>{
+      if (state['activeProfile'] == null) ...{
+        'activeProfile': id,
+        'activeMihomoProfile': id,
+        'coreType': 'mihomo',
+      },
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
