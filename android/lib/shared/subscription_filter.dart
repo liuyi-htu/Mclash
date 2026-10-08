@@ -6,6 +6,7 @@ const domesticGroup = '🚀 国内';
 const foreignGroup = '🌍 国外';
 const defaultSubscriptionFilters = {domesticGroup: '', foreignGroup: ''};
 const groupFilterPrefix = '# Mclash 代理组正则: ';
+const groupDirectPrefix = '# Mclash 代理组 DIRECT: ';
 const customGroupFilterPrefix = '# Mclash 代理组「';
 const _prefixes = {
   domesticGroup: '# Mclash 国内正则: ',
@@ -77,6 +78,26 @@ String writeSubscriptionFilters(String content, Map<String, String> filters) {
   return '$groupFilterPrefix${jsonEncode(filters)}\n$body';
 }
 
+Map<String, bool> readGroupDirectOptions(String content) {
+  final names = ((loadYaml(content) as YamlMap)['proxy-groups'] as List? ?? [])
+      .map((group) => group['name'])
+      .toSet();
+  final lines =
+      content.split('\n').where((line) => line.startsWith(groupDirectPrefix));
+  if (lines.isEmpty) return {};
+  return Map<String, bool>.from(
+      jsonDecode(lines.first.substring(groupDirectPrefix.length)) as Map)
+    ..removeWhere((name, _) => !names.contains(name));
+}
+
+String writeGroupDirectOptions(String content, Map<String, bool> options) {
+  final body = content
+      .split('\n')
+      .where((line) => !line.startsWith(groupDirectPrefix))
+      .join('\n');
+  return '$groupDirectPrefix${jsonEncode(options)}\n$body';
+}
+
 RegExp _compile(String filter) {
   var insensitive = false;
   if (filter.startsWith('(?i)')) {
@@ -95,13 +116,14 @@ String applySubscriptionFilters(String content, Map<String, String> filters) {
   }
   final names = nodes.map((node) => node['name'] as String).toList();
   final editor = YamlEditor(content);
+  final directOptions = readGroupDirectOptions(content);
   for (final groupName in filters.keys) {
     final index = _groupIndex(config, groupName);
     final group = config['proxy-groups'][index] as YamlMap;
     final filter = filters[groupName]!;
     final pattern = _compile(filter);
     final selected = <String>[
-      if (groupName == domesticGroup) 'DIRECT',
+      if (directOptions[groupName] ?? groupName == domesticGroup) 'DIRECT',
       ...names.where(pattern.hasMatch),
     ];
     for (final key in [
@@ -113,6 +135,9 @@ String applySubscriptionFilters(String content, Map<String, String> filters) {
       'empty-fallback'
     ]) {
       if (group.containsKey(key)) editor.remove(['proxy-groups', index, key]);
+    }
+    if (selected.isEmpty && directOptions[groupName] == false) {
+      throw FormatException('$groupName 未匹配到节点，请调整正则表达式或选择 DIRECT');
     }
     editor.update(['proxy-groups', index, 'proxies'],
         selected.isEmpty ? ['DIRECT'] : selected);

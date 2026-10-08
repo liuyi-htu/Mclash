@@ -105,7 +105,7 @@ void main() {
     expect(find.byType(CheckboxListTile), findsNothing);
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
-    expect(configGroups(saved!).last['proxies'], ['北京', 'JP']);
+    expect(configGroups(saved!).last['proxies'], ['DIRECT', '北京', 'JP']);
     expect(readSubscriptionFilters(saved!)['新建'], '');
     expect(find.text('新建'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -174,10 +174,48 @@ void main() {
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     expect(readSubscriptionFilters(saved!)['自选'], '^北');
-    expect(loadYaml(saved!)['proxy-groups'][1]['proxies'], ['北京']);
+    expect(loadYaml(saved!)['proxy-groups'][1]['proxies'], ['DIRECT', '北京']);
     expect(find.text('编辑代理组'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('DIRECT off persists and survives regex matching and reopening',
+      (tester) async {
+    String? saved;
+    await tester.pumpWidget(MaterialApp(
+        home: ConfigManagementPage(
+            content: source,
+            mode: ConfigManagementMode.groups,
+            onSave: (value) async {
+              saved = value;
+            })));
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    final direct = find
+        .byWidgetPredicate((widget) => widget is DropdownButtonFormField<bool>);
+    expect(
+        tester.getTopLeft(direct).dy,
+        lessThan(
+            tester.getTopLeft(find.widgetWithText(TextField, '正则表达式')).dy));
+    await tester.tap(direct);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('off').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '正则表达式'), '^北');
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(configGroups(saved!)[1]['proxies'], ['北京']);
+    expect(readGroupDirectOptions(saved!)['自选'], false);
+    expect(
+        configGroups(editSubscriptionFilter(saved!, '自选', '^JP'))[1]['proxies'],
+        ['JP']);
+    await tester.tap(find.text('自选'));
+    await tester.pumpAndSettle();
+    expect(find.text('off'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('invalid regex stays in the edit dialog without saving',
       (tester) async {
     var saves = 0;

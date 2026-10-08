@@ -268,6 +268,9 @@ internal object SubscriptionConfig {
         val prefixes = listOf("# Mclash 国内正则: ", "# Mclash 国外正则: ")
         val filterPrefix = "# Mclash 代理组正则: "
         val filterSource = previousConfig ?: template
+        val directPrefix = "# Mclash 代理组 DIRECT: "
+        val directComment = filterSource.lineSequence().firstOrNull { it.startsWith(directPrefix) }
+        val directOptions = directComment?.let { loader.load<Map<String, Boolean>>(it.removePrefix(directPrefix)) }.orEmpty()
         val genericComment = filterSource.lineSequence().firstOrNull { it.startsWith(filterPrefix) }
         val filters = mutableMapOf<String, String>()
         if (genericComment != null) {
@@ -293,8 +296,9 @@ internal object SubscriptionConfig {
             val name = group["name"] as String
             if (filters.containsKey(name)) {
                 val pattern = Regex(filters.getValue(name))
-                val selected = (if (name == regionNames[0]) listOf("DIRECT") else emptyList()) + names.filter { pattern.containsMatchIn(it) }
+                val selected = (if (directOptions[name] ?: (name == regionNames[0])) listOf("DIRECT") else emptyList()) + names.filter { pattern.containsMatchIn(it) }
                 for (key in listOf("filter", "use", "include-all-proxies", "include-all", "include-all-providers", "empty-fallback")) group.remove(key)
+                require(selected.isNotEmpty() || directOptions[name] != false) { "$name 未匹配到节点，请调整正则表达式或选择 DIRECT" }
                 group["proxies"] = selected.ifEmpty { listOf("DIRECT") }
             } else {
                 val selected = (group["proxies"] as? List<*>).orEmpty().filter { it in validMembers }
@@ -326,6 +330,7 @@ internal object SubscriptionConfig {
             (if (roleSets[id]?.containsKey("back") == true) "# Mclash 后置链路 $id: {" else "# Mclash 链式节点 $id: {") + chains.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}\n"
         }
         val header = setMetadata + (globalComment?.let { "$it\n" } ?: "") + filterPrefix + "{" + filters.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) } + "}" +
+            (directComment?.let { "\n$it" } ?: "") +
             (if (host.isNullOrEmpty()) "" else "\n$hostPrefix${quote(host)}") +
             (if (manualNames.isEmpty()) "" else "\n$manualPrefix[${manualNames.joinToString(",", transform = ::quote)}]") +
             (if (chainOverrides.isEmpty()) "" else "\n$chainPrefix{${chainOverrides.entries.joinToString(",") { quote(it.key) + ":" + quote(it.value) }}}") +

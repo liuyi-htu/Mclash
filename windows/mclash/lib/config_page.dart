@@ -1,3 +1,4 @@
+import 'subscription_changes.dart';
 import 'dialog_typography.dart';
 import 'rule_provider_page.dart';
 import 'app_appearance.dart';
@@ -80,7 +81,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _handleAdd(_AddConfigAction action) async {
-    if (!_ensureStopped()) return;
+    if (_working || _locked) return;
 
     switch (action) {
       case _AddConfigAction.local:
@@ -393,6 +394,10 @@ class _ConfigPageState extends State<ConfigPage> {
     try {
       setState(() => _working = true);
       if (!_ensureStopped()) return;
+      final previousIds = _profiles.map((profile) => profile.id).toSet();
+      final before = existing == null
+          ? null
+          : await _service.getConfigContent(existing.id);
       final profiles = existing == null
           ? await _service.addSubscription(
               name: name, url: url, subscriptionNames: subscriptionNames)
@@ -404,7 +409,16 @@ class _ConfigPageState extends State<ConfigPage> {
             );
       if (!mounted) return;
       setState(() => _profiles = profiles);
-      AppNotice.show(context, existing == null ? '订阅已添加' : '订阅已修改并更新');
+      final updatedId = existing?.id ??
+          profiles
+              .firstWhere((profile) => !previousIds.contains(profile.id))
+              .id;
+      final after = await _service.getConfigContent(updatedId);
+      if (!mounted) return;
+      setState(() => _working = false);
+      await showSubscriptionChanges(context,
+          message: existing == null ? '订阅已添加' : '订阅已修改并更新',
+          changes: SubscriptionChanges.compare(before ?? 'proxies: []', after));
     } catch (error) {
       if (!mounted) return;
       _showError(error);
@@ -817,14 +831,26 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _applyAirportChange(
       Future<List<ConfigProfile>> Function() operation,
-      {String? message}) async {
+      {String? message,
+      String? updatedProfileId}) async {
     if (!_ensureStopped()) return;
     setState(() => _working = true);
     try {
+      final before = updatedProfileId == null
+          ? null
+          : await _service.getConfigContent(updatedProfileId);
       final profiles = await operation();
       if (!mounted) return;
       setState(() => _profiles = profiles);
-      if (message != null) AppNotice.show(context, message);
+      if (updatedProfileId != null && before != null) {
+        final after = await _service.getConfigContent(updatedProfileId);
+        if (!mounted) return;
+        await showSubscriptionChanges(context,
+            message: message ?? '订阅更新成功',
+            changes: SubscriptionChanges.compare(before, after));
+      } else {
+        if (message != null) AppNotice.show(context, message);
+      }
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -974,6 +1000,7 @@ class _ConfigPageState extends State<ConfigPage> {
       await _applyAirportChange(
           () => _service.editSubscriptionAirport(profile.id,
               oldUrl: link, name: name, url: url),
+          updatedProfileId: profile.id,
           message: link == null ? '机场已添加' : '“$name”已更新');
     }
   }
@@ -1007,6 +1034,7 @@ class _ConfigPageState extends State<ConfigPage> {
             await _applyAirportChange(
                 () => _service.editSubscriptionAirport(current.id,
                     oldUrl: link, name: name, url: link),
+                updatedProfileId: current.id,
                 message: '“$name”已更新');
             return latestProfile();
           },
