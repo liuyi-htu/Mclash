@@ -69,6 +69,30 @@ rules: ['DOMAIN-SUFFIX,example.org,总组', 'MATCH,DIRECT']
     expect(groups[3]['proxies'], ['手选', '测速']);
     expect(readSubscriptionFilters(text), {'测速': '^JP'});
   });
+  test('subscription refresh retains DIRECT and off choices', () {
+    const previous = """
+# Mclash 代理组正则: {"Enabled":"JP","Disabled":"JP"}
+# Mclash 代理组 DIRECT: {"Enabled":true,"Disabled":false}
+proxies: [{name: JP, type: http}]
+proxy-groups:
+  - {name: Enabled, type: select, proxies: [DIRECT, JP]}
+  - {name: Disabled, type: select, proxies: [JP]}
+rules: ['MATCH,Enabled']
+""";
+    final result = buildSubscriptionConfig(
+        template, 'proxies: [{name: JP2, type: http}]',
+        previousConfig: previous);
+    final groups = loadYaml(result)['proxy-groups'];
+    expect(groups[0]['proxies'], ['DIRECT', 'JP2']);
+    expect(groups[1]['proxies'], ['JP2']);
+    expect(
+        readGroupDirectOptions(result), {'Enabled': true, 'Disabled': false});
+    expect(
+        () => buildSubscriptionConfig(
+            template, 'proxies: [{name: US, type: http}]',
+            previousConfig: previous),
+        throwsFormatException);
+  });
   test('manual regional groups do not resume regex matching on refresh', () {
     const previous =
         '# Mclash 代理组正则: {}\nproxies: [{name: Keep, type: http}]\nproxy-groups: [{name: 🚀 国内, type: select, proxies: [Keep]}]\nrules: ["MATCH,🚀 国内"]';

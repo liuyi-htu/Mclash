@@ -151,7 +151,7 @@ void _validateGraph(String content) {
 }
 
 String updateConfigGroup(String content, Map<String, dynamic> group,
-    {String? oldName, String? filter}) {
+    {String? oldName, String? filter, bool? includeDirect}) {
   final name = (group['name'] as String).trim();
   if (isProtectedConfigGroup(oldName) && name != oldName) {
     throw const FormatException('国内和国外代理组的名称不可修改');
@@ -186,6 +186,13 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
       members.contains(oldName) ||
       members.any((member) => !configPolicies(content).contains(member))) {
     throw const FormatException('代理组成员无效');
+  }
+  if (includeDirect != null) {
+    members.removeWhere((member) => member == 'DIRECT');
+    if (includeDirect) members.insert(0, 'DIRECT');
+    if (members.isEmpty && filter == null) {
+      throw const FormatException('代理组没有节点，请调整正则表达式或选择 DIRECT');
+    }
   }
   final updated = {...group, 'name': name, 'proxies': members};
   if (index < 0) {
@@ -233,6 +240,16 @@ String updateConfigGroup(String content, Map<String, dynamic> group,
   }
   if (index < 0) filters[name] = '';
   var result = writeSubscriptionFilters(editor.toString(), filters);
+  final directOptions = readGroupDirectOptions(content);
+  if (oldName != null &&
+      oldName != name &&
+      directOptions.containsKey(oldName)) {
+    directOptions[name] = directOptions.remove(oldName)!;
+  }
+  if (includeDirect != null) directOptions[name] = includeDirect;
+  if (directOptions.isNotEmpty) {
+    result = writeGroupDirectOptions(result, directOptions);
+  }
   if (filter != null) result = editSubscriptionFilter(result, name, filter);
   _validateGraph(result);
   return result;
@@ -261,8 +278,12 @@ String deleteConfigGroup(String content, String name) {
   final editor = YamlEditor(content)
     ..update(['proxy-groups'],
         groups.where((group) => group['name'] != name).toList());
-  return writeSubscriptionFilters(
+  final result = writeSubscriptionFilters(
       editor.toString(), readSubscriptionFilters(content)..remove(name));
+  return content.contains(groupDirectPrefix)
+      ? writeGroupDirectOptions(
+          result, readGroupDirectOptions(content)..remove(name))
+      : result;
 }
 
 /// Match visible profile metadata to the same actions used by the config menu.

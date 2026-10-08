@@ -8,6 +8,26 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun refreshPreservesDirectPreferences() {
+        val previous = """
+            # Mclash 代理组正则: {"Enabled":"JP","Disabled":"JP"}
+            # Mclash 代理组 DIRECT: {"Enabled":true,"Disabled":false}
+            proxies: [{name: JP, type: http}]
+            proxy-groups:
+              - {name: Enabled, type: select, proxies: [DIRECT, JP]}
+              - {name: Disabled, type: select, proxies: [JP]}
+            rules: ['MATCH,Enabled']
+        """.trimIndent()
+        val result = SubscriptionConfig.build(template, "proxies: [{name: JP2, type: http}]", previous)
+        val groups = (Yaml().load<Map<String, Any>>(result)["proxy-groups"] as List<*>).filterIsInstance<Map<*, *>>()
+        assertEquals(listOf("DIRECT", "JP2"), groups[0]["proxies"])
+        assertEquals(listOf("JP2"), groups[1]["proxies"])
+        assertTrue(result.contains("# Mclash 代理组 DIRECT: {\"Enabled\":true,\"Disabled\":false}"))
+        assertThrows(IllegalArgumentException::class.java) {
+            SubscriptionConfig.build(template, "proxies: [{name: US, type: http}]", previous)
+        }
+    }
+
     @Test fun linksNormalizeAndValidateEveryUrl() {
         assertEquals(listOf("https://example.org/a", "https://example.org/b"),
             SubscriptionConfig.links(" https://example.org/a\r\n\r\nhttps://example.org/b\nhttps://example.org/a "))

@@ -461,6 +461,7 @@ Future<String?> _groupDialog(
       ? savedProxyNodeNames(content)
       : List<String>.from(initial['proxies'] as List? ?? []);
   if (selected.isEmpty) selected.add('DIRECT');
+  var includeDirect = readGroupDirectOptions(content)[initial?['name']] ?? true;
   String? error;
   try {
     return await showDialog<String>(
@@ -519,6 +520,21 @@ Future<String?> _groupDialog(
                                   decoration: managementFieldDecoration(
                                       context, '检测间隔（秒）')),
                             ],
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<bool>(
+                              style: Theme.of(context).textTheme.bodyMedium,
+                              value: includeDirect,
+                              decoration:
+                                  managementFieldDecoration(context, 'DIRECT'),
+                              items: const [
+                                DropdownMenuItem(
+                                    value: true, child: Text('DIRECT')),
+                                DropdownMenuItem(
+                                    value: false, child: Text('off')),
+                              ],
+                              onChanged: (value) =>
+                                  update(() => includeDirect = value!),
+                            ),
                             const SizedBox(height: 10),
                             TextField(
                                 style: Theme.of(context).textTheme.bodyMedium,
@@ -630,6 +646,7 @@ Future<String?> _groupDialog(
                           if (type != 'load-balance') group.remove('strategy');
                           try {
                             final next = updateConfigGroup(content, group,
+                                includeDirect: includeDirect,
                                 oldName: initial?['name'] as String?,
                                 filter: initial == null ||
                                         filter.text.trim() != initialFilter

@@ -14,6 +14,24 @@ rules: ['DOMAIN-SUFFIX,example.org,自选', 'MATCH,DIRECT']
 ''';
 
 void main() {
+  test('DIRECT preference survives matching, rename and delete', () {
+    final enabled = updateConfigGroup(source, {'name': '自选', 'type': 'select'},
+        oldName: '自选', filter: '^JP', includeDirect: true);
+    expect(configGroups(enabled)[1]['proxies'], ['DIRECT', 'JP']);
+    final disabled = updateConfigGroup(
+        enabled, {'name': '更名', 'type': 'select'},
+        oldName: '自选', filter: '^北', includeDirect: false);
+    expect(configGroups(disabled)[1]['proxies'], ['北京']);
+    expect(readGroupDirectOptions(disabled), {'更名': false});
+    final refreshed = addNodeLink(disabled, 'http://example.org:80#北京2');
+    expect(configGroups(refreshed)[1]['proxies'], ['北京2', '北京']);
+    expect(() => editSubscriptionFilter(disabled, '更名', r'^missing$'),
+        throwsFormatException);
+    final deleted =
+        deleteConfigGroup(updateConfigRules(disabled, ['MATCH,DIRECT']), '更名');
+    expect(readGroupDirectOptions(deleted), isEmpty);
+  });
+
   test('group reordering preserves settings, metadata and references', () {
     final content = '# Mclash 链路代理组: {"链路":["JP"]}\n'
         '# Mclash 代理组正则: {"自选":"^JP"}\n'

@@ -42,7 +42,14 @@ rules: ["MATCH,DIRECT"]
       if (call.method == 'getConfigs') return [profile];
       if (call.method == 'addSubscription') {
         saved = Map<Object?, Object?>.from(call.arguments as Map);
-        return [profile];
+        return [
+          profile,
+          {...profile, 'id': 'new-airport'}
+        ];
+      }
+      if (call.method == 'getConfigContent') {
+        expect(call.arguments['id'], 'new-airport');
+        return content;
       }
       throw StateError('Unexpected call: ${call.method}');
     });
@@ -76,6 +83,12 @@ rules: ["MATCH,DIRECT"]
       'subscriptionNames': {'https://example.org/a': '机场甲'},
     });
     expect(find.text('订阅已添加'), findsOneWidget);
+    expect(find.text('新增（2）'), findsOneWidget);
+    expect(find.text('上海'), findsOneWidget);
+    expect(find.text('KR'), findsOneWidget);
+    expect(find.text('变动（0）'), findsOneWidget);
+    expect(find.text('删除（0）'), findsOneWidget);
+    expect(find.text('配置已保存，新配置将在下次启动时应用。'), findsNothing);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -769,6 +782,48 @@ rules: ["MATCH,DIRECT"]
       'url': 'https://example.org/b'
     });
     expect(find.text('第二机场'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('successful airport refresh reports changes and failure does not',
+      (tester) async {
+    var updated = false;
+    var fail = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getConfigs') return [multiProfile];
+      if (call.method == 'getConfigContent') {
+        return updated
+            ? content
+                .replaceFirst('name: 上海, type: ss', 'name: 上海, type: http')
+                .replaceFirst('name: KR, type: ss', 'name: New, type: ss')
+            : content;
+      }
+      if (call.method == 'editSubscriptionAirport') {
+        if (fail) throw PlatformException(code: 'failed', message: '更新失败');
+        updated = true;
+        return [multiProfile];
+      }
+      throw StateError('Unexpected call: ${call.method}');
+    });
+    await openAirports(tester);
+    await tester.tap(find.byTooltip('更新机场').last);
+    await tester.pumpAndSettle();
+    expect(find.text('新增（1）'), findsOneWidget);
+    expect(find.text('New'), findsOneWidget);
+    expect(find.text('变动（1）'), findsOneWidget);
+    expect(find.text('上海'), findsOneWidget);
+    expect(find.text('删除（1）'), findsOneWidget);
+    expect(find.text('KR'), findsOneWidget);
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    fail = true;
+    await tester.tap(find.byTooltip('更新机场').last);
+    await tester.pumpAndSettle();
+    expect(find.text('新增（1）'), findsNothing);
+    expect(find.textContaining('更新失败'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
