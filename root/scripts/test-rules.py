@@ -37,6 +37,8 @@ if tool in ('iptables', 'ip6tables'):
     args = args[2:] if args[:1] == ['-w'] else args
     assert args[0] == '-t'
     table = args[1]
+    if args[2:] == ['-S']:
+        print('table available'); sys.exit(0)
     action, chain = args[2:4]
     rest = args[4:]
     chains = state['chains'][tool + ':' + table]
@@ -68,30 +70,32 @@ if tool in ('iptables', 'ip6tables'):
         else: del chains[chain]
     else: raise AssertionError(command)
 elif tool == 'ip':
-    assert args[0] == '-4'
+    assert args[0] in ('-4', '-6')
+    family = '6' if args[0] == '-6' else ''
+    rule_key, route_key = 'rules' + family, 'routes' + family
     kind, action = args[1:3]
     if kind == 'rule' and action == 'show':
-        for r in state['rules']: print(r)
+        for r in state[rule_key]: print(r)
     elif kind == 'route' and action == 'show':
         assert args[3] == 'table'
-        for r in state['routes']:
+        for r in state[route_key]:
             if r[-1] == args[4]: print(' '.join(r))
     elif kind == 'route':
         route = args[3:]
         assert action in ('add', 'del')
         if action == 'add':
-            if route in state['routes']: code = 1
-            else: state['routes'].append(route)
-        elif route not in state['routes']: code = 1
-        else: state['routes'].remove(route)
+            if route in state[route_key]: code = 1
+            else: state[route_key].append(route)
+        elif route not in state[route_key]: code = 1
+        else: state[route_key].remove(route)
     elif kind == 'rule':
         spec = args[3:]
         assert spec[0] == 'pref'
         rule = spec[1] + ': from all ' + ' '.join(spec[2:])
-        if action == 'add': state['rules'].append(rule)
+        if action == 'add': state[rule_key].append(rule)
         elif action == 'del':
-            if rule not in state['rules']: code = 1
-            else: state['rules'].remove(rule)
+            if rule not in state[rule_key]: code = 1
+            else: state[rule_key].remove(rule)
         else: raise AssertionError(command)
     else: raise AssertionError(command)
 else: raise AssertionError(command)
@@ -105,8 +109,12 @@ def initial():
         'chains': {
             'iptables:mangle': {'OUTPUT': [['-j', 'ANDROID_SYSTEM']], 'PREROUTING': [['-j', 'FOREIGN_PROXY']], 'ANDROID_SYSTEM': [], 'FOREIGN_PROXY': []},
             'iptables:nat': {'OUTPUT': [['-j', 'ANDROID_DNS']], 'PREROUTING': [], 'ANDROID_DNS': []},
+            'ip6tables:mangle': {'OUTPUT': [['-j', 'ANDROID_SYSTEM6']], 'PREROUTING': [['-j', 'FOREIGN_PROXY6']], 'ANDROID_SYSTEM6': [], 'FOREIGN_PROXY6': []},
+            'ip6tables:nat': {'OUTPUT': [['-j', 'ANDROID_DNS6']], 'PREROUTING': [], 'ANDROID_DNS6': []},
             'ip6tables:filter': {'OUTPUT': [['-j', 'ANDROID_V6']], 'FORWARD': [], 'ANDROID_V6': []},
         },
+        'rules6': ['10000: from all lookup 123'],
+        'routes6': [['2001:db8::/64', 'dev', 'eth0', 'table', '123']],
         'rules': ['10000: from all lookup 123'],
         'routes': [['203.0.113.0/24', 'dev', 'eth0', 'table', '123']],
     }
@@ -136,6 +144,15 @@ def main(install, cleanup, hotspot=None):
                     'ip6tables -w 5 -t filter -I FORWARD',
                     'ip6tables -w 5 -t filter -I OUTPUT',
                     'iptables -w 5 -t mangle -A OUTPUT -j MCLASH_R_OUT']
+        dual_stack = 'ip6tables -w 5 -t mangle -N MCLASH_R_OUT6' in install.read_text()
+        if dual_stack:
+            failures += ['ip6tables -w 5 -t mangle -N MCLASH_R_OUT6',
+                         'ip6tables -w 5 -t mangle -N MCLASH_R_DNS6',
+                         'ip6tables -w 5 -t mangle -A MCLASH_R_PRE6 -p udp -j TPROXY',
+                         'ip -6 route add', 'ip -6 rule add',
+                         'ip6tables -w 5 -t mangle -A MCLASH_R_OUT6 -j MCLASH_R_DNS6',
+                         'ip6tables -w 5 -t mangle -A OUTPUT -j MCLASH_R_OUT6',
+                         'ip6tables -w 5 -t mangle -N MCLASH_R_HDNS6']
         for failure in failures:
             before = initial()
             state_file.write_text(json.dumps(before))
@@ -148,7 +165,10 @@ def main(install, cleanup, hotspot=None):
                 for key, chain in (('iptables:mangle', 'MCLASH_R_HOT'),
                                    ('iptables:nat', 'MCLASH_R_HDNS'),
                                    ('ip6tables:filter', 'MCLASH_R_HV6')):
-                    assert installed[key][chain], (key, chain)
+                    assert installed[key][chain] or (dual_stack and chain == 'MCLASH_R_HV6'), (key, chain)
+                if dual_stack:
+                    assert installed['ip6tables:mangle']['MCLASH_R_HOT6']
+                    assert installed['ip6tables:mangle']['MCLASH_R_HDNS6']
             result = run(cleanup)
             assert result.returncode == 0, (result.stdout, result.stderr)
             after = json.loads(state_file.read_text())
@@ -167,6 +187,15 @@ def main(install, cleanup, hotspot=None):
             assert run(install).returncode != 0
             assert run(cleanup).returncode == 0
             assert json.loads(state_file.read_text()) == before
+        if dual_stack:
+            for collision in ('priority', 'table'):
+                before = initial()
+                if collision == 'priority': before['rules6'].append('9000: from all lookup 456')
+                else: before['routes6'].append(['local', '::/0', 'dev', 'lo', 'table', '20230'])
+                state_file.write_text(json.dumps(before))
+                assert run(install).returncode != 0
+                assert run(cleanup).returncode == 0
+                assert json.loads(state_file.read_text()) == before
         print(f'Rule lifecycle passed: hotspot update, normal stop, {len(failures)-1} partial failures, repeat cleanup and 2 foreign collisions.')
 
 

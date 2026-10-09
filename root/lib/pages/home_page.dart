@@ -42,6 +42,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   DateTime? _lastAboutTitleTap;
   Timer? _trafficTimer;
   bool _statusChecking = false;
+  bool _trafficChecking = false;
   int? _lastRxBytes;
   int? _lastTxBytes;
   DateTime? _lastTrafficSample;
@@ -124,6 +125,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _updateTrafficSpeed() async {
+    if (_trafficChecking) return;
+    _trafficChecking = true;
     try {
       unawaited(_pollStatus());
       final stats = await _service.getTrafficStats();
@@ -134,12 +137,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final seconds = previousTime == null
           ? 0.0
           : now.difference(previousTime).inMilliseconds / 1000;
-      final download = seconds > 0 && _lastRxBytes != null
-          ? ((rx - _lastRxBytes!) / seconds).clamp(0, double.infinity)
-          : 0.0;
-      final upload = seconds > 0 && _lastTxBytes != null
-          ? ((tx - _lastTxBytes!) / seconds).clamp(0, double.infinity)
-          : 0.0;
+      final download = stats['rxBytesPerSecond']?.toDouble() ??
+          (seconds > 0 && _lastRxBytes != null
+              ? ((rx - _lastRxBytes!) / seconds).clamp(0, double.infinity)
+              : 0.0);
+      final upload = stats['txBytesPerSecond']?.toDouble() ??
+          (seconds > 0 && _lastTxBytes != null
+              ? ((tx - _lastTxBytes!) / seconds).clamp(0, double.infinity)
+              : 0.0);
       _lastRxBytes = rx;
       _lastTxBytes = tx;
       _lastTrafficSample = now;
@@ -152,6 +157,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     } catch (_) {
       // Keep the last displayed values if traffic statistics are unavailable.
+    } finally {
+      _trafficChecking = false;
     }
   }
 
@@ -576,6 +583,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final current = await _service.getRootSettings();
       if (!mounted) return;
       var bypassLan = current.bypassLan;
+      var ipv6 = current.ipv6;
       var saving = false;
       await showDialog<void>(
         context: context,
@@ -596,34 +604,64 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               content: SingleChildScrollView(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('绕过局域网',
-                      style: Theme.of(dialogContext)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(fontSize: 14)),
-                  value: bypassLan,
-                  onChanged: saving
-                      ? null
-                      : (value) async {
-                          final previous = bypassLan;
-                          setDialogState(() {
-                            bypassLan = value;
-                            saving = true;
-                          });
-                          try {
-                            await _service.saveRootSettings(bypassLan: value);
-                          } catch (error) {
-                            bypassLan = previous;
-                            if (mounted) _showError(error);
-                          } finally {
-                            if (dialogContext.mounted) {
-                              setDialogState(() => saving = false);
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('绕过局域网',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 14)),
+                    value: bypassLan,
+                    onChanged: saving
+                        ? null
+                        : (value) async {
+                            final previous = bypassLan;
+                            setDialogState(() {
+                              bypassLan = value;
+                              saving = true;
+                            });
+                            try {
+                              await _service.saveRootSettings(bypassLan: value);
+                            } catch (error) {
+                              bypassLan = previous;
+                              if (mounted) _showError(error);
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => saving = false);
+                              }
                             }
-                          }
-                        },
-                ),
+                          },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('IPv6',
+                        style: Theme.of(dialogContext)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontSize: 14)),
+                    value: ipv6,
+                    onChanged: saving
+                        ? null
+                        : (value) async {
+                            final previous = ipv6;
+                            setDialogState(() {
+                              ipv6 = value;
+                              saving = true;
+                            });
+                            try {
+                              await _service.saveRootSettings(ipv6: value);
+                            } catch (error) {
+                              ipv6 = previous;
+                              if (mounted) _showError(error);
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => saving = false);
+                              }
+                            }
+                          },
+                  ),
+                ]),
               ),
             )),
           ),

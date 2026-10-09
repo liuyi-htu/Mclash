@@ -83,7 +83,7 @@ class ProxyVpnService : VpnService() {
                 val preferences = AppPreferences(this)
                 val vpnMtu = preferences.vpnMtu
                 val tcpBufferSize = preferences.tcpBufferSize
-                val ipv4DnsServers = preferences.vpnIpv4DnsServers
+                val ipv4DnsServers = listOf(VpnDnsRuntime.VPN_DNS_ADDRESS)
                 val ipv6Enabled = preferences.vpnIpv6Enabled
                 val bypassLan = preferences.vpnBypassLan
                 StartupLog.append(
@@ -202,6 +202,7 @@ class ProxyVpnService : VpnService() {
                     appendLine("socks5:")
                     appendLine("  address: 127.0.0.1")
                     appendLine("  port: $socksPort")
+                    appendLine("  dns-port: ${VpnDnsRuntime.SOCKS_PORT}")
                     appendLine("  udp: 'udp'")
                     appendLine("misc:")
                     appendLine("  log-file: '$logTarget'")

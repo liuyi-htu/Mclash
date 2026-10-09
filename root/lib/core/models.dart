@@ -121,13 +121,15 @@ class SubscriptionUrlTestResult {
 }
 
 class RootProxySettings {
-  const RootProxySettings({required this.bypassLan});
+  const RootProxySettings({required this.bypassLan, this.ipv6 = false});
 
   factory RootProxySettings.fromMap(Map<Object?, Object?> map) {
     return RootProxySettings(
       bypassLan: map['bypassLan'] as bool? ?? true,
+      ipv6: map['ipv6'] as bool? ?? false,
     );
   }
 
   final bool bypassLan;
+  final bool ipv6;
 }

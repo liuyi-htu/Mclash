@@ -161,15 +161,8 @@ class MainActivity : FlutterActivity() {
                     }
                 )
                 "getTrafficStats" -> runAsync(result, "root-traffic") {
-                    if (!ProxyTProxyService.running) mapOf("rxBytes" to 0L, "txBytes" to 0L)
-                    else {
-                        val connection = java.net.URL("http://127.0.0.1:9090/connections").openConnection() as java.net.HttpURLConnection
-                        try {
-                            connection.connectTimeout = 500; connection.readTimeout = 500
-                            val json = org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                            mapOf("rxBytes" to json.optLong("downloadTotal"), "txBytes" to json.optLong("uploadTotal"))
-                        } finally { connection.disconnect() }
-                    }
+                    if (!ProxyTProxyService.running) RootTrafficStats.decode(emptyMap())
+                    else RootTrafficStats.read()
                 }
                 "getStartupLog" -> result.success(startupDiagnostics())
                 "getDebugLog" -> result.success(readDebugLog(call))
@@ -265,6 +258,7 @@ class MainActivity : FlutterActivity() {
 
     private fun rootSettings(): Map<String, Any> = mapOf(
         "bypassLan" to preferences.rootBypassLan,
+        "ipv6" to preferences.rootIpv6,
     )
 
     private fun importConfigs(result: MethodChannel.Result) {
@@ -383,7 +377,8 @@ class MainActivity : FlutterActivity() {
 
     private fun saveRootSettings(call: MethodCall, result: MethodChannel.Result) {
         requireProxyStopped()
-        preferences.rootBypassLan = call.argument<Boolean>("bypassLan") ?: true
+        call.argument<Boolean>("bypassLan")?.let { preferences.rootBypassLan = it }
+        call.argument<Boolean>("ipv6")?.let { preferences.rootIpv6 = it }
         result.success(rootSettings())
     }
 

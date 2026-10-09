@@ -11,7 +11,7 @@ internal object TProxyRules {
     private const val DNS = "MCLASH_R_DNS"
     private const val V6 = "MCLASH_R_V6"
 
-    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean): String {
+    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean, ipv6: Boolean = false): String {
         require(appUid > 0)
         require(selectedUids.all { it > 0 && it != appUid })
         require(!onlySelected || selectedUids.isNotEmpty()) { "请至少选择一个已安装的应用" }
@@ -69,7 +69,7 @@ internal object TProxyRules {
                     appendLine("iptables -w 5 -t mangle -A $OUT -d $subnet -j RETURN")
                 }
             }
-            for (protocol in listOf("tcp", "udp")) {
+            if (!ipv6) for (protocol in listOf("tcp", "udp")) {
                 appendLine("ip6tables -w 5 -t filter -A $V6 -p $protocol --dport 53 -j REJECT")
             }
             appendLine("ip6tables -w 5 -t filter -A $V6 -d ::1/128 -j RETURN")
@@ -83,16 +83,17 @@ internal object TProxyRules {
                     appendLine("iptables -w 5 -t mangle -A $OUT -m owner --uid-owner $uid -j RETURN")
                     appendLine("ip6tables -w 5 -t filter -A $V6 -m owner --uid-owner $uid -j RETURN")
                 } else {
-                    appendCapture(uid)
+                    appendCapture(uid, ipv6)
                 }
             }
-            if (!onlySelected) appendCapture(null)
+            if (!onlySelected) appendCapture(null, ipv6)
             for (protocol in listOf("tcp", "udp")) {
                 appendLine("iptables -w 5 -t mangle -A $PRE -p $protocol -j TPROXY --on-ip 127.0.0.1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark $CAPTURE")
             }
             appendLine("ip -4 route add local 0.0.0.0/0 dev lo table $TABLE")
             appendLine("ip -4 rule add pref $PRIORITY fwmark $CAPTURE lookup $TABLE")
-            append(HotspotRules.install())
+            if (ipv6) append(Ipv6TProxyRules.install(appUid, onlySelected, selectedUids, bypassLan))
+            append(HotspotRules.install(ipv6))
             // Only install hooks after every chain and route is ready.
             appendLine("iptables -w 5 -t mangle -I PREROUTING 1 -i lo -m mark --mark $CAPTURE -j $PRE")
             appendLine("iptables -w 5 -t nat -I OUTPUT 1 -j $DNS")
@@ -101,11 +102,11 @@ internal object TProxyRules {
         }
     }
 
-    private fun StringBuilder.appendCapture(uid: String?) {
+    private fun StringBuilder.appendCapture(uid: String?, ipv6: Boolean) {
         val owner = uid?.let { " -m owner --uid-owner $it" }.orEmpty()
         for (protocol in listOf("tcp", "udp")) {
             appendLine("iptables -w 5 -t mangle -A $OUT -p $protocol$owner -j MARK --set-xmark $CAPTURE")
-            appendLine("ip6tables -w 5 -t filter -A $V6 -p $protocol$owner -j REJECT")
+            if (!ipv6) appendLine("ip6tables -w 5 -t filter -A $V6 -p $protocol$owner -j REJECT")
         }
     }
 
@@ -113,6 +114,7 @@ internal object TProxyRules {
     fun cleanup(): String = """
         set +e
         ${HotspotRules.cleanup()}
+        ${Ipv6TProxyRules.cleanup()}
         own_routes=0
         iptables -w 5 -t mangle -S $OUT >/dev/null 2>&1 && own_routes=1
         while iptables -w 5 -t mangle -C OUTPUT -j $OUT 2>/dev/null; do

@@ -228,9 +228,13 @@ class NativeProxyService {
     return RootProxySettings.fromMap(result ?? const <Object?, Object?>{});
   }
 
-  Future<RootProxySettings> saveRootSettings({required bool bypassLan}) async {
-    final result = await _channel.invokeMapMethod<Object?, Object?>(
-        'saveRootSettings', <String, Object>{'bypassLan': bypassLan});
+  Future<RootProxySettings> saveRootSettings(
+      {bool? bypassLan, bool? ipv6}) async {
+    final result = await _channel
+        .invokeMapMethod<Object?, Object?>('saveRootSettings', <String, Object>{
+      if (bypassLan != null) 'bypassLan': bypassLan,
+      if (ipv6 != null) 'ipv6': ipv6,
+    });
     return RootProxySettings.fromMap(result ?? const <Object?, Object?>{});
   }
 
@@ -310,6 +314,10 @@ class NativeProxyService {
     return <String, int>{
       'rxBytes': (result?['rxBytes'] as num?)?.toInt() ?? 0,
       'txBytes': (result?['txBytes'] as num?)?.toInt() ?? 0,
+      if (result?['rxBytesPerSecond'] is num)
+        'rxBytesPerSecond': (result!['rxBytesPerSecond'] as num).toInt(),
+      if (result?['txBytesPerSecond'] is num)
+        'txBytesPerSecond': (result!['txBytesPerSecond'] as num).toInt(),
     };
   }
 

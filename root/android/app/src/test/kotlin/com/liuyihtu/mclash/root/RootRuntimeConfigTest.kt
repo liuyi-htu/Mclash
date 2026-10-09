@@ -5,6 +5,25 @@ import org.junit.Test
 import org.yaml.snakeyaml.Yaml
 
 class RootRuntimeConfigTest {
+    @Test fun ipv6EnablesDualStackDnsAndLoopbackOnlyTransparentListener() {
+        val config = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build("rules: ['MATCH,DIRECT']", false, ipv6 = true))
+        assertEquals(true, config["ipv6"])
+        val dns = config["dns"] as Map<*, *>
+        assertEquals(true, dns["ipv6"])
+        assertEquals("[::]:11053", dns["listen"])
+        assertEquals("127.0.0.1", config["bind-address"])
+        val listener = (config["listeners"] as List<*>).first() as Map<*, *>
+        assertEquals("::1", listener["listen"])
+        assertEquals("tproxy", listener["type"])
+        assertEquals(17894, listener["port"])
+        assertEquals(true, listener["udp"])
+        val dnsListener = (config["listeners"] as List<*>)[1] as Map<*, *>
+        val dnsProxy = (config["proxies"] as List<*>).last() as Map<*, *>
+        assertEquals(17895, dnsListener["port"])
+        assertEquals(dnsProxy["name"], dnsListener["proxy"])
+        assertEquals("dns", dnsProxy["type"])
+    }
+
     @Test fun rememberedDashboardModeSurvivesRuntimeRegeneration() {
         val source = "mode: rule\nproxies: []\nrules: ['MATCH,DIRECT']"
         for (mode in listOf("global", "direct", "rule")) {

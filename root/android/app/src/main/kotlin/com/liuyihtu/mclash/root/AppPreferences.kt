@@ -52,6 +52,10 @@ internal class AppPreferences(context: Context) {
         get() = preferences.getString(KEY_DELAY_RESULTS_JSON, "{}") ?: "{}"
         set(value) = preferences.edit().putString(KEY_DELAY_RESULTS_JSON, value).apply()
 
+    var rootIpv6: Boolean
+        get() = preferences.getBoolean(KEY_ROOT_IPV6, false)
+        set(value) = preferences.edit().putBoolean(KEY_ROOT_IPV6, value).apply()
+
     var rootBypassLan: Boolean
         get() = preferences.getBoolean(KEY_ROOT_BYPASS_LAN, true)
         set(value) = preferences.edit().putBoolean(KEY_ROOT_BYPASS_LAN, value).apply()
@@ -83,6 +87,7 @@ internal class AppPreferences(context: Context) {
         private const val KEY_DEBUG_LOGGING_ENABLED = "debug_logging_enabled"
         private const val KEY_DELAY_TEST_URL = "delay_test_url"
         private const val KEY_DELAY_RESULTS_JSON = "delay_results_json"
+        private const val KEY_ROOT_IPV6 = "root_ipv6"
         private const val KEY_ROOT_BYPASS_LAN = "root_bypass_lan"
         private const val KEY_DEVELOPER_MODE_ENABLED = "developer_mode_enabled"
         private const val KEY_ACCEPTED_USAGE_NOTICE_VERSION =

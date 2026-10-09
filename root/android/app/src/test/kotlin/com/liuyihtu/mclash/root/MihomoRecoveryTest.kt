@@ -6,6 +6,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class MihomoRecoveryTest {
+    @Test fun ipv6ReadinessRequiresBothTransparentSocketsAndDualStackDns() {
+        val temporary = Files.createTempDirectory("mihomo-ipv6-listeners").toFile()
+        try {
+            val tcp = File(temporary, "tcp6")
+            val udp = File(temporary, "udp6")
+            tcp.writeText("0: 00000000000000000000000001000000:45E6 0:0 0A\n2: 00000000000000000000000001000000:45E7 0:0 0A\n1: 00000000000000000000000000000000:2B2D 0:0 0A\n")
+            udp.writeText("0: 00000000000000000000000001000000:45E6 0:0 07\n2: 00000000000000000000000001000000:45E7 0:0 07\n1: 00000000000000000000000000000000:2B2D 0:0 07\n")
+            val check = MihomoProcess.ipv6ListenerCheck().replace("/proc/net/", temporary.absolutePath + "/")
+            val prefix = "owner_alive() { return 1; }\ncore_pid=0\n"
+            fun run(): Int {
+                val process = ProcessBuilder("/bin/sh", "-c", prefix + check).redirectErrorStream(true).start()
+                process.inputStream.bufferedReader().readText()
+                return process.waitFor()
+            }
+            assertEquals(0, run())
+            udp.writeText("0: 00000000000000000000000001000000:45E6 0:0 07\n")
+            assertNotEquals(0, run())
+        } finally { temporary.deleteRecursively() }
+    }
+
     @Test fun fastRecoveryKillsOnlyCoresUsingThisAppsDataDirectory() {
         val temporary = Files.createTempDirectory("mihomo-recovery").toFile()
         try {

@@ -107,6 +107,15 @@ internal object MihomoProcess {
             )
             waitForPort(
                 process = next,
+                host = "127.0.0.1",
+                port = VpnDnsRuntime.SOCKS_PORT,
+                logFile = logFile,
+                label = "本地 DNS 端口",
+                debugLoggingEnabled = debugLoggingEnabled,
+                cancelled = cancelled,
+            )
+            waitForPort(
+                process = next,
                 host = LOCAL_CONTROLLER_HOST,
                 port = LOCAL_CONTROLLER_PORT,
                 logFile = logFile,
@@ -267,6 +276,7 @@ internal object MihomoProcess {
             },
             Charsets.UTF_8,
         )
+        runtime.writeText(VpnDnsRuntime.build(runtime.readText(Charsets.UTF_8), ipv6Enabled), Charsets.UTF_8)
         return runtime
     }
 

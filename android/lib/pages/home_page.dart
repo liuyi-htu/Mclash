@@ -509,9 +509,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final current = await _service.getVpnTunnelSettings();
       if (!mounted) return;
 
-      final ipv4DnsController = TextEditingController(
-        text: current.ipv4DnsServers.join(', '),
-      );
       final mtuController = TextEditingController(text: '${current.mtu}');
       final bufferController = TextEditingController(
         text: '${current.tcpBufferSize}',
@@ -519,14 +516,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       var ipv6Enabled = current.ipv6Enabled;
       var bypassLan = current.bypassLan;
       String? validationMessage;
-
-      List<String> parseDnsServers(TextEditingController controller) =>
-          controller.text
-              .split(RegExp(r'[,，;；\s]+'))
-              .map((value) => value.trim())
-              .where((value) => value.isNotEmpty)
-              .toSet()
-              .toList(growable: false);
 
       final save = await showDialog<bool>(
             context: context,
@@ -550,30 +539,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     children: [
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: Text('启用 IPv6',
-                            style:
-                                Theme.of(dialogContext).textTheme.bodyMedium),
-                        value: ipv6Enabled,
-                        onChanged: (value) =>
-                            setDialogState(() => ipv6Enabled = value),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
                         title: Text('绕过局域网',
-                            style:
-                                Theme.of(dialogContext).textTheme.bodyMedium),
+                            style: Theme.of(dialogContext)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontSize: 14)),
                         value: bypassLan,
                         onChanged: (value) =>
                             setDialogState(() => bypassLan = value),
                       ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        style: Theme.of(dialogContext).textTheme.bodyMedium,
-                        controller: ipv4DnsController,
-                        decoration:
-                            managementFieldDecoration(dialogContext, 'IPv4 DNS')
-                                .copyWith(hintText: '114.114.114.114'),
-                        keyboardType: TextInputType.text,
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('IPv6',
+                            style: Theme.of(dialogContext)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontSize: 14)),
+                        value: ipv6Enabled,
+                        onChanged: (value) =>
+                            setDialogState(() => ipv6Enabled = value),
                       ),
                       const SizedBox(height: 10),
                       TextField(
@@ -620,7 +604,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             .bodyMedium
                             ?.copyWith(fontSize: 14)),
                     onPressed: () {
-                      ipv4DnsController.text = '114.114.114.114';
                       mtuController.text = '1500';
                       bufferController.text = '262144';
                       setDialogState(() {
@@ -642,18 +625,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       final tcpBuffer = int.tryParse(
                         bufferController.text.trim(),
                       );
-                      final ipv4DnsServers = parseDnsServers(ipv4DnsController);
-                      if (ipv4DnsServers.isEmpty ||
-                          ipv4DnsServers.any(
-                            (address) =>
-                                InternetAddress.tryParse(address)?.type !=
-                                InternetAddressType.IPv4,
-                          )) {
-                        setDialogState(
-                          () => validationMessage = '请填写有效的 IPv4 DNS 地址',
-                        );
-                        return;
-                      }
                       if (mtu == null || mtu < 576 || mtu > 9000) {
                         setDialogState(
                           () => validationMessage = 'MTU 必须在 576 到 9000 之间',
@@ -681,18 +652,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
       final mtu = int.tryParse(mtuController.text.trim());
       final tcpBuffer = int.tryParse(bufferController.text.trim());
-      final ipv4DnsServers = parseDnsServers(ipv4DnsController);
-      ipv4DnsController.dispose();
       mtuController.dispose();
       bufferController.dispose();
 
-      if (!save || mtu == null || tcpBuffer == null || ipv4DnsServers.isEmpty) {
+      if (!save || mtu == null || tcpBuffer == null) {
         return;
       }
       await _service.saveVpnTunnelSettings(
         mtu: mtu,
         tcpBufferSize: tcpBuffer,
-        ipv4DnsServers: ipv4DnsServers,
         ipv6Enabled: ipv6Enabled,
         bypassLan: bypassLan,
       );
