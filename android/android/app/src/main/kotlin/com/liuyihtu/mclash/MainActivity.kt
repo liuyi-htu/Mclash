@@ -191,7 +191,7 @@ class MainActivity : FlutterActivity() {
     private fun vpnTunnelSettings(): Map<String, Any> = mapOf(
         "mtu" to preferences.vpnMtu,
         "tcpBufferSize" to preferences.tcpBufferSize,
-        "ipv4DnsServers" to preferences.vpnIpv4DnsServers,
+        "ipv4DnsServers" to listOf(VpnDnsRuntime.VPN_DNS_ADDRESS),
         "ipv6Enabled" to preferences.vpnIpv6Enabled,
         "bypassLan" to preferences.vpnBypassLan,
     )
@@ -317,11 +317,6 @@ class MainActivity : FlutterActivity() {
         val mtu = call.argument<Int>("mtu") ?: error("MTU 不能为空")
         val tcpBufferSize = call.argument<Int>("tcpBufferSize")
             ?: error("TCP 缓冲不能为空")
-        val ipv4DnsServers = call.argument<List<String>>("ipv4DnsServers")
-            ?.map(String::trim)
-            ?.filter(String::isNotEmpty)
-            ?.distinct()
-            ?: error("IPv4 DNS 不能为空")
         val ipv6Enabled = call.argument<Boolean>("ipv6Enabled") ?: false
         val bypassLan = call.argument<Boolean>("bypassLan") ?: true
 
@@ -329,19 +324,8 @@ class MainActivity : FlutterActivity() {
         require(tcpBufferSize in 4096..1048576) {
             "TCP 缓冲必须在 4096 到 1048576 之间"
         }
-        require(ipv4DnsServers.isNotEmpty()) { "请至少填写一个 IPv4 DNS 地址" }
-        ipv4DnsServers.forEach { address ->
-            require(address.matches(Regex("[0-9a-fA-F:.]+"))) {
-                "IPv4 DNS 必须填写 IP 地址：$address"
-            }
-            val parsed = runCatching { InetAddress.getByName(address) }.getOrNull()
-            require(parsed is Inet4Address) {
-                "IPv4 DNS 地址无效：$address"
-            }
-        }
         preferences.vpnMtu = mtu
         preferences.tcpBufferSize = tcpBufferSize
-        preferences.vpnIpv4DnsServers = ipv4DnsServers
         preferences.vpnIpv6Enabled = ipv6Enabled
         preferences.vpnBypassLan = bypassLan
         result.success(vpnTunnelSettings())

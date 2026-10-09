@@ -56,26 +56,26 @@ class ProxyTProxyService : Service() {
             StartupLog.reset(this)
             StartupLog.append(this, "Root TProxy 启动；ABI=${Build.SUPPORTED_ABIS.joinToString()}")
             StartupLog.append(this, RootShell.requireRoot())
-            require(Settings.Global.getString(contentResolver, "private_dns_mode") != "hostname") {
-                "请先在 Android 网络设置中关闭严格私人 DNS，再启动 TProxy"
-            }
-            RootRuntimeMode.capture(this)
-            MihomoProcess.recover(this)
             val preferences = AppPreferences(this)
             val store = ConfigStore(this)
-            require(store.exists()) { "请先选择有效配置" }
-            val onlySelected = preferences.appProxyMode == AppPreferences.MODE_ONLY_SELECTED
-            val uids = preferences.selectedPackages.mapNotNull { name ->
-                runCatching { packageManager.getApplicationInfo(name, 0).uid }.getOrNull()
-            }.filter { it != android.os.Process.myUid() && it > 0 }.toSet()
-            val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids, preferences.rootBypassLan)
-            check(!stopping) { "启动已取消" }
-            MihomoProcess.start(this, store.configFile, rules) { stopping }
-            var hotspotSnapshot = HotspotRules.snapshot(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
-            RootShell.run(HotspotRules.update(hotspotSnapshot.interfaces, preferences.rootBypassLan, hotspotSnapshot.localAddresses))
+            if (!MihomoProcess.attach(this)) {
+                require(Settings.Global.getString(contentResolver, "private_dns_mode") != "hostname") {
+                    "请先在 Android 网络设置中关闭严格私人 DNS，再启动 TProxy"
+                }
+                RootRuntimeMode.capture(this)
+                MihomoProcess.recover(this)
+                require(store.exists()) { "请先选择有效配置" }
+                val onlySelected = preferences.appProxyMode == AppPreferences.MODE_ONLY_SELECTED
+                val uids = preferences.selectedPackages.mapNotNull { name ->
+                    runCatching { packageManager.getApplicationInfo(name, 0).uid }.getOrNull()
+                }.filter { it != android.os.Process.myUid() && it > 0 }.toSet()
+                val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids, preferences.rootBypassLan, preferences.rootIpv6)
+                check(!stopping) { "启动已取消" }
+                MihomoProcess.start(this, store.configFile, rules) { stopping }
+            }
             running = true
             starting = false
-            StartupLog.append(this, "IPv4 TProxy 接管完成；热点默认接管：${hotspotSnapshot.interfaces.joinToString().ifBlank { "等待热点开启" }}；IPv6 按应用及热点阻断")
+            StartupLog.append(this, "IPv4 TProxy 接管完成；热点默认接管：由独立 Root 守护进程监控；IPv6 ${if (preferences.rootIpv6) "TCP/UDP 接管" else "按应用及热点阻断"}")
             getSystemService(NotificationManager::class.java).notify(2,
                 notification("TProxy · ${store.activeProfile()?.name ?: "当前配置"}"))
             QuickSettingsTileUpdater.request(this)
@@ -84,21 +84,7 @@ class ProxyTProxyService : Service() {
                     Thread.sleep(2000)
                     if (!running || stopping || !MihomoProcess.isRunning()) break
                     RootRuntimeMode.capture(this)
-                    try {
-                        val current = HotspotRules.snapshot(RootShell.run(HotspotRules.SNAPSHOT_COMMAND, 10))
-                        if (current != hotspotSnapshot && running && !stopping) {
-                            RootShell.run(HotspotRules.update(current.interfaces, preferences.rootBypassLan, current.localAddresses))
-                            hotspotSnapshot = current
-                            StartupLog.append(this, "热点接管接口：${current.interfaces.joinToString().ifBlank { "热点已关闭" }}")
-                        }
-                    } catch (error: Throwable) {
-                        if (running && !stopping) {
-                            lastError = "热点规则更新失败：${error.message}"
-                            StartupLog.append(this, lastError!!)
-                            worker.execute { stopProxy() }
-                            return@Thread
-                        }
-                    }
+
                 }
                 if (running && !stopping) {
                     lastError = "Root 内核或守护进程已退出，请查看启动日志"
@@ -133,12 +119,9 @@ class ProxyTProxyService : Service() {
 
     override fun onDestroy() {
         stopping = true
-        if (running || starting) worker.execute {
-            RootRuntimeMode.capture(this)
-            runCatching { if (!MihomoProcess.stop()) MihomoProcess.recover(this) }
-                .onSuccess { running = false; starting = false }
-                .onFailure { lastError = "停止清理失败：${it.message}" }
-        }
+        // Explicit STOP owns shutdown. Activity/service destruction must not stop the daemon.
+        running = false
+        starting = false
         worker.shutdown()
         super.onDestroy()
     }

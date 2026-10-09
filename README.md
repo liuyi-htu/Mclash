@@ -79,7 +79,7 @@ Android App 的 `lib/` 目录按职责划分：
 Android SDK 需安装 Command-line Tools 和 Platform Tools。通过
 `ANDROID_HOME`、`ANDROID_SDK_ROOT` 和客户端的 `android/local.properties`
 配置 SDK；资源准备步骤还需 `sdkmanager`。当前工作区可在仓库根目录运行
-`source ../env.sh` 加载本地工具链和缓存路径；此文件位于仓库外。系统还需要：
+`source ../.toolchains/env.sh` 加载本地工具链和缓存路径；此文件位于仓库外。系统还需要：
 
 ```text
 git curl unzip gzip sha256sum file python3 java flutter dart
@@ -144,6 +144,12 @@ Windows 构建脚本会将共享模板复制到 Flutter 的 `assets/default-conf
 BUILD_MODE=debug ./build-mclash-android.sh
 ```
 
+VPN 的 TCP/UDP 53 流量交给 Mihomo 内部 DNS，IPv4/IPv6 跟随 VPN 开关；
+VPN 参数不再提供 IPv4 DNS 输入框，程序保留 Android 所需的 DNS 接收地址。
+内部 DNS 出口从普通代理组和 GLOBAL 中排除。DoH、DoT 等非 53 端口流量按普通代理规则处理。
+HEV 的 2.17.1 源码及依赖保存在 `android/native/hev-socks5-tunnel`，DNS 接管和 UDP 会话修复直接维护在源码中。
+GitHub 手动构建直接编译此目录，无需下载 HEV 或应用补丁；本地准备 JNI 运行库时也应编译此目录。
+
 以下运行资源路径以 `android/` 客户端目录为起点：
 
 ```text
@@ -163,19 +169,19 @@ android/app/src/main/assets/geodata/country.mmdb
 
 ### 接管方式
 
-本机应用 → iptables OUTPUT 打标 → IPv4 策略路由回送到 lo → PREROUTING TPROXY → Mihomo。
+本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由回送到 lo → PREROUTING TPROXY → Mihomo。
 
-- 支持本机 IPv4 TCP、UDP，保留订阅、节点选择、规则/全局/直连及分应用代理。
+- 支持本机 IPv4 TCP、UDP，以及可选的 IPv6 TCP、UDP，保留订阅、节点选择、规则/全局/直连及分应用代理。
 - 需要用户授予 `su` 权限；设备内核和 iptables 必须支持 TPROXY、MARK、owner、REDIRECT、REJECT 和策略路由。
-- 不建立 VpnService，不加载 HEV。默认接管 Android 报告为共享网络状态的热点接口，并随接口变化更新规则；热点客户端的 IPv4 TCP/UDP 经 TProxy 接管，DNS 53 重定向到 Mihomo，IPv6 TCP/UDP 阻断。热点流量不按本机应用列表过滤。
-- 本应用和 UID 0 的 Root 程序普通数据流量直连，避免透明代理响应和内核出站回环；UID 0 的 IPv4 DNS 53 仍被重定向，以处理系统解析器请求。共享 UID 的应用会共同生效，分应用选择针对当前 Android 用户已安装的应用。
-- 首版使用 IPv4。纳入代理范围的应用，其公网 IPv6 TCP/UDP 通过 ip6tables 阻断；未纳入代理范围的应用保留直连。IPv6 DNS 53 对非 Root、非本应用流量统一阻断，促使解析器使用 IPv4。
+- 不建立 VpnService，不加载 HEV。默认接管 Android 报告为共享网络状态的热点接口，并随接口变化更新规则；热点客户端的 IPv4 TCP/UDP 经 TProxy 接管，DNS 53 重定向到 Mihomo；在 TProxy 参数中开启 IPv6 后，同样接管热点 IPv6 TCP/UDP 和 DNS，关闭时阻断热点 IPv6 TCP/UDP。热点流量不按本机应用列表过滤。
+- 本应用和 UID 0 的 Root 程序普通数据流量直连，避免透明代理响应和内核出站回环；UID 0 的 DNS 53 仍被接管，以处理系统解析器请求。共享 UID 的应用会共同生效，分应用选择针对当前 Android 用户已安装的应用。
+- TProxy 参数提供 IPv6 开关，默认关闭。开启后使用 IPv6 透明监听、独立的 IPv6 策略路由和 DNS 透明接管（使用 Mihomo DNS 出口，无需 IPv6 NAT 表），按相同分应用设置接管 IPv6 TCP/UDP；未纳入代理范围的应用保留直连。关闭时阻断纳入代理范围应用的公网 IPv6 TCP/UDP，并阻断非 Root、非本应用的 IPv6 DNS 53。IPv6 链路本地、组播及热点 DHCPv6 保留系统处理；开启“绕过局域网”时也绕过 IPv6 ULA。开关需在停止代理后修改；设备不支持 IPv6 TProxy 或监听未就绪时，启动失败并回滚接管规则。
 - 本机 IPv4 TCP/UDP DNS 53 除本应用和带内核出站标记的流量外，统一重定向到 Mihomo（包括 UID 0）；系统 DNS 通常由 netd 发出，因此 DNS 不按应用列表过滤。不会改写 Android 的私人 DNS 设置；严格私人 DNS 开启时拒绝启动。应用内 DoH/DoT 作为普通 TCP/UDP 按代理范围处理，不保证获得域名规则信息。
-- 运行时生成独立配置，保留订阅的上游 DNS、节点和规则，固定代理与控制器的本机监听、DNS 监听、`redir-host`、IPv4 和出站标记，并移除导入配置的 TUN、自定义入站和外部控制监听。原配置文件不变。
+- 运行时生成独立配置，保留订阅的上游 DNS、节点和规则，固定代理与控制器的本机监听、DNS 监听、`redir-host`、IPv6 开关状态和出站标记，并移除导入配置的 TUN、自定义入站和外部控制监听。原配置文件不变。
 
 ### 生命周期与恢复
 
-Root shell 守护进程同时管理内核和防火墙。端口准备完成后才安装规则；安装失败、正常停止、内核退出或应用进程消失时撤销规则，再结束内核。用应用 PID 和进程起始时间识别进程退出，避免 PID 重用和休眠造成误判。清理失败时保留内核并重试，应用显示错误而不是宣称已停止。
+Root shell 守护进程通过 nohup/setsid 独立管理内核和防火墙，并脱离应用的冻结分组。关闭界面、冻结或强制退出 App 后，内核和热点监控继续运行；重新打开 App 会校验守护 PID、启动时间和命令行，再连接原内核，保留连接和累计流量。端口准备完成后才安装规则；明确停止、内核退出、安装或热点规则更新失败、卸载运行目录时撤销规则，再结束内核。清理失败时保留内核并重试，应用显示错误而不是宣称已停止。热点接口及地址变化由守护每两秒检测；主页上传、下载速率和累计流量直接读取 Mihomo。
 
 只使用 `MCLASH_R_*` 专用链、路由表 `20230`、优先级 `9000` 和高位 mark 掩码。检测到路由表/优先级冲突时拒绝启动，不清空系统防火墙或替换其他应用路由。标记与 Android/其他 Root 网络软件的兼容性仍需逐机验证。
 

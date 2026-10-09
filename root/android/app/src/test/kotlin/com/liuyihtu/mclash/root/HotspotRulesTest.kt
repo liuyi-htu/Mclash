@@ -4,6 +4,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HotspotRulesTest {
+    @Test fun ipv6HotspotCapturesDataAndDnsWhilePreservingLocalServices() {
+        val script = HotspotRules.update(setOf("wlan2"), false, ipv6Enabled = true,
+            localIpv6Addresses = setOf("2001:db8::1"))
+        assertTrue(script.contains("-A MCLASH_R_HOT6 -i wlan2 -d 2001:db8::1/128 -j RETURN"))
+        assertTrue(script.contains("-A MCLASH_R_HDNS6 -i wlan2 -p udp --dport 53 -j TPROXY --on-ip ::1 --on-port 17895"))
+        assertTrue(script.contains("-A MCLASH_R_HOT6 -i wlan2 -p udp -j TPROXY --on-ip ::1"))
+        assertTrue(script.contains("-d fe80::/10 -j RETURN"))
+        assertTrue(script.contains("--dport 547 -j RETURN"))
+        assertFalse(script.contains("-d fc00::/7 -j RETURN"))
+        assertFalse(script.contains("-j REJECT"))
+        val snapshot = HotspotRules.snapshot("wlan2 - TetheredState -\nMCLASH_LOCAL_IPV4 127.0.0.1\nMCLASH_LOCAL_IPV6 2001:db8::1")
+        assertEquals(setOf("2001:db8::1"), snapshot.localIpv6Addresses)
+    }
+
     @Test fun detectsOnlyActiveTetheredInterfaces() {
         val dump = """
               Tether state:

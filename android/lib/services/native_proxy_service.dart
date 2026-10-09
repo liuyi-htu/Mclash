@@ -229,7 +229,6 @@ class NativeProxyService {
   Future<VpnTunnelSettings> saveVpnTunnelSettings({
     required int mtu,
     required int tcpBufferSize,
-    required List<String> ipv4DnsServers,
     required bool ipv6Enabled,
     required bool bypassLan,
   }) async {
@@ -238,7 +237,6 @@ class NativeProxyService {
       <String, Object>{
         'mtu': mtu,
         'tcpBufferSize': tcpBufferSize,
-        'ipv4DnsServers': ipv4DnsServers,
         'ipv6Enabled': ipv6Enabled,
         'bypassLan': bypassLan,
       },

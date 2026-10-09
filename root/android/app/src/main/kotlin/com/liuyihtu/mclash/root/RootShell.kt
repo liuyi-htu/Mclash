@@ -39,7 +39,7 @@ internal object RootShell {
     fun requireRoot(): String = run("""
         set -eu
         [ "${'$'}(id -u)" = 0 ] || { echo '请授予 Mclash Root 超级用户权限'; exit 1; }
-        for tool in ip iptables ip6tables iptables-restore ip6tables-restore dumpsys sed awk tr grep; do
+        for tool in ip iptables ip6tables iptables-restore ip6tables-restore dumpsys sed awk tr grep sort timeout nohup setsid; do
             command -v "${'$'}tool" >/dev/null || { echo "缺少命令：${'$'}tool"; exit 1; }
         done
         iptables -w 5 -t mangle -S OUTPUT >/dev/null || { echo '无法访问 IPv4 mangle 表'; exit 1; }

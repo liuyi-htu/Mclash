@@ -262,17 +262,15 @@ jobs:
             exit 1
           }
           hev_source="$RUNNER_TEMP/hev-socks5-tunnel"
-          git clone --depth 1 --branch "$HEV_VERSION" --recurse-submodules \
-            https://github.com/heiher/hev-socks5-tunnel.git "$hev_source"
-          actual_hev_commit=$(git -C "$hev_source" rev-parse HEAD)
-          [[ "$actual_hev_commit" == "$HEV_COMMIT" ]] || {
-            echo "HevSocks5Tunnel commit mismatch: expected $HEV_COMMIT, got $actual_hev_commit" >&2
+          mkdir -p "$hev_source"
+          cp -a android/native/hev-socks5-tunnel "$hev_source/jni"
+          [[ "$(cat "$hev_source/jni/.rev-id")" == "$HEV_COMMIT" ]] || {
+            echo "Bundled Hev source does not match the pinned upstream commit" >&2
             exit 1
           }
-          ln -s . "$hev_source/jni"
           "$android_sdk/ndk/$NDK_VERSION/ndk-build" \
             -C "$hev_source" \
-            APP_ABI=arm64-v8a \
+            APP_ABI=arm64-v8a REV_ID="$HEV_COMMIT" \
             APP_MODULES=hev-socks5-tunnel \
             -j"$(nproc)"
           library="$hev_source/libs/arm64-v8a/libhev-socks5-tunnel.so"

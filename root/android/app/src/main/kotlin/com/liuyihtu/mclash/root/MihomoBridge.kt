@@ -9,9 +9,7 @@ import java.util.concurrent.TimeUnit
 
 /** The privileged supervisor owns both the core and its rules, including crash cleanup. */
 internal object MihomoProcess {
-    @Volatile private var process: Process? = null
     private var home: File? = null
-    private var outputReader: Thread? = null
     @Volatile private var lastOutput = ""
 
     fun prepare(context: Context): File {
@@ -32,7 +30,7 @@ internal object MihomoProcess {
 
     fun previewConfig(context: Context, source: File): String {
         val settings = AppPreferences(context)
-        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode)
+        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode, settings.rootIpv6)
     }
 
     fun validateConfig(context: Context, source: File) = validateWithBinary(context, source, binary(context))
@@ -58,11 +56,11 @@ internal object MihomoProcess {
 
     @Synchronized
     fun start(context: Context, source: File, rules: String, cancelled: () -> Boolean) {
-        check(process?.isAlive != true) { "Root 代理已在运行" }
+        check(!isRunning()) { "Root 代理已在运行" }
         val directory = prepare(context)
         val core = binary(context)
         val config = File(directory, "runtime.yaml").apply { writeText(previewConfig(context, source)) }
-        val appPid = android.os.Process.myPid()
+        val ipv6 = AppPreferences(context).rootIpv6
         val appUid = android.os.Process.myUid()
         val ready = File(directory, "ready").apply { writeText("") }
         val ports = File(directory, "ports-ready").apply { delete() }
@@ -70,6 +68,9 @@ internal object MihomoProcess {
         val log = File(directory, "mihomo.log").apply { writeText("") }
         File(directory, "supervisor.log").writeText("")
         File(directory, "supervisor.pid").writeText("")
+        File(directory, "supervisor.stamp").writeText("")
+        File(directory, "hotspot.snapshot").delete()
+        File(directory, "hotspot-monitor.sh").writeText(RootHotspotMonitor.script(AppPreferences(context).rootBypassLan, ipv6))
         File(directory, "install.sh").apply { writeText(rules) }
         File(directory, "cleanup.sh").apply { writeText(TProxyRules.cleanup()) }
         val script = File(directory, "supervisor.sh").apply {
@@ -80,7 +81,11 @@ internal object MihomoProcess {
                 cd ${RootShell.quote(directory.absolutePath)}
                 [ "${'$'}(id -u)" = 0 ] || { echo '未获得 Root 权限'; exit 1; }
                 echo ${'$'}${'$'} > ./supervisor.pid
-                app_stamp=${'$'}(awk '{print ${'$'}22}' /proc/$appPid/stat)
+                awk '{print ${'$'}22}' /proc/${'$'}${'$'}/stat > ./supervisor.stamp
+                # Never inherit the application's freezer group.
+                if grep -q '/uid_$appUid/' /proc/${'$'}${'$'}/cgroup; then
+                    echo ${'$'}${'$'} > /sys/fs/cgroup/cgroup.procs
+                fi
                 core_pid=''
                 # Cache rollback before launch; uninstall may remove this directory.
                 cleanup_rules=${'$'}(cat ./cleanup.sh)
@@ -109,44 +114,47 @@ internal object MihomoProcess {
                 trap cleanup EXIT
                 trap 'exit 1' HUP INT TERM
                 owner_alive() {
-                    [ ! -f ./stop ] &&
-                    [ "${'$'}(awk '{print ${'$'}22}' /proc/$appPid/stat 2>/dev/null)" = "${'$'}app_stamp" ]
+                    [ ! -f ./stop ] && [ -f ./runtime.yaml ]
                 }
                 ${RootShell.quote(core.absolutePath)} -d ${RootShell.quote(directory.absolutePath)} -f ${RootShell.quote(config.absolutePath)} >> ${RootShell.quote(log.absolutePath)} 2>&1 &
                 core_pid=${'$'}!
+                listener_ready() {
+                    awk '${'$'}2 ~ /:45E2${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6 &&
+                    awk '${'$'}2 ~ /:2382${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6
+                }
+                core_alive() {
+                    kill -0 "${'$'}core_pid" 2>/dev/null || return 1
+                    IFS=' ' read -r child_pid child_name child_state child_rest < /proc/"${'$'}core_pid"/stat 2>/dev/null || return 1
+                    [ "${'$'}child_state" != Z ]
+                }
                 n=0
-                while [ ! -f ./ports-ready ]; do
-                    owner_alive && kill -0 "${'$'}core_pid" 2>/dev/null || { echo '启动期间进程退出或被取消'; exit 1; }
+                while ! listener_ready; do
+                    owner_alive && core_alive || { echo '启动期间进程退出或被取消'; exit 1; }
                     [ "${'$'}n" -lt 900 ] || { echo '等待内核监听超时'; exit 1; }
                     sleep 0.1; n=${'$'}((n + 1))
                 done
+                echo ready > ./ports-ready
+                ${if (ipv6) ipv6ListenerCheck() else ""}
                 /system/bin/sh ./install.sh >> ./supervisor.log 2>&1 || { cat ./supervisor.log; exit 1; }
+                timeout 15 /system/bin/sh ./hotspot-monitor.sh
                 echo ready > ./ready
                 echo 'TPROXY_READY'
-                while owner_alive && kill -0 "${'$'}core_pid" 2>/dev/null; do sleep 1; done
+                while owner_alive && core_alive; do
+                    timeout 15 /system/bin/sh ./hotspot-monitor.sh
+                    sleep 2
+                done
                 echo 'Root supervisor stopped; removing routing rules'
             """.trimIndent() + "\n")
         }
         lastOutput = ""
-        val next = RootShell.start("exec /system/bin/sh ${RootShell.quote(script.absolutePath)}")
-        process = next
-        outputReader = Thread({
-            next.inputStream.bufferedReader().useLines { lines ->
-                lines.forEach { line ->
-                    lastOutput = (lastOutput + line + "\n").takeLast(8192)
-                    runCatching { File(directory, "supervisor.log").appendText(line + "\n") }
-                }
-            }
-        }, "root-supervisor-output").apply { isDaemon = true; start() }
+        RootShell.run("nohup setsid /system/bin/sh ${RootShell.quote(script.absolutePath)} >> ${RootShell.quote(File(directory, "supervisor.log").absolutePath)} 2>&1 < /dev/null &")
         val deadline = System.currentTimeMillis() + 100_000
         try {
             while (System.currentTimeMillis() < deadline) {
                 check(!cancelled()) { "启动已取消" }
-                check(next.isAlive) { diagnostics(directory) }
-                if (!ports.exists() && canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)) {
-                    // Both test connections were made before any interception rules were installed.
-                    ports.writeText("ready")
-                }
+                val stamp = File(directory, "supervisor.stamp").readText().trim()
+                if (stamp.isNotEmpty()) check(daemonAlive(directory)) { diagnostics(directory) }
+                check(ready.readText().trim() != "stopped") { diagnostics(directory) }
                 if (ready.readText().trim() == "ready") return
                 Thread.sleep(200)
             }
@@ -157,19 +165,55 @@ internal object MihomoProcess {
         }
     }
 
-    fun isRunning(): Boolean = process?.isAlive == true
+    internal fun ipv6ListenerCheck(): String = """
+        n=0
+        while ! (
+            awk '${'$'}2 == "00000000000000000000000001000000:${RootRuntimeConfig.TPROXY_PORT.toString(16).uppercase()}" && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp6 &&
+            awk '${'$'}2 == "00000000000000000000000001000000:${RootRuntimeConfig.TPROXY_PORT.toString(16).uppercase()}" && ${'$'}4 == "07" {found=1} END {exit !found}' /proc/net/udp6 &&
+            awk '${'$'}2 == "00000000000000000000000001000000:${RootRuntimeConfig.IPV6_DNS_TPROXY_PORT.toString(16).uppercase()}" && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp6 &&
+            awk '${'$'}2 == "00000000000000000000000001000000:${RootRuntimeConfig.IPV6_DNS_TPROXY_PORT.toString(16).uppercase()}" && ${'$'}4 == "07" {found=1} END {exit !found}' /proc/net/udp6 &&
+            awk '${'$'}2 == "00000000000000000000000000000000:${RootRuntimeConfig.DNS_PORT.toString(16).uppercase()}" && ${'$'}4 == "07" {found=1} END {exit !found}' /proc/net/udp6 &&
+            awk '${'$'}2 == "00000000000000000000000000000000:${RootRuntimeConfig.DNS_PORT.toString(16).uppercase()}" && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp6
+        ); do
+            owner_alive && kill -0 "${'$'}core_pid" 2>/dev/null || exit 1
+            [ "${'$'}n" -lt 100 ] || { echo 'IPv6 TProxy 或 DNS 监听未就绪，请检查内核支持'; exit 1; }
+            sleep 0.1; n=${'$'}((n + 1))
+        done
+    """.trimIndent()
+
+    internal fun identityCheck(directory: File, pid: Int, stamp: String): String = """
+        [ "${'$'}(awk '{print ${'$'}22}' /proc/$pid/stat 2>/dev/null)" = ${RootShell.quote(stamp)} ] &&
+        tr '\000' '\n' < /proc/$pid/cmdline | grep -F -x ${RootShell.quote(File(directory, "supervisor.sh").absolutePath)} >/dev/null
+    """.trimIndent()
+
+    private fun daemonAlive(directory: File): Boolean = runCatching {
+        val pid = File(directory, "supervisor.pid").readText().trim().toInt()
+        val stamp = File(directory, "supervisor.stamp").readText().trim()
+        check(pid > 1 && stamp.matches(Regex("[0-9]+")))
+        RootShell.run(identityCheck(directory, pid, stamp), 5)
+        true
+    }.getOrDefault(false)
+
+    fun isRunning(): Boolean = home?.let(::daemonAlive) == true
+
+    fun attach(context: Context): Boolean {
+        val directory = File(context.filesDir, "mihomo")
+        home = directory
+        return File(directory, "ready").takeIf { it.isFile }?.readText()?.trim() == "ready" &&
+            daemonAlive(directory) && canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)
+    }
 
     @Synchronized
     fun stop(): Boolean {
-        val current = process ?: return false
-        home?.resolve("stop")?.writeText("stop")
-        // Supervisor removes rules first, then terminates the core. Do not kill it mid-cleanup.
-        check(current.waitFor(20, TimeUnit.SECONDS)) { "Root 清理尚未完成，请检查启动日志" }
-        outputReader?.join(1000)
-        process = null
-        // "stopped" is written only after the supervisor verifies rule removal
-        // and reaps the core. A killed supervisor requires full recovery instead.
-        return home?.resolve("ready")?.readText()?.trim() == "stopped"
+        val directory = home ?: return false
+        if (!daemonAlive(directory)) return false
+        File(directory, "stop").writeText("stop")
+        val deadline = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < deadline) {
+            if (File(directory, "ready").readText().trim() == "stopped" && !daemonAlive(directory)) return true
+            Thread.sleep(200)
+        }
+        error("Root 清理尚未完成，请检查启动日志")
     }
 
     fun recover(context: Context): String {

@@ -13,6 +13,7 @@ void main() {
   var registrationReads = 0;
   var registrationExports = 0;
   bool? savedBypassLan;
+  bool? savedIpv6;
 
   setUp(() {
     running = false;
@@ -22,6 +23,7 @@ void main() {
     registrationReads = 0;
     registrationExports = 0;
     savedBypassLan = null;
+    savedIpv6 = null;
     PackageInfo.setMockInitialValues(
       appName: 'Mclash Root',
       packageName: 'com.liuyihtu.mclash.root',
@@ -35,8 +37,15 @@ void main() {
         throw StateError('Status snapshots must not wait for restoration');
       }
       if (call.method == 'saveRootSettings') {
-        savedBypassLan = (call.arguments as Map)['bypassLan'] as bool;
-        return {'bypassLan': savedBypassLan};
+        final args = call.arguments as Map;
+        if (args.containsKey('bypassLan')) {
+          savedBypassLan = args['bypassLan'] as bool;
+        }
+        if (args.containsKey('ipv6')) savedIpv6 = args['ipv6'] as bool;
+        return {
+          'bypassLan': savedBypassLan ?? true,
+          'ipv6': savedIpv6 ?? false
+        };
       }
       if (call.method == 'getDeviceRegistration') {
         registrationReads++;
@@ -63,7 +72,10 @@ void main() {
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => developerModeEnabled,
         'getConfigInfo' => <String, Object?>{},
-        'getRootSettings' => <String, Object?>{'bypassLan': true},
+        'getRootSettings' => <String, Object?>{
+            'bypassLan': savedBypassLan ?? true,
+            'ipv6': savedIpv6 ?? false
+          },
         'isRunning' => running,
         'getProxyStatus' => proxyStatus,
         'getDebugLoggingEnabled' => false,
@@ -250,11 +262,29 @@ void main() {
     expect(find.text('VPN MTU'), findsNothing);
     expect(find.text('启用 IPv6'), findsNothing);
     expect(find.text('保存'), findsNothing);
-    await tester.tap(find.byType(SwitchListTile));
+    await tester.tap(find.widgetWithText(SwitchListTile, '绕过局域网'));
     await tester.pumpAndSettle();
     expect(savedBypassLan, false);
-    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+    expect(
+        tester
+            .widget<SwitchListTile>(
+                find.widgetWithText(SwitchListTile, '绕过局域网'))
+            .value,
         false);
+    expect(
+        tester
+            .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'IPv6'))
+            .value,
+        false);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'IPv6'));
+    await tester.pumpAndSettle();
+    expect(savedIpv6, true);
+    expect(savedBypassLan, false);
+    expect(
+        tester
+            .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'IPv6'))
+            .value,
+        true);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
