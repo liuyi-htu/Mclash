@@ -1,3 +1,4 @@
+import '../shared/runtime_config_display.dart';
 import '../shared/dialog_typography.dart';
 import 'dart:async';
 
@@ -107,9 +108,12 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
         _runtimeContent = widget.runtimeView || running;
         _readOnly = _runtimeContent || widget.profile.isSubscription;
       });
-      final content = widget.runtimeView || running
+      final rawContent = widget.runtimeView || running
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
+      final content = widget.runtimeView || running
+          ? formatRuntimeConfigForDisplay(rawContent)
+          : rawContent;
       if (!mounted) return;
       if (_dirty) {
         setState(() {

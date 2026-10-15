@@ -890,8 +890,9 @@ SliverGridDelegateWithFixedCrossAxisCount _panelGridDelegate(
       : 1.0;
   final textScale = MediaQuery.textScalerOf(context).scale(15) / 15 / baseline;
   final minWidth = (width >= 600 ? 200.0 : 145.0) * textScale;
-  final columns =
-      ((width + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
+  final columns = MediaQuery.sizeOf(context).shortestSide < 600
+      ? 2
+      : ((width + spacing) / (minWidth + spacing)).floor().clamp(1, 6);
   return SliverGridDelegateWithFixedCrossAxisCount(
     crossAxisCount: columns,
     mainAxisSpacing: spacing,
@@ -959,7 +960,7 @@ class _ProxyGroupButton extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  _DelayBadge(delay: delay),
+                  Flexible(child: _DelayBadge(delay: delay)),
                 ],
               ),
             ],
@@ -1088,6 +1089,8 @@ class _DelayBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       child: Text(
         text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: _delayColor(colors, delay),
           fontSize: 12,

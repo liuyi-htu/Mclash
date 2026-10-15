@@ -296,6 +296,55 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('phone group and node cards stay in two columns at large text',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    for (final size in [
+      const Size(320, 640),
+      const Size(390, 844),
+      const Size(844, 390)
+    ]) {
+      tester.view.physicalSize = size;
+      for (final scale in [1.0, 1.8]) {
+        controller.includeGlobalGroup = true;
+        await tester.pumpWidget(MaterialApp(
+          key: UniqueKey(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: const ProxyPanelPage(proxyRunning: true, proxyMode: 'global'),
+        ));
+        await tester.pumpAndSettle();
+        final grid = tester.widget<SliverGrid>(find.byType(SliverGrid));
+        expect(
+            (grid.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+                .crossAxisCount,
+            2);
+        expect(tester.getTopLeft(find.text('GLOBAL')).dy,
+            tester.getTopLeft(find.text('Test group')).dy);
+        await tester.tap(find.text('Test group'));
+        await tester.pumpAndSettle();
+        final nodes = tester.widget<GridView>(find.byType(GridView));
+        expect(
+            (nodes.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
+                .crossAxisCount,
+            2);
+        final first = find.descendant(
+            of: find.byType(GridView), matching: find.text('Node A'));
+        final second = find.descendant(
+            of: find.byType(GridView), matching: find.text('Node B'));
+        expect(tester.getTopLeft(first).dy, tester.getTopLeft(second).dy);
+        expect(tester.getTopLeft(second).dx,
+            greaterThan(tester.getTopLeft(first).dx));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+      }
+    }
+  });
+
   testWidgets(
       'proxy panel adapts to tablet rotation, split screen and large text',
       (tester) async {
@@ -335,7 +384,7 @@ void main() {
     expect(
         (nodes.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount)
             .crossAxisCount,
-        1);
+        2);
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Node B').last);
     await tester.pumpAndSettle();

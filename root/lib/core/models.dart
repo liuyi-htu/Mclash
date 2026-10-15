@@ -121,15 +121,46 @@ class SubscriptionUrlTestResult {
 }
 
 class RootProxySettings {
-  const RootProxySettings({required this.bypassLan, this.ipv6 = false});
+  const RootProxySettings(
+      {required this.bypassLan,
+      this.ipv6 = false,
+      this.proxyMode = 'tproxy',
+      this.tunStack = 'mixed'});
 
   factory RootProxySettings.fromMap(Map<Object?, Object?> map) {
     return RootProxySettings(
       bypassLan: map['bypassLan'] as bool? ?? true,
       ipv6: map['ipv6'] as bool? ?? false,
+      proxyMode: map['proxyMode'] == 'tun' ? 'tun' : 'tproxy',
+      tunStack: tunStacks.contains(map['tunStack'])
+          ? map['tunStack'] as String
+          : 'mixed',
     );
   }
 
+  static const tunStacks = ['mixed', 'system', 'gvisor', 'mips'];
+  final String tunStack;
+  final String proxyMode;
   final bool bypassLan;
   final bool ipv6;
+}
+
+class NetworkSharingSettings {
+  const NetworkSharingSettings({
+    this.enabled = false,
+    this.interfaces = const [],
+    this.availableInterfaces = const [],
+  });
+
+  factory NetworkSharingSettings.fromMap(Map<Object?, Object?> map) =>
+      NetworkSharingSettings(
+        enabled: map['enabled'] as bool? ?? false,
+        interfaces: (map['interfaces'] as List?)?.cast<String>() ?? const [],
+        availableInterfaces:
+            (map['availableInterfaces'] as List?)?.cast<String>() ?? const [],
+      );
+
+  final bool enabled;
+  final List<String> interfaces;
+  final List<String> availableInterfaces;
 }

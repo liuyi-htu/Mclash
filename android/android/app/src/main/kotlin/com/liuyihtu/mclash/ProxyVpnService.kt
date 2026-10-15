@@ -16,11 +16,14 @@ import androidx.core.content.ContextCompat
 import hev.htproxy.TProxyService
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class ProxyVpnService : VpnService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val worker = Executors.newSingleThreadExecutor()
+
+    private val logMaintenance = Executors.newSingleThreadScheduledExecutor()
 
     private var tunDescriptor: ParcelFileDescriptor? = null
     private var tunnelStarted = false
@@ -29,6 +32,11 @@ class ProxyVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        logMaintenance.scheduleWithFixedDelay({
+            for (path in listOf("mihomo/mihomo.log", "runtime/hev.log")) {
+                runCatching { DebugLogLimits.trim(File(filesDir, path)) }
+            }
+        }, 0, 2, TimeUnit.SECONDS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -44,6 +52,7 @@ class ProxyVpnService : VpnService() {
     override fun onBind(intent: Intent?): IBinder? = super.onBind(intent)
 
     override fun onDestroy() {
+        logMaintenance.shutdownNow()
         if (running || starting || stopping || MihomoProcess.isRunning()) requestStop(null)
         worker.shutdown()
         super.onDestroy()

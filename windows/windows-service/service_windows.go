@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"golang.org/x/sys/windows/svc"
@@ -108,12 +107,7 @@ func (h *serviceHandler) logf(format string, args ...any) {
 		return
 	}
 	_ = h.paths.ensureDataDirs()
-	file, err := os.OpenFile(h.paths.ServiceLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	_, _ = fmt.Fprintf(file, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+	_ = appendBoundedLog(h.paths.ServiceLog, []byte(fmt.Sprintf("%s %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))))
 }
 
 func (h *serviceHandler) writeState(pid int, message string) {

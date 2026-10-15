@@ -1,3 +1,4 @@
+import 'package:mclash/dns_management.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/windows_proxy_platform_service.dart';
@@ -60,6 +61,33 @@ void main() {
     await service.saveConfigContent(id: 'test.yaml', content: 'rules: []\n');
     expect(await profile.readAsString(), 'rules: []\n');
     expect(await File('${profile.path}.bak').readAsString(), before);
+  });
+  test(
+      'DNS save synchronizes the active runtime file and preserves controlled IPv6',
+      () async {
+    await File('${dir.path}\\settings.json').writeAsString(
+        '{"activeProfile":"test.yaml","profileNames":{"test.yaml":"Airport"}}');
+    await profile
+        .writeAsString('dns: {ipv6: true, nameserver: [1.1.1.1]}\nrules: []\n');
+    final service = WindowsProxyPlatformService(
+      dataDir: dir.path,
+      serviceProcessRunner: (_, args) async => args.first == 'status-json'
+          ? ProcessResult(1, 0, '{"state":"stopped"}', '')
+          : ProcessResult(1, 0, 'configuration test successful', ''),
+    );
+    final runtimeBefore = await service.getRuntimeConfigContent();
+    expect(loadYaml(configDnsText(runtimeBefore)).containsKey('ipv6'), false);
+    await service.saveConfigContent(
+        id: 'test.yaml',
+        content: updateConfigDns(
+            await profile.readAsString(), 'nameserver: [8.8.8.8]'));
+    final persisted =
+        loadYaml(await File('${dir.path}\\config.yaml').readAsString());
+    final runtimeAfter = loadYaml(await service.getRuntimeConfigContent());
+    expect(persisted['dns'], runtimeAfter['dns']);
+    expect(persisted['dns']['nameserver'], ['8.8.8.8']);
+    expect(persisted['dns']['ipv6'], false);
+    expect(loadYaml(await profile.readAsString())['dns']['ipv6'], true);
   });
   test('running service rejects edits and exposes actual runtime content',
       () async {

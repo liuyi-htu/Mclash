@@ -310,6 +310,10 @@ class NativeProxyService {
     return <String, int>{
       'rxBytes': (result?['rxBytes'] as num?)?.toInt() ?? 0,
       'txBytes': (result?['txBytes'] as num?)?.toInt() ?? 0,
+      if (result?['rxBytesPerSecond'] is num)
+        'rxBytesPerSecond': (result!['rxBytesPerSecond'] as num).toInt(),
+      if (result?['txBytesPerSecond'] is num)
+        'txBytesPerSecond': (result!['txBytesPerSecond'] as num).toInt(),
     };
   }
 

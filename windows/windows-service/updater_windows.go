@@ -60,22 +60,8 @@ func appendUpdateLog(paths appPaths, format string, args ...any) {
 	if err := paths.ensureDataDirs(); err != nil {
 		return
 	}
-	file, err := os.OpenFile(
-		filepath.Join(paths.Logs, "update.log"),
-		os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-		0o644,
-	)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	message := fmt.Sprintf(format, args...)
-	_, _ = fmt.Fprintf(
-		file,
-		"%s %s\n",
-		time.Now().Format("2006-01-02 15:04:05"),
-		message,
-	)
+	message := fmt.Sprintf("%s %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, args...))
+	_ = appendBoundedLog(filepath.Join(paths.Logs, "update.log"), []byte(message))
 }
 
 func checkCoreUpdate(paths appPaths) (coreUpdateInfo, githubRelease, error) {

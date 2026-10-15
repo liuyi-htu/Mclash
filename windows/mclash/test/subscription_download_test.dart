@@ -10,6 +10,78 @@ import 'package:yaml/yaml.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = null;
+
+  test(
+      'one airport config rejects duplicates and allows re-adding after deletion',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('single-subscription-');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    var failDownload = true;
+    server.listen((request) async {
+      requests++;
+      if (failDownload) {
+        request.response.statusCode = 503;
+      } else {
+        request.response.write(
+            'proxies: [{name: HK, type: http, server: example.org, port: 80}]');
+      }
+      await request.response.close();
+    });
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, __) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
+    final url = 'http://127.0.0.1:${server.port}/subscription';
+    try {
+      await expectLater(service.addSubscription(name: '失败', url: url),
+          throwsA(isA<HttpException>()));
+      failDownload = false;
+      final pending = service.addSubscription(name: '机场配置', url: url);
+      await expectLater(
+          service.addSubscription(name: '并发', url: url), throwsStateError);
+      await pending;
+      final settings = File('${dir.path}\\settings.json');
+      final before = await settings.readAsString();
+      final id =
+          (jsonDecode(before)['profileUrls'] as Map).keys.single as String;
+      final downloaded = requests;
+      await expectLater(
+          service.addSubscription(name: '第二份', url: url), throwsStateError);
+      expect(requests, downloaded);
+      expect(await settings.readAsString(), before);
+      // Additional airports still belong to this one configuration.
+      final other = '$url?second';
+      await service.editSubscriptionAirport(id, name: '第二机场', url: other);
+      expect(
+          (jsonDecode(await settings.readAsString())['profileUrls'] as Map)
+              .values
+              .single,
+          '$url\n$other');
+      // The existing deletion rule requires deselecting the active profile.
+      final state =
+          jsonDecode(await settings.readAsString()) as Map<String, dynamic>;
+      state['activeProfile'] = null;
+      state['activeMihomoProfile'] = null;
+      await settings.writeAsString(jsonEncode(state));
+      await service.deleteConfig(id);
+      await service.addSubscription(name: '重新添加', url: url);
+      expect(
+          (jsonDecode(await settings.readAsString())['profileTypes'] as Map)
+              .values
+              .where((type) => type == 'subscription'),
+          hasLength(1));
+    } finally {
+      await server.close(force: true);
+      for (final entry in dir.parent.listSync()) {
+        if (entry.path.startsWith('${dir.path}\\')) {
+          await entry.delete(recursive: true);
+        }
+      }
+      await dir.delete(recursive: true);
+    }
+  });
+
   test(
       'multiple airports prefix nodes; single refresh retains other caches and failed refresh is atomic',
       () async {
@@ -31,7 +103,7 @@ void main() {
             'Subscription-Userinfo', path == '/a' ? firstUsage : secondUsage);
         final name = path == '/a' ? '香港' : secondName;
         request.response.write(
-            'proxies: [{name: $name, type: http, server: example.org, port: 80}]');
+            'proxies: [{name: $name, type: http, server: example.org, port: 80, dialer-proxy: Airport, udp: true}]\nproxy-groups: [{name: Airport, type: select, proxies: [DIRECT]}]\ndns: {enable: false}\nrules: ["MATCH,Airport"]');
       }
       await request.response.close();
     });
@@ -63,6 +135,16 @@ void main() {
               .map((node) => node['name'] as String)
               .toList();
       expect(names(await profile.readAsString()), ['1-香港', '2-香港']);
+      final cached = jsonDecode(await cache.readAsString()) as Map;
+      for (final content in cached.values) {
+        final source = loadYaml(content as String) as Map;
+        expect(source.keys, ['proxies']);
+        expect(source['proxies'][0]['dialer-proxy'], isNull);
+        expect(source['proxies'][0]['udp'], isTrue);
+      }
+      expect(
+          loadYaml(await profile.readAsString())['proxies'][0]['dialer-proxy'],
+          isNull);
       // The first subscription is selected and ready without an extra click.
       secondName = '日本';
       final savedFirstUsage = firstUsage;

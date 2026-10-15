@@ -17,6 +17,7 @@ import 'app_selector_page.dart';
 import 'config_page.dart';
 import 'core_update_page.dart';
 import 'device_registration_page.dart';
+import 'network_sharing_dialog.dart';
 import 'proxy_panel_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -32,6 +33,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
   ProxyStatus get _status => _proxyStatus.value;
   set _status(ProxyStatus status) => _proxyStatus.value = status;
+  String _rootProxyMode = 'tproxy';
   bool _toggling = false;
   int _transitionGeneration = 0;
   bool _refreshInProgress = false;
@@ -211,7 +213,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     children: [
                       const Text(
                         '使用 Mclash 前，请认真阅读以下声明：',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(fontWeight: FontWeight.w400),
                       ),
                       const SizedBox(height: 14),
                       const _UsageNoticeItem(
@@ -246,7 +248,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         controlAffinity: ListTileControlAffinity.leading,
                         title: const Text(
                           '我已阅读、理解并同意遵守以上声明',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                          style: TextStyle(fontWeight: FontWeight.w400),
                         ),
                         onChanged: saving
                             ? null
@@ -316,6 +318,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _service.getConfigInfo(),
         _service.getProxyStatus(),
         _service.getDebugLoggingEnabled(),
+        _service.getRootSettings(),
       ]);
       final config = values[0] as ConfigInfo;
       final status = values[1] as ProxyStatus;
@@ -323,6 +326,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         _config = config;
+        _rootProxyMode = (values[3] as RootProxySettings).proxyMode;
         if (!_toggling && generation == _transitionGeneration) {
           _status = status;
         }
@@ -540,7 +544,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           style: Theme.of(context)
               .textTheme
               .bodyMedium
-              ?.copyWith(fontSize: 14, fontWeight: FontWeight.w600)),
+              ?.copyWith(fontSize: 14, fontWeight: FontWeight.w400)),
       subtitle: subtitle == null
           ? null
           : Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
@@ -576,12 +580,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _showRootSettings() async {
     if (_status != ProxyStatus.stopped) {
-      _showError('请先停止代理再修改 TProxy 参数');
+      _showError('请先停止代理再修改代理模式');
       return;
     }
     try {
       final current = await _service.getRootSettings();
       if (!mounted) return;
+      var proxyMode = current.proxyMode;
+      var tunStack = current.tunStack;
       var bypassLan = current.bypassLan;
       var ipv6 = current.ipv6;
       var saving = false;
@@ -592,7 +598,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             canPop: !saving,
             child: DialogTypography(
                 child: AlertDialog(
-              title: Text('TProxy 参数',
+              title: Text('代理模式',
                   style: Theme.of(dialogContext)
                       .textTheme
                       .titleMedium
@@ -605,6 +611,86 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(16)),
               content: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'tun', label: Text('TUN')),
+                      ButtonSegment(value: 'tproxy', label: Text('TProxy')),
+                    ],
+                    selected: {proxyMode},
+                    onSelectionChanged: saving
+                        ? null
+                        : (selection) async {
+                            final previous = proxyMode;
+                            setDialogState(() {
+                              proxyMode = selection.single;
+                              saving = true;
+                            });
+                            try {
+                              final saved = await _service.saveRootSettings(
+                                  proxyMode: proxyMode);
+                              proxyMode = saved.proxyMode;
+                              if (mounted) {
+                                setState(
+                                    () => _rootProxyMode = saved.proxyMode);
+                              }
+                            } catch (error) {
+                              proxyMode = previous;
+                              if (mounted) _showError(error);
+                            } finally {
+                              if (dialogContext.mounted) {
+                                setDialogState(() => saving = false);
+                              }
+                            }
+                          },
+                  ),
+                  if (proxyMode == 'tun') ...[
+                    const SizedBox(height: 16),
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'TUN 协议栈',
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: tunStack,
+                          isExpanded: true,
+                          items: RootProxySettings.tunStacks
+                              .map(
+                                (stack) => DropdownMenuItem(
+                                    value: stack, child: Text(stack)),
+                              )
+                              .toList(),
+                          onChanged: saving
+                              ? null
+                              : (value) async {
+                                  if (value == null || value == tunStack) {
+                                    return;
+                                  }
+                                  final previous = tunStack;
+                                  setDialogState(() {
+                                    tunStack = value;
+                                    saving = true;
+                                  });
+                                  try {
+                                    final saved = await _service
+                                        .saveRootSettings(tunStack: value);
+                                    tunStack = saved.tunStack;
+                                  } catch (error) {
+                                    tunStack = previous;
+                                    if (mounted) _showError(error);
+                                  } finally {
+                                    if (dialogContext.mounted) {
+                                      setDialogState(() => saving = false);
+                                    }
+                                  }
+                                },
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: Text('绕过局域网',
@@ -1080,7 +1166,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               running: running,
               busy: busy,
               status: _statusText,
-              detail: 'TProxy · ${_config.fileName ?? '未选择配置'}',
+              detail:
+                  '${_rootProxyMode == 'tun' ? 'TUN' : 'TProxy'} · ${_config.fileName ?? '未选择配置'}',
               download: _formatSpeed(_downloadBytesPerSecond),
               downloadTotal: _formatSpeed((_lastRxBytes ?? 0).toDouble())
                   .replaceAll('/s', ''),
@@ -1098,6 +1185,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               locked: _status != ProxyStatus.stopped,
               developerModeEnabled: _developerModeEnabled,
               onRootSettings: _showRootSettings,
+              sharingAvailable: _status == ProxyStatus.running,
+              onNetworkSharing: () async {
+                await showDialog<void>(
+                  context: context,
+                  builder: (_) =>
+                      NetworkSharingDialog(proxyStatus: _proxyStatus),
+                );
+              },
               onCoreUpdate: () async {
                 await showDialog<void>(
                   context: context,
@@ -1132,6 +1227,8 @@ class _SettingsPage extends StatelessWidget {
     required this.locked,
     required this.developerModeEnabled,
     required this.onRootSettings,
+    required this.sharingAvailable,
+    required this.onNetworkSharing,
     required this.onCoreUpdate,
     required this.onAppSelector,
     required this.onDebugLogs,
@@ -1140,6 +1237,8 @@ class _SettingsPage extends StatelessWidget {
   });
 
   final bool locked;
+  final bool sharingAvailable;
+  final Future<void> Function() onNetworkSharing;
   final bool developerModeEnabled;
   final Future<void> Function() onDeveloperSettings;
   final Future<void> Function() onRootSettings;
@@ -1161,8 +1260,12 @@ class _SettingsPage extends StatelessWidget {
         PulseSettingsGroup(children: [
           SettingsCard(
               icon: Icons.tune_rounded,
-              title: 'TProxy 参数',
+              title: '代理模式',
               onTap: locked ? null : onRootSettings),
+          SettingsCard(
+              icon: Icons.wifi_tethering_rounded,
+              title: '网络共享',
+              onTap: sharingAvailable ? onNetworkSharing : null),
           SettingsCard(
               icon: Icons.apps_rounded,
               title: '分应用代理',
@@ -1236,7 +1339,7 @@ class _UsageNoticeItem extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w600,
                     color: warning ? colors.error : colors.onSurface,
                   ),
                 ),

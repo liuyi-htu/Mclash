@@ -40,6 +40,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   DateTime? _lastAboutTitleTap;
   Timer? _trafficTimer;
   bool _statusChecking = false;
+  bool _trafficChecking = false;
   int? _lastRxBytes;
   int? _lastTxBytes;
   DateTime? _lastTrafficSample;
@@ -119,6 +120,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _updateTrafficSpeed() async {
+    if (_trafficChecking) return;
+    _trafficChecking = true;
     try {
       unawaited(_pollStatus());
       final stats = await _service.getTrafficStats();
@@ -129,12 +132,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final seconds = previousTime == null
           ? 0.0
           : now.difference(previousTime).inMilliseconds / 1000;
-      final download = seconds > 0 && _lastRxBytes != null
-          ? ((rx - _lastRxBytes!) / seconds).clamp(0, double.infinity)
-          : 0.0;
-      final upload = seconds > 0 && _lastTxBytes != null
-          ? ((tx - _lastTxBytes!) / seconds).clamp(0, double.infinity)
-          : 0.0;
+      final download = stats['rxBytesPerSecond']?.toDouble() ??
+          (seconds > 0 && _lastRxBytes != null
+              ? ((rx - _lastRxBytes!) / seconds).clamp(0, double.infinity)
+              : 0.0);
+      final upload = stats['txBytesPerSecond']?.toDouble() ??
+          (seconds > 0 && _lastTxBytes != null
+              ? ((tx - _lastTxBytes!) / seconds).clamp(0, double.infinity)
+              : 0.0);
       _lastRxBytes = rx;
       _lastTxBytes = tx;
       _lastTrafficSample = now;
@@ -147,6 +152,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     } catch (_) {
       // Keep the last displayed values if traffic statistics are unavailable.
+    } finally {
+      _trafficChecking = false;
     }
   }
 

@@ -34,7 +34,6 @@ type debugLogWriter struct {
 	paths appPaths
 	path  string
 	mu    sync.Mutex
-	file  *os.File
 }
 
 func (w *debugLogWriter) Write(data []byte) (int, error) {
@@ -43,29 +42,16 @@ func (w *debugLogWriter) Write(data []byte) (int, error) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.file == nil {
-		if err := w.paths.ensureDataDirs(); err != nil {
-			return 0, err
-		}
-		file, err := os.OpenFile(w.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return 0, fmt.Errorf("open core log: %w", err)
-		}
-		w.file = file
+	if err := w.paths.ensureDataDirs(); err != nil {
+		return 0, err
 	}
-	return w.file.Write(data)
+	if err := appendBoundedLog(w.path, data); err != nil {
+		return 0, err
+	}
+	return len(data), nil
 }
 
-func (w *debugLogWriter) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.file == nil {
-		return nil
-	}
-	err := w.file.Close()
-	w.file = nil
-	return err
-}
+func (w *debugLogWriter) Close() error { return nil }
 
 type mihomoProcess struct {
 	cmd       *exec.Cmd

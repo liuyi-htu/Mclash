@@ -43,7 +43,7 @@ void main() {
     expect(find.text('Pulse'), findsNothing);
     expect(find.text('设置'), findsNWidgets(2));
     expect(find.text('Simple'), findsNothing);
-    expect(find.byType(SettingsCard), findsNWidgets(6));
+    expect(find.byType(SettingsCard), findsNWidgets(7));
     expect(find.byType(ListTile), findsNothing);
     expect(find.byIcon(Icons.chevron_right), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);

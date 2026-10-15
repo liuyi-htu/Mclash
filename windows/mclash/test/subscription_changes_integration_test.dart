@@ -5,6 +5,9 @@ import 'package:mclash/models.dart';
 import 'package:mclash/proxy_platform_service.dart';
 
 class _Service implements ProxyPlatformService {
+  _Service({this.empty = false});
+  final bool empty;
+  String? addedName;
   bool updated = false;
   bool fail = false;
   static const profile = ConfigProfile(
@@ -17,7 +20,8 @@ class _Service implements ProxyPlatformService {
       url: 'https://example.org/sub');
 
   @override
-  Future<List<ConfigProfile>> getConfigs() async => [profile];
+  Future<List<ConfigProfile>> getConfigs() async =>
+      empty && !updated ? [] : [profile];
   @override
   Future<String> getConfigContent(String id) async => updated
       ? 'proxies: [{name: Changed, type: http, port: 81}, {name: Added, type: http}]'
@@ -27,9 +31,9 @@ class _Service implements ProxyPlatformService {
       {required String name,
       required String url,
       Map<String, String>? subscriptionNames}) async {
+    addedName = name;
     updated = true;
     return [
-      profile,
       ConfigProfile(
           id: 'new-airport',
           name: name,
@@ -56,7 +60,7 @@ class _Service implements ProxyPlatformService {
 void main() {
   testWidgets('first subscription download reports all nodes as added',
       (tester) async {
-    final service = _Service();
+    final service = _Service(empty: true);
     await tester.pumpWidget(
         MaterialApp(home: ConfigPage(proxyRunning: false, service: service)));
     await tester.pumpAndSettle();
@@ -64,12 +68,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('添加机场配置'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '配置名称'), '新配置');
+    expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
     await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '新机场');
     await tester.enterText(
         find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/new');
     await tester.tap(find.text('添加并下载'));
     await tester.pumpAndSettle();
+    expect(service.addedName, '机场');
     expect(find.text('订阅已添加'), findsOneWidget);
     expect(find.text('新增（2）'), findsOneWidget);
     expect(find.text('Changed'), findsOneWidget);

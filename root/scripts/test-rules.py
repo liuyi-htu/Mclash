@@ -108,6 +108,7 @@ def initial():
     return {
         'chains': {
             'iptables:mangle': {'OUTPUT': [['-j', 'ANDROID_SYSTEM']], 'PREROUTING': [['-j', 'FOREIGN_PROXY']], 'ANDROID_SYSTEM': [], 'FOREIGN_PROXY': []},
+            'iptables:filter': {'FORWARD': [['-j', 'ANDROID_FORWARD']], 'ANDROID_FORWARD': []},
             'iptables:nat': {'OUTPUT': [['-j', 'ANDROID_DNS']], 'PREROUTING': [], 'ANDROID_DNS': []},
             'ip6tables:mangle': {'OUTPUT': [['-j', 'ANDROID_SYSTEM6']], 'PREROUTING': [['-j', 'FOREIGN_PROXY6']], 'ANDROID_SYSTEM6': [], 'FOREIGN_PROXY6': []},
             'ip6tables:nat': {'OUTPUT': [['-j', 'ANDROID_DNS6']], 'PREROUTING': [], 'ANDROID_DNS6': []},
@@ -144,6 +145,9 @@ def main(install, cleanup, hotspot=None):
                     'ip6tables -w 5 -t filter -I FORWARD',
                     'ip6tables -w 5 -t filter -I OUTPUT',
                     'iptables -w 5 -t mangle -A OUTPUT -j MCLASH_R_OUT']
+        tun = 'route add default dev mclash0' in install.read_text()
+        if tun:
+            failures += ['iptables -w 5 -t filter -N MCLASH_R_TUN', 'iptables -w 5 -t filter -I FORWARD']
         dual_stack = 'ip6tables -w 5 -t mangle -N MCLASH_R_OUT6' in install.read_text()
         if dual_stack:
             failures += ['ip6tables -w 5 -t mangle -N MCLASH_R_OUT6',
@@ -153,6 +157,8 @@ def main(install, cleanup, hotspot=None):
                          'ip6tables -w 5 -t mangle -A MCLASH_R_OUT6 -j MCLASH_R_DNS6',
                          'ip6tables -w 5 -t mangle -A OUTPUT -j MCLASH_R_OUT6',
                          'ip6tables -w 5 -t mangle -N MCLASH_R_HDNS6']
+        if tun:
+            failures = [item for item in failures if item is None or '-j TPROXY' not in item]
         for failure in failures:
             before = initial()
             state_file.write_text(json.dumps(before))
@@ -179,23 +185,37 @@ def main(install, cleanup, hotspot=None):
             repeated = json.loads(state_file.read_text())
             repeated.pop('failed', None)
             assert repeated == after
-        for collision in ('priority', 'table'):
+        for collision in (('priority', 'table', 'tun-priority') if tun else ('priority', 'table')):
             before = initial()
-            if collision == 'priority': before['rules'].append('9000: from all lookup 456')
+            if collision == 'tun-priority': before['rules'].append('8999: from all lookup 456')
+            elif collision == 'priority': before['rules'].append('9000: from all lookup 456')
             else: before['routes'].append(['local', '0.0.0.0/0', 'dev', 'lo', 'table', '20230'])
             state_file.write_text(json.dumps(before))
             assert run(install).returncode != 0
             assert run(cleanup).returncode == 0
             assert json.loads(state_file.read_text()) == before
         if dual_stack:
-            for collision in ('priority', 'table'):
+            for collision in (('priority', 'table', 'tun-priority') if tun else ('priority', 'table')):
                 before = initial()
-                if collision == 'priority': before['rules6'].append('9000: from all lookup 456')
+                if collision == 'tun-priority': before['rules6'].append('8999: from all lookup 456')
+                elif collision == 'priority': before['rules6'].append('9000: from all lookup 456')
                 else: before['routes6'].append(['local', '::/0', 'dev', 'lo', 'table', '20230'])
                 state_file.write_text(json.dumps(before))
                 assert run(install).returncode != 0
                 assert run(cleanup).returncode == 0
                 assert json.loads(state_file.read_text()) == before
+        if tun:
+            for family in ([4, 6] if dual_stack else [4]):
+                before = initial()
+                state_file.write_text(json.dumps(before))
+                assert run(install).returncode == 0
+                result = run(cleanup, f'ip -{family} rule del pref 8999')
+                assert result.returncode != 0, (result.stdout, result.stderr)
+                result = run(cleanup)
+                assert result.returncode == 0, (result.stdout, result.stderr)
+                after = json.loads(state_file.read_text())
+                after.pop('failed', None)
+                assert after == before, after
         print(f'Rule lifecycle passed: hotspot update, normal stop, {len(failures)-1} partial failures, repeat cleanup and 2 foreign collisions.')
 
 

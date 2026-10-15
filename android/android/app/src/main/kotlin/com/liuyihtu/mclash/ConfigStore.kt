@@ -125,9 +125,14 @@ internal class ConfigStore(private val context: Context) {
         return added
     }
 
+    @Synchronized
     fun addSubscription(name: String, rawUrl: String, subscriptionNames: Map<String, String>? = null): ConfigProfile {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
+
+        require(readProfiles().none { it.type == TYPE_SUBSCRIPTION }) {
+            "只能添加一个机场配置，请在已有配置中添加机场"
+        }
 
         val download = downloadSubscription(rawUrl)
         val bytes = download.bytes
@@ -393,7 +398,9 @@ internal class ConfigStore(private val context: Context) {
             }
             totalBytes += source.bytes.size
             require(totalBytes <= MAX_CONFIG_BYTES) { "订阅总内容超过 8 MB" }
-            source
+            // Cache original nodes before applying local Host or chain overrides.
+            source.copy(bytes = SubscriptionConfig.mergeSources(listOf(source.bytes.toString(Charsets.UTF_8)))
+                .toByteArray(Charsets.UTF_8))
         }
         val merged = SubscriptionConfig.mergeSources(sources.map { it.bytes.toString(Charsets.UTF_8) })
         return SubscriptionDownload(

@@ -2,7 +2,7 @@
 
 - `android/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
   Root 权限。
-- `root/`：独立的 Android Root TProxy 客户端，使用 mihomo，支持本机应用与热点代理。
+- `root/`：独立的 Android Root 客户端（TUN / TProxy），使用 mihomo，支持本机应用与热点代理。
 - `windows/`：Flutter Windows 客户端，使用 mihomo，通过
   独立的 Windows 系统服务管理代理内核、系统代理和更新。
 
@@ -11,6 +11,10 @@
 ```text
 Mclash/
 ├── README.md
+├── .github/workflows/             # 仅手动触发的构建与检查
+├── assets/                        # 三端共用资源与默认配置
+├── THIRD_PARTY_NOTICES/            # 第三方许可说明
+├── tools/                         # 图标等共用资源工具
 ├── android/
 │   ├── lib/                        # Android 客户端 Flutter 源码
 │   ├── android/                    # Android/Kotlin 源码
@@ -19,7 +23,7 @@ Mclash/
 │   └── dist/                       # Android 最终产物
 ├── root/
 │   ├── lib/                        # Root 客户端 Flutter 源码
-│   ├── android/                    # Root TProxy/Kotlin 源码
+│   ├── android/                    # Root TUN / TProxy、Kotlin 源码
 │   ├── test/                       # Flutter 组件测试
 │   ├── scripts/                    # 运行资源准备与规则测试
 │   ├── build-root-android.sh       # Root 客户端独立构建入口
@@ -30,6 +34,10 @@ Mclash/
     ├── installer/                  # Inno Setup 安装配置
     └── scripts/build-windows.ps1   # Windows 构建入口
 ```
+
+`build/`、`.dart_tool/`、`dist/` 等目录为本地构建缓存或产物，不纳入源码同步；
+本机 SDK 路径、签名配置和密钥同样保留在本地。`AGENTS.md` 与
+`LOCAL_CHANGES.md` 是本地协作和改动记录，不上传 GitHub。
 
 Android App 的 `lib/` 目录按职责划分：
 
@@ -50,7 +58,8 @@ Android App 的 `lib/` 目录按职责划分：
 ### Android Root
 
 - `ProxyTProxyService.kt`：Root 代理生命周期和热点接口监测。
-- `TProxyRules.kt`、`HotspotRules.kt`：本机与热点的透明代理规则。
+- `TunRules.kt`、`TProxyRules.kt`、`Ipv6TProxyRules.kt`：TUN / TProxy 本机接管及 IPv6 规则。
+- `HotspotRules.kt`、`RootHotspotMonitor.kt`：所选共享接口的规则与状态监测。
 - `RootRuntimeConfig.kt`：生成 Root 模式运行配置。
 - `MihomoBridge.kt`：Root shell 守护进程与 mihomo 内核管理。
 
@@ -128,6 +137,13 @@ Android 和 Windows 添加、修改或更新机场订阅时，先下载 Mihomo/C
 未提供或无效的流量信息显示“未提供”，到期时间未提供时显示“不限时”；
 已有订阅需手动更新一次以获取这些数据。
 “添加节点”仅列出手动节点，新添加的节点置顶，更新订阅后手动节点仍排在机场节点之前，可直接删除；删除时同步清理分组和代理链引用。
+
+支持逐条粘贴 `vmess://`、`vless://`、`trojan://`、`ss://`、`hysteria2://` / `hy2://`、
+`tuic://`（v5）、`anytls://`、`socks5://` / `socks://` 和 `http://` / `https://` 节点链接。
+VLESS 支持 TCP、HTTP、WS、H2、gRPC 和基础 XHTTP，支持 TLS、Reality 和 TCP 下的 Vision；
+Trojan 支持 TCP、WS、gRPC。SS 支持 SIP002、旧式 Base64、明文认证及 obfs / WebSocket v2ray-plugin。
+暂不支持的参数、传输或插件会明确报错；SSR、Hysteria 1、TUIC v4 及复杂 XHTTP 扩展仍需使用 YAML 配置导入。
+“修改 Host”仅作用于 VMess 的 HTTP / WS 传输，不改服务器地址和 TLS SNI。
 更新订阅只替换机场节点，手动节点的字段保持原样；主动修改 Host、正则和代理链时仍包含手动节点。
 修改 Host、正则或代理链前需要先停止代理。修改保存到对应配置；如果该配置
 当前已启用，则同时更新运行配置。更新订阅会保留正则；正则留空时匹配全部节点。
@@ -165,17 +181,20 @@ android/app/src/main/assets/geodata/country.mmdb
 
 ## Android Root 客户端
 
-独立的 Android Root TProxy 客户端。基于仓库 Android 客户端的 Flutter 界面和配置管理开发，包名为 `com.liuyihtu.mclash.root`，可以与 `com.liuyihtu.mclash` 同时安装。
+独立的 Android Root 客户端（TUN / TProxy）。基于仓库 Android 客户端的 Flutter 界面和配置管理开发，包名为 `com.liuyihtu.mclash.root`，可以与 `com.liuyihtu.mclash` 同时安装。
 
 ### 接管方式
 
-本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由回送到 lo → PREROUTING TPROXY → Mihomo。
+TProxy：本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由回送到 lo → PREROUTING TPROXY → Mihomo。
+
+TUN：本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由 → mclash0 → Mihomo TUN。
 
 - 支持本机 IPv4 TCP、UDP，以及可选的 IPv6 TCP、UDP，保留订阅、节点选择、规则/全局/直连及分应用代理。
-- 需要用户授予 `su` 权限；设备内核和 iptables 必须支持 TPROXY、MARK、owner、REDIRECT、REJECT 和策略路由。
-- 不建立 VpnService，不加载 HEV。默认接管 Android 报告为共享网络状态的热点接口，并随接口变化更新规则；热点客户端的 IPv4 TCP/UDP 经 TProxy 接管，DNS 53 重定向到 Mihomo；在 TProxy 参数中开启 IPv6 后，同样接管热点 IPv6 TCP/UDP 和 DNS，关闭时阻断热点 IPv6 TCP/UDP。热点流量不按本机应用列表过滤。
+- 需要用户授予 `su` 权限；设备内核和 iptables 必须支持 MARK、owner、REDIRECT、REJECT 和策略路由；TProxy 模式还需要 TPROXY，TUN 模式需要 TUN 设备支持。
+- 不建立 VpnService，不加载 HEV。设置中的“网络共享”按钮位于“代理模式”下方，仅在代理运行时可用。首次使用默认关闭共享，之后保存开关状态并在启动代理时恢复；开启后列出 Android 报告为共享网络状态的热点、USB、蓝牙接口，由用户手动勾选，首次使用默认不勾选任何接口，之后保留用户的勾选记录，关闭共享、停止代理或重启应用不会清空，重新开启共享时沿用记录。只有勾选且仍在线的接口会接管，新增接口不会自动共享；取消勾选或关闭共享会撤销共享规则。热点客户端的 IPv4 TCP/UDP 按所选模式经 TUN 或 TProxy 接管，DNS 53 重定向到 Mihomo；在代理模式中开启 IPv6 后，同样接管热点 IPv6 TCP/UDP 和 DNS，关闭时仅阻断所选共享接口的 IPv6 TCP/UDP。热点流量不按本机应用列表过滤。
 - 本应用和 UID 0 的 Root 程序普通数据流量直连，避免透明代理响应和内核出站回环；UID 0 的 DNS 53 仍被接管，以处理系统解析器请求。共享 UID 的应用会共同生效，分应用选择针对当前 Android 用户已安装的应用。
-- TProxy 参数提供 IPv6 开关，默认关闭。开启后使用 IPv6 透明监听、独立的 IPv6 策略路由和 DNS 透明接管（使用 Mihomo DNS 出口，无需 IPv6 NAT 表），按相同分应用设置接管 IPv6 TCP/UDP；未纳入代理范围的应用保留直连。关闭时阻断纳入代理范围应用的公网 IPv6 TCP/UDP，并阻断非 Root、非本应用的 IPv6 DNS 53。IPv6 链路本地、组播及热点 DHCPv6 保留系统处理；开启“绕过局域网”时也绕过 IPv6 ULA。开关需在停止代理后修改；设备不支持 IPv6 TProxy 或监听未就绪时，启动失败并回滚接管规则。
+- “代理模式”中可切换 TUN / TProxy，默认 TProxy，停止代理后修改并保存。选择 TUN 后，下方可选择 mixed、system、gvisor、mips 协议栈，默认 mixed，单独保存选择。TUN 使用独立策略路由，沿用分应用、局域网绕过和手动共享接口设置。
+- 代理模式提供 IPv6 开关，默认关闭。开启后按所选模式使用 TUN 或 IPv6 透明监听、独立的 IPv6 策略路由和 DNS 接管（使用 Mihomo DNS 出口，无需 IPv6 NAT 表），按相同分应用设置接管 IPv6 TCP/UDP；未纳入代理范围的应用保留直连。关闭时阻断纳入代理范围应用的公网 IPv6 TCP/UDP，并阻断非 Root、非本应用的 IPv6 DNS 53。IPv6 链路本地、组播及热点 DHCPv6 保留系统处理；开启“绕过局域网”时也绕过 IPv6 ULA。开关需在停止代理后修改；设备不支持所选接管模式或监听／接口未就绪时，启动失败并回滚接管规则。
 - 本机 IPv4 TCP/UDP DNS 53 除本应用和带内核出站标记的流量外，统一重定向到 Mihomo（包括 UID 0）；系统 DNS 通常由 netd 发出，因此 DNS 不按应用列表过滤。不会改写 Android 的私人 DNS 设置；严格私人 DNS 开启时拒绝启动。应用内 DoH/DoT 作为普通 TCP/UDP 按代理范围处理，不保证获得域名规则信息。
 - 运行时生成独立配置，保留订阅的上游 DNS、节点和规则，固定代理与控制器的本机监听、DNS 监听、`redir-host`、IPv6 开关状态和出站标记，并移除导入配置的 TUN、自定义入站和外部控制监听。原配置文件不变。
 

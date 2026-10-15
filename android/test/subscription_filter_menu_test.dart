@@ -39,11 +39,10 @@ rules: ["MATCH,DIRECT"]
     Map<Object?, Object?>? saved;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'getConfigs') return [profile];
+      if (call.method == 'getConfigs') return const [];
       if (call.method == 'addSubscription') {
         saved = Map<Object?, Object?>.from(call.arguments as Map);
         return [
-          profile,
           {...profile, 'id': 'new-airport'}
         ];
       }
@@ -66,7 +65,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.textContaining('拖动调整机场顺序'), findsNothing);
-    await tester.enterText(find.widgetWithText(TextField, '配置名称'), '测试配置');
+    expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
     await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '机场甲');
     await tester.enterText(
         find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/a');
@@ -78,7 +77,7 @@ rules: ["MATCH,DIRECT"]
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
     expect(saved, {
-      'name': '测试配置',
+      'name': '机场',
       'url': 'https://example.org/a',
       'subscriptionNames': {'https://example.org/a': '机场甲'},
     });
@@ -97,7 +96,15 @@ rules: ["MATCH,DIRECT"]
   testWidgets(
       'configuration menu follows YAML section order and handles unreadable files',
       (tester) async {
-    const defaults = ['添加节点', '修改 Host', '链式节点', '代理组管理', '规则集管理', '规则管理'];
+    const defaults = [
+      '添加节点',
+      '修改 Host',
+      '链式节点',
+      '代理组管理',
+      '规则集管理',
+      '规则管理',
+      'DNS 管理'
+    ];
     final cases = <String?>[
       content,
       '# proxies: comment only\nrules: ["MATCH,DIRECT"]\nproxy-groups: []\nproxies: []\n',
@@ -121,7 +128,7 @@ rules: ["MATCH,DIRECT"]
       await tester.tap(find.text('Airport').first);
       await tester.pumpAndSettle();
       final expected = index == 1
-          ? ['规则集管理', '规则管理', '代理组管理', '添加节点', '修改 Host', '链式节点']
+          ? ['规则集管理', '规则管理', 'DNS 管理', '代理组管理', '添加节点', '修改 Host', '链式节点']
           : defaults;
       for (var position = 1; position < expected.length; position++) {
         expect(
@@ -263,6 +270,7 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('https://example.org/sub'), findsNothing);
     for (final name in [
       '规则管理',
+      'DNS 管理',
       '代理组管理',
       '修改 Host',
       '添加节点',

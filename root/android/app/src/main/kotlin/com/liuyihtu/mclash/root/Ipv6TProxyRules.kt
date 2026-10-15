@@ -7,7 +7,7 @@ internal object Ipv6TProxyRules {
     private const val DNS = "MCLASH_R_DNS6"
     private const val BYPASS = "0x40000000/0x40000000"
 
-    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean): String = buildString {
+    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean, tun: Boolean = false): String = buildString {
         val capture = TProxyRules.CAPTURE
         val table = TProxyRules.TABLE
         val priority = TProxyRules.PRIORITY
@@ -43,13 +43,14 @@ internal object Ipv6TProxyRules {
         for (owner in owners) for (protocol in listOf("tcp", "udp")) {
             appendLine("ip6tables -w 5 -t mangle -A $OUT -p $protocol$owner -j MARK --set-xmark $capture")
         }
-        for (protocol in listOf("tcp", "udp")) {
+        if (!tun) for (protocol in listOf("tcp", "udp")) {
             appendLine("ip6tables -w 5 -t mangle -A $PRE -p $protocol --dport 53 -j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.IPV6_DNS_TPROXY_PORT} --tproxy-mark $capture")
             appendLine("ip6tables -w 5 -t mangle -A $PRE -p $protocol -j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark $capture")
         }
-        appendLine("ip -6 route add local ::/0 dev lo table $table")
+        appendLine(if (tun) "ip -6 route add default dev mclash0 table $table" else "ip -6 route add local ::/0 dev lo table $table")
+        if (tun) append(TunRules.returnRoute(6))
         appendLine("ip -6 rule add pref $priority fwmark $capture lookup $table")
-        appendLine("ip6tables -w 5 -t mangle -I PREROUTING 1 -i lo -m mark --mark $capture -j $PRE")
+        if (!tun) appendLine("ip6tables -w 5 -t mangle -I PREROUTING 1 -i lo -m mark --mark $capture -j $PRE")
         appendLine("ip6tables -w 5 -t mangle -A OUTPUT -j $OUT")
     }
 
@@ -68,8 +69,13 @@ internal object Ipv6TProxyRules {
         ip6tables -w 5 -t mangle -F $DNS 2>/dev/null
         ip6tables -w 5 -t mangle -X $DNS 2>/dev/null
         if [ "${'$'}own_v6_routes" = 1 ]; then
+            ${TunRules.cleanupReturnRoute(6)}
             ip -6 rule del pref ${TProxyRules.PRIORITY} fwmark ${TProxyRules.CAPTURE} lookup ${TProxyRules.TABLE} 2>/dev/null
+            ip -6 route del default dev mclash0 table ${TProxyRules.TABLE} 2>/dev/null
             ip -6 route del local ::/0 dev lo table ${TProxyRules.TABLE} 2>/dev/null
+            if ip -6 route show table ${TProxyRules.TABLE} 2>/dev/null | awk '/dev mclash0/ {found=1} END {exit !found}'; then
+                echo 'Mclash TUN 路由仍存在，将重试'; exit 1
+            fi
             remaining_v6_rules=${'$'}(ip -6 rule show) || { echo '无法核验 IPv6 策略路由清理结果'; exit 1; }
             if echo "${'$'}remaining_v6_rules" | awk '${'$'}1 == "${TProxyRules.PRIORITY}:" && /fwmark 0x20000000\/0x20000000/ && /lookup ${TProxyRules.TABLE}/ {found=1} END {exit !found}'; then
                 echo 'Mclash IPv6 策略路由仍存在，将重试'; exit 1

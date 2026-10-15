@@ -222,6 +222,23 @@ class NativeProxyService {
         .toList(growable: false);
   }
 
+  Future<NetworkSharingSettings> getNetworkSharing() async {
+    final result =
+        await _channel.invokeMapMethod<Object?, Object?>('getNetworkSharing');
+    return NetworkSharingSettings.fromMap(result ?? const {});
+  }
+
+  Future<NetworkSharingSettings> setNetworkSharing({
+    required bool enabled,
+    required List<String> interfaces,
+  }) async {
+    final result = await _channel.invokeMapMethod<Object?, Object?>(
+      'setNetworkSharing',
+      {'enabled': enabled, 'interfaces': interfaces},
+    );
+    return NetworkSharingSettings.fromMap(result ?? const {});
+  }
+
   Future<RootProxySettings> getRootSettings() async {
     final result =
         await _channel.invokeMapMethod<Object?, Object?>('getRootSettings');
@@ -229,11 +246,16 @@ class NativeProxyService {
   }
 
   Future<RootProxySettings> saveRootSettings(
-      {bool? bypassLan, bool? ipv6}) async {
+      {bool? bypassLan,
+      bool? ipv6,
+      String? proxyMode,
+      String? tunStack}) async {
     final result = await _channel
         .invokeMapMethod<Object?, Object?>('saveRootSettings', <String, Object>{
       if (bypassLan != null) 'bypassLan': bypassLan,
       if (ipv6 != null) 'ipv6': ipv6,
+      if (proxyMode != null) 'proxyMode': proxyMode,
+      if (tunStack != null) 'tunStack': tunStack,
     });
     return RootProxySettings.fromMap(result ?? const <Object?, Object?>{});
   }

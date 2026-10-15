@@ -12,7 +12,7 @@ internal object MihomoProcess {
     private const val START_TIMEOUT_MS = 90_000L
     private const val LOCAL_PROXY_PORT = 7890
     private const val LOCAL_CONTROLLER_HOST = "127.0.0.1"
-    private const val LOCAL_CONTROLLER_PORT = 9090
+    internal const val LOCAL_CONTROLLER_PORT = 9090
     private val BUNDLED_GEODATA = listOf(
         "geosite.dat" to "GeoSite.dat",
         "geoip.dat" to "GeoIP.dat",

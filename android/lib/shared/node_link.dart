@@ -1,3 +1,4 @@
+import 'share_link.dart';
 import 'proxy_chain.dart';
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
@@ -130,46 +131,15 @@ Map<String, dynamic> parseVmessLink(String link) {
 Map<String, dynamic> parseNodeLink(String link) {
   final value = link.trim();
   if (value.startsWith('vmess://')) return parseVmessLink(value);
-  try {
-    final uri = Uri.parse(value);
-    if (!['http', 'https'].contains(uri.scheme) ||
-        uri.host.isEmpty ||
-        (uri.path.isNotEmpty && uri.path != '/') ||
-        uri.hasQuery) {
-      throw const FormatException();
-    }
-    final port = uri.hasPort
-        ? uri.port
-        : uri.scheme == 'https'
-            ? 443
-            : 80;
-    if (port < 1 || port > 65535) throw const FormatException();
-    final userInfo = uri.userInfo;
-    final separator = userInfo.indexOf(':');
-    return {
-      'name': uri.fragment.isEmpty
-          ? '${uri.scheme.toUpperCase()} ${uri.host}:$port'
-          : Uri.decodeComponent(uri.fragment),
-      'type': 'http',
-      'server': uri.host,
-      'port': port,
-      if (uri.scheme == 'https') 'tls': true,
-      if (userInfo.isNotEmpty)
-        'username': Uri.decodeComponent(
-            separator < 0 ? userInfo : userInfo.substring(0, separator)),
-      if (separator >= 0)
-        'password': Uri.decodeComponent(userInfo.substring(separator + 1)),
-    };
-  } catch (_) {
-    throw const FormatException(
-        '请输入 vmess:// 或 HTTP 代理链接，例如 http://10.0.0.200:80/');
-  }
+  return parseShareLink(value);
 }
 
 String addNodeLink(String content, String link) {
   final node = parseNodeLink(link);
   final hostOverride = readSubscriptionHost(content);
-  if (hostOverride.isNotEmpty && ['http', 'ws'].contains(node['network'])) {
+  if (node['type'] == 'vmess' &&
+      hostOverride.isNotEmpty &&
+      ['http', 'ws'].contains(node['network'])) {
     final host = hostOverride.trim();
     if (RegExp(r'[\s/\\?#]').hasMatch(host)) {
       throw const FormatException('Host 不要包含 URL、路径或空白字符');

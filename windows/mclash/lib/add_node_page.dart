@@ -1,3 +1,4 @@
+import 'share_link.dart';
 import 'dialog_typography.dart';
 import 'proxy_edit_access.dart';
 import 'management_style.dart';
@@ -92,6 +93,8 @@ class _AddNodePageState extends State<AddNodePage> {
                         maxLines: 6,
                         decoration: managementFieldDecoration(context, '节点链接')
                             .copyWith(
+                                helperText: supportedNodeLinkHint,
+                                helperMaxLines: 3,
                                 errorText: error,
                                 errorMaxLines: 8,
                                 errorStyle: Theme.of(context)

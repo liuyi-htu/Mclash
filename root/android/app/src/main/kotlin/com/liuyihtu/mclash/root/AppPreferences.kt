@@ -52,6 +52,35 @@ internal class AppPreferences(context: Context) {
         get() = preferences.getString(KEY_DELAY_RESULTS_JSON, "{}") ?: "{}"
         set(value) = preferences.edit().putString(KEY_DELAY_RESULTS_JSON, value).apply()
 
+    val sharedInterfaces: Set<String>
+        get() = preferences.getStringSet("shared_interfaces", emptySet())?.toSet() ?: emptySet()
+
+    val networkSharingEnabled: Boolean
+        get() = preferences.getBoolean("network_sharing_enabled", false)
+
+    fun saveNetworkSharing(enabled: Boolean, interfaces: Set<String>) {
+        check(preferences.edit()
+            .putBoolean("network_sharing_enabled", enabled)
+            .putStringSet("shared_interfaces", interfaces.toSet())
+            .commit()) {
+            "无法保存网络共享状态和接口记录"
+        }
+    }
+
+    var rootTunStack: String
+        get() = preferences.getString("root_tun_stack", "mixed")?.takeIf { it in RootRuntimeConfig.TUN_STACKS } ?: "mixed"
+        set(value) {
+            require(value in RootRuntimeConfig.TUN_STACKS) { "TUN 协议栈无效" }
+            check(preferences.edit().putString("root_tun_stack", value).commit()) { "无法保存 TUN 协议栈" }
+        }
+
+    var rootProxyMode: String
+        get() = preferences.getString("root_proxy_mode", "tproxy")?.takeIf { it in setOf("tun", "tproxy") } ?: "tproxy"
+        set(value) {
+            require(value in setOf("tun", "tproxy")) { "代理模式无效" }
+            check(preferences.edit().putString("root_proxy_mode", value).commit()) { "无法保存代理模式" }
+        }
+
     var rootIpv6: Boolean
         get() = preferences.getBoolean(KEY_ROOT_IPV6, false)
         set(value) = preferences.edit().putBoolean(KEY_ROOT_IPV6, value).apply()

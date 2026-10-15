@@ -1,3 +1,4 @@
+import 'package:mclash/shared/runtime_config_display.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +20,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final content =
-        'mode: rule\n# ${'long ' * 100}needle\nrules:\n  - MATCH,DIRECT\n';
+        'mode: rule\n# ${'long ' * 100}needle\nrules:\n  - MATCH,DIRECT\nproxies:\n  - name: Test node\n    type: http\n    server: example.org\n    port: 80\n';
     var copied = '';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -88,7 +89,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('复制全文'));
     await tester.pumpAndSettle();
-    expect(copied, content);
+    expect(copied, formatRuntimeConfigForDisplay(content));
+    expect(
+        controller.text
+            .split('\n')
+            .where((line) => line.trimLeft().startsWith('- {')),
+        hasLength(1));
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

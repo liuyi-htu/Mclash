@@ -37,6 +37,7 @@ List<String> configActionOrder(String content) {
         if (entry.value == section) ...[
           if (entry.key == 'rules') 'ruleProviders',
           entry.key,
+          if (entry.key == 'rules') 'dns',
         ],
   ];
 }
