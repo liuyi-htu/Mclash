@@ -1,3 +1,4 @@
+import 'dns_management.dart';
 import 'subscription_changes.dart';
 import 'dialog_typography.dart';
 import 'rule_provider_page.dart';
@@ -45,6 +46,7 @@ class _ConfigPageState extends State<ConfigPage> {
   List<ConfigProfile> _profiles = const [];
   bool _loading = true;
   bool _working = false;
+  bool _readingConfig = false;
   bool _profilesExpanded = false;
 
   @override
@@ -81,7 +83,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _handleAdd(_AddConfigAction action) async {
-    if (_working || _locked) return;
+    if (_loading || _working || _locked) return;
 
     switch (action) {
       case _AddConfigAction.local:
@@ -135,8 +137,18 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _showSubscriptionEditor({ConfigProfile? existing}) async {
     if (!_ensureStopped()) return;
+    if (existing == null) {
+      final subscriptions =
+          _profiles.where((profile) => profile.isSubscription).toList();
+      if (subscriptions.isNotEmpty) {
+        final profile = subscriptions.firstWhere((profile) => profile.active,
+            orElse: () => subscriptions.first);
+        await _showSubscriptionActions(profile);
+        return;
+      }
+    }
 
-    final nameController = TextEditingController(text: existing?.name ?? '');
+    final nameController = TextEditingController(text: existing?.name ?? '机场');
     final urlControllers = (existing?.url ?? '')
         .split(RegExp(r'\r?\n'))
         .where((line) => line.trim().isNotEmpty)
@@ -169,17 +181,19 @@ class _ConfigPageState extends State<ConfigPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              TextField(
-                                enabled: !_locked,
-                                controller: nameController,
-                                autofocus: true,
-                                decoration: const InputDecoration(
-                                  labelText: '配置名称',
-                                  hintText: '例如：我的代理配置',
+                              if (existing != null) ...[
+                                TextField(
+                                  enabled: !_locked,
+                                  controller: nameController,
+                                  autofocus: true,
+                                  decoration: const InputDecoration(
+                                    labelText: '配置名称',
+                                    hintText: '例如：我的代理配置',
+                                  ),
+                                  textInputAction: TextInputAction.next,
                                 ),
-                                textInputAction: TextInputAction.next,
-                              ),
-                              const SizedBox(height: 12),
+                                const SizedBox(height: 12),
+                              ],
                               SizedBox(
                                 width: double.maxFinite,
                                 height: urlControllers.length * 148.0,
@@ -674,10 +688,16 @@ class _ConfigPageState extends State<ConfigPage> {
       ConfigProfile profile, ConfigManagementMode mode) async {
     if (!_ensureStopped()) return;
     try {
-      setState(() => _working = true);
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
       final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
-      setState(() => _working = false);
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
       await Navigator.of(context).push<void>(MaterialPageRoute(
           builder: (_) => _watchAccess((_) => ConfigManagementPage(
                 content: content,
@@ -692,17 +712,66 @@ class _ConfigPageState extends State<ConfigPage> {
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _manageDns(ConfigProfile profile) async {
+    if (!_ensureStopped()) return;
+    try {
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
+      final content = profile.active
+          ? await _service.getRuntimeConfigContent()
+          : await _service.getConfigContent(profile.id);
+      if (!mounted) return;
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
+      final saved = await showDnsManagementDialog(
+        context: context,
+        content: content,
+        onSave: (text) async {
+          if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
+          final latest = await _service.getConfigContent(profile.id);
+          await _service.saveConfigContent(
+              id: profile.id, content: updateConfigDns(latest, text));
+        },
+      );
+      if (saved && mounted) await _load();
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
   }
 
   Future<void> _manageRuleProviders(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
-      setState(() => _working = true);
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
       final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
-      setState(() => _working = false);
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
       await Navigator.of(context).push<void>(MaterialPageRoute(
           builder: (_) => _watchAccess((_) => RuleProviderPage(
                 content: content,
@@ -716,17 +785,28 @@ class _ConfigPageState extends State<ConfigPage> {
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
   }
 
   Future<void> _editSubscriptionHost(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
-      setState(() => _working = true);
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
       final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
-      setState(() => _working = false);
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
       final saved = await showSubscriptionHostDialog(
         context: context,
         proxyStatus: widget.proxyStatus,
@@ -744,17 +824,28 @@ class _ConfigPageState extends State<ConfigPage> {
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
   }
 
   Future<void> _addNode(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
-      setState(() => _working = true);
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
       final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
-      setState(() => _working = false);
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
       await Navigator.of(context).push<void>(MaterialPageRoute(
         builder: (_) => _watchAccess((_) => AddNodePage(
               nodes: savedManualNodeNames(content),
@@ -788,20 +879,31 @@ class _ConfigPageState extends State<ConfigPage> {
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
   }
 
   Future<void> _editProxyChain(ConfigProfile profile) async {
     if (!_ensureStopped()) return;
     try {
-      setState(() => _working = true);
+      setState(() {
+        _working = true;
+        _readingConfig = true;
+      });
       final content = await _service.getConfigContent(profile.id);
       if (savedProxyNodeNames(content).length < 2) {
         throw const FormatException('请先保存至少两个节点');
       }
       if (!mounted) return;
-      setState(() => _working = false);
+      setState(() {
+        _working = false;
+        _readingConfig = false;
+      });
       await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => _watchAccess((_) => ProxyChainPage(
                 content: content,
@@ -815,7 +917,12 @@ class _ConfigPageState extends State<ConfigPage> {
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
   }
 
@@ -1053,14 +1160,22 @@ class _ConfigPageState extends State<ConfigPage> {
   Future<void> _showActions(ConfigProfile profile) async {
     if (_working) return;
     var orderedActions = configActionOrder('');
-    setState(() => _working = true);
+    setState(() {
+      _working = true;
+      _readingConfig = true;
+    });
     try {
       final content = await _service.getConfigContent(profile.id);
       orderedActions = configActionOrder(content);
     } catch (_) {
       // Keep management available when a profile file is missing or unreadable.
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _readingConfig = false;
+        });
+      }
     }
     if (!mounted) return;
     const editingActions = {
@@ -1070,6 +1185,7 @@ class _ConfigPageState extends State<ConfigPage> {
       'groups': ('代理组管理', Icons.account_tree_outlined),
       'ruleProviders': ('规则集管理', Icons.folder_copy_outlined),
       'rules': ('规则管理', Icons.rule),
+      'dns': ('DNS 管理', Icons.dns_outlined),
     };
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -1152,6 +1268,10 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
       case 'ruleProviders':
         await _manageRuleProviders(profile);
+        await _returnToActions(profile);
+        return;
+      case 'dns':
+        await _manageDns(profile);
         await _returnToActions(profile);
         return;
       case 'rules':
@@ -1356,7 +1476,8 @@ class _ConfigPageState extends State<ConfigPage> {
     return Scaffold(
       body: Column(
         children: [
-          if (_working) const LinearProgressIndicator(minHeight: 3),
+          if (_working && !_readingConfig)
+            const LinearProgressIndicator(minHeight: 3),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())

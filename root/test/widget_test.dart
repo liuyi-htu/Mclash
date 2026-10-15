@@ -14,6 +14,8 @@ void main() {
   var registrationExports = 0;
   bool? savedBypassLan;
   bool? savedIpv6;
+  String? savedRootProxyMode;
+  String? savedTunStack;
 
   setUp(() {
     running = false;
@@ -24,6 +26,8 @@ void main() {
     registrationExports = 0;
     savedBypassLan = null;
     savedIpv6 = null;
+    savedRootProxyMode = null;
+    savedTunStack = null;
     PackageInfo.setMockInitialValues(
       appName: 'Mclash Root',
       packageName: 'com.liuyihtu.mclash.root',
@@ -41,9 +45,17 @@ void main() {
         if (args.containsKey('bypassLan')) {
           savedBypassLan = args['bypassLan'] as bool;
         }
+        if (args.containsKey('proxyMode')) {
+          savedRootProxyMode = args['proxyMode'] as String;
+        }
+        if (args.containsKey('tunStack')) {
+          savedTunStack = args['tunStack'] as String;
+        }
         if (args.containsKey('ipv6')) savedIpv6 = args['ipv6'] as bool;
         return {
           'bypassLan': savedBypassLan ?? true,
+          'proxyMode': savedRootProxyMode ?? 'tproxy',
+          'tunStack': savedTunStack ?? 'mixed',
           'ipv6': savedIpv6 ?? false
         };
       }
@@ -74,6 +86,8 @@ void main() {
         'getConfigInfo' => <String, Object?>{},
         'getRootSettings' => <String, Object?>{
             'bypassLan': savedBypassLan ?? true,
+            'proxyMode': savedRootProxyMode ?? 'tproxy',
+            'tunStack': savedTunStack ?? 'mixed',
             'ipv6': savedIpv6 ?? false
           },
         'isRunning' => running,
@@ -218,11 +232,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    for (final title in ['TProxy 参数', '分应用代理', '开发者模式']) {
+    for (final title in ['代理模式', '分应用代理', '开发者模式']) {
       final tile =
           find.ancestor(of: find.text(title), matching: find.byType(InkWell));
       expect(tester.widget<InkWell>(tile).onTap, isNull);
     }
+    final sharing =
+        find.ancestor(of: find.text('网络共享'), matching: find.byType(InkWell));
+    expect(tester.widget<InkWell>(sharing).onTap, isNotNull);
+    expect(tester.getTopLeft(find.text('网络共享')).dy,
+        greaterThan(tester.getTopLeft(find.text('代理模式')).dy));
     await tester.tap(find.text('调试日志'));
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
@@ -248,14 +267,32 @@ void main() {
     expect(tester.widget<InkWell>(apps).onTap, isNotNull);
   });
   testWidgets(
-      'Root settings expose TProxy parameters without VPN tunnel controls',
+      'Root settings switch TUN and TProxy and retain parameter controls',
       (tester) async {
     await tester.pumpWidget(const MclashApp());
     await tester.pump();
     await tester.tap(find.text('设置'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('TProxy 参数'));
+    final sharing =
+        find.ancestor(of: find.text('网络共享'), matching: find.byType(InkWell));
+    expect(tester.widget<InkWell>(sharing).onTap, isNull);
+    await tester.tap(find.text('代理模式'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('TUN'));
+    await tester.pumpAndSettle();
+    expect(savedRootProxyMode, 'tun');
+    expect(find.text('TUN 协议栈'), findsOneWidget);
+    for (final stack in ['system', 'gvisor', 'mips', 'mixed']) {
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(stack).last);
+      await tester.pumpAndSettle();
+      expect(savedTunStack, stack);
+    }
+    await tester.tap(find.text('TProxy'));
+    await tester.pumpAndSettle();
+    expect(savedRootProxyMode, 'tproxy');
+    expect(find.byType(DropdownButton<String>), findsNothing);
     expect(find.text('清理残留规则'), findsNothing);
     expect(find.text('绕过局域网'), findsOneWidget);
     expect(find.byType(EditableText), findsNothing);

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/core/models.dart';
 import 'package:mclash/shared/subscription_management_page.dart';
 import 'package:mclash/shared/config_management_page.dart';
 import 'package:mclash/shared/management_style.dart';
+import 'package:mclash/shared/app_appearance.dart';
 import 'config_management_test.dart' show source;
 
 void main() {
@@ -44,7 +46,7 @@ void main() {
                 onSave: (_) async {}),
           ]) {
             await tester.pumpWidget(MaterialApp(
-              theme: ThemeData(brightness: brightness),
+              theme: buildPulseTheme(brightness),
               builder: (context, child) => MediaQuery(
                   data: MediaQuery.of(context)
                       .copyWith(textScaler: TextScaler.linear(scale)),
@@ -53,6 +55,30 @@ void main() {
             ));
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            for (final tile
+                in tester.widgetList<ListTile>(find.byType(ListTile))) {
+              if (tile.title == null) continue;
+              final titles = tile.title is Text
+                  ? find.byWidget(tile.title!)
+                  : find.descendant(
+                      of: find.byWidget(tile.title!),
+                      matching: find.byType(Text));
+              for (final text in titles.evaluate()) {
+                final paragraph = tester
+                    .renderObject<RenderParagraph>(find.byWidget(text.widget));
+                expect(paragraph.text.style!.fontWeight, FontWeight.w400);
+              }
+            }
+            final airport = find.text('较长的机场名称用于检查小窗显示');
+            if (airport.evaluate().isNotEmpty) {
+              expect(
+                  tester
+                      .renderObject<RenderParagraph>(airport)
+                      .text
+                      .style!
+                      .fontWeight,
+                  FontWeight.w400);
+            }
             for (final element in find.byType(ManagementCard).evaluate()) {
               final width = tester.getSize(find.byWidget(element.widget)).width;
               expect(width, lessThanOrEqualTo(808));

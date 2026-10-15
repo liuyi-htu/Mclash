@@ -57,6 +57,12 @@ internal object HotspotRules {
     )
     private val ifacePattern = Regex("[a-zA-Z0-9_.-]{1,15}")
 
+    fun sharingPolicy(enabled: Boolean, interfaces: Set<String>): String {
+        require(interfaces.all { it != "lo" && ifacePattern.matches(it) }) { "共享接口名称无效" }
+        return (if (enabled) "1\n" else "0\n") +
+            interfaces.sorted().joinToString("\n", postfix = if (interfaces.isEmpty()) "" else "\n")
+    }
+
     fun interfaces(dump: String): Set<String> =
         Regex("(?m)^\\s*([a-zA-Z0-9_.-]{1,15})\\s+-\\s+TetheredState\\s+-")
             .findAll(dump).map { it.groupValues[1] }.filter { it != "lo" }.toSet()
@@ -69,7 +75,7 @@ internal object HotspotRules {
         }
     }
 
-    fun update(interfaces: Set<String>, bypassLan: Boolean, localAddresses: Set<String> = setOf("127.0.0.1"), ipv6Enabled: Boolean = false, localIpv6Addresses: Set<String> = emptySet()): String {
+    fun update(interfaces: Set<String>, bypassLan: Boolean, localAddresses: Set<String> = setOf("127.0.0.1"), ipv6Enabled: Boolean = false, localIpv6Addresses: Set<String> = emptySet(), tun: Boolean = false): String {
         require(interfaces.all { it != "lo" && ifacePattern.matches(it) })
         require(localAddresses.all(::validIpv4)) { "本机 IPv4 地址无效" }
         require(localIpv6Addresses.all(::validIpv6)) { "本机 IPv6 地址无效" }
@@ -101,7 +107,7 @@ internal object HotspotRules {
             if (ipv6Enabled) {
                 for (protocol in listOf("tcp", "udp")) {
                     data6 += "-A $DATA6 -i $iface -p $protocol --dport 53 -j RETURN"
-                    dns6 += "-A $DNS6 -i $iface -p $protocol --dport 53 -j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.IPV6_DNS_TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"
+                    dns6 += "-A $DNS6 -i $iface -p $protocol --dport 53 ${if (tun) "-j MARK --set-xmark ${TProxyRules.CAPTURE}" else "-j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.IPV6_DNS_TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"}"
                 }
                 for (address in localIpv6Addresses.sorted()) {
                     data6 += "-A $DATA6 -i $iface -d $address/128 -j RETURN"
@@ -113,11 +119,11 @@ internal object HotspotRules {
                     data6 += "-A $DATA6 -i $iface -p udp --dport $port -j RETURN"
                 }
                 for (protocol in listOf("tcp", "udp")) {
-                    data6 += "-A $DATA6 -i $iface -p $protocol -j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"
+                    data6 += "-A $DATA6 -i $iface -p $protocol ${if (tun) "-j MARK --set-xmark ${TProxyRules.CAPTURE}" else "-j TPROXY --on-ip ::1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"}"
                 }
             }
             for (protocol in listOf("tcp", "udp")) {
-                data += "-A $DATA -i $iface -p $protocol -j TPROXY --on-ip 127.0.0.1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"
+                data += "-A $DATA -i $iface -p $protocol ${if (tun) "-j MARK --set-xmark ${TProxyRules.CAPTURE}" else "-j TPROXY --on-ip 127.0.0.1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark ${TProxyRules.CAPTURE}"}"
                 if (!ipv6Enabled) ipv6 += "-A $V6 -i $iface -p $protocol -j REJECT"
             }
         }

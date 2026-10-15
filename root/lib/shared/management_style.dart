@@ -61,7 +61,7 @@ class ManagementCard extends StatelessWidget {
           horizontalTitleGap: compact ? 8 : null,
           titleTextStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontSize: compact ? 14 : 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
           subtitleTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: colors.onSurfaceVariant,
@@ -133,7 +133,7 @@ class ManagementMenuTile extends StatelessWidget {
       ),
       title: Text(title,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
               color: !enabled
                   ? colors.onSurface.withValues(alpha: 0.38)
                   : destructive

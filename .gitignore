@@ -28,6 +28,7 @@
 
 # Local agent instructions and workspace state
 /AGENTS.md
+/LOCAL_CHANGES.md
 /.agents/
 /.codex/
 

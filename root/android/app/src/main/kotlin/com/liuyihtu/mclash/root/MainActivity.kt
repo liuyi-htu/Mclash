@@ -6,9 +6,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
-import android.view.Gravity
 import android.view.ViewTreeObserver
-import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -129,6 +127,12 @@ class MainActivity : FlutterActivity() {
                 "selectConfig" -> selectConfig(call, result)
                 "renameConfig" -> renameConfig(call, result)
                 "deleteConfig" -> deleteConfig(call, result)
+                "getNetworkSharing" -> runAsync(result, "root-sharing-info") { MihomoProcess.networkSharing(this) }
+                "setNetworkSharing" -> runAsync(result, "root-sharing-update") {
+                    val enabled = call.argument<Boolean>("enabled") ?: error("缺少网络共享开关")
+                    val interfaces = call.argument<List<String>>("interfaces")?.toSet() ?: emptySet()
+                    MihomoProcess.setNetworkSharing(this, enabled, interfaces)
+                }
                 "getRootSettings" -> result.success(rootSettings())
                 "saveRootSettings" -> saveRootSettings(call, result)
                 "getInstalledApps" -> result.success(getInstalledApps())
@@ -258,6 +262,8 @@ class MainActivity : FlutterActivity() {
 
     private fun rootSettings(): Map<String, Any> = mapOf(
         "bypassLan" to preferences.rootBypassLan,
+        "proxyMode" to preferences.rootProxyMode,
+        "tunStack" to preferences.rootTunStack,
         "ipv6" to preferences.rootIpv6,
     )
 
@@ -377,6 +383,8 @@ class MainActivity : FlutterActivity() {
 
     private fun saveRootSettings(call: MethodCall, result: MethodChannel.Result) {
         requireProxyStopped()
+        call.argument<String>("tunStack")?.let { preferences.rootTunStack = it }
+        call.argument<String>("proxyMode")?.let { preferences.rootProxyMode = it }
         call.argument<Boolean>("bypassLan")?.let { preferences.rootBypassLan = it }
         call.argument<Boolean>("ipv6")?.let { preferences.rootIpv6 = it }
         result.success(rootSettings())
@@ -592,39 +600,6 @@ class MainActivity : FlutterActivity() {
         result.success(null)
     }
 
-    override fun onPostResume() {
-        super.onPostResume()
-        handleTileStartRequest()
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleTileStartRequest()
-    }
-
-    private fun handleTileStartRequest() {
-        if (!intent.getBooleanExtra(EXTRA_START_FROM_TILE, false)) return
-        intent.removeExtra(EXTRA_START_FROM_TILE)
-
-        if (ProxyTProxyService.running || ProxyTProxyService.starting) {
-            QuickSettingsTileUpdater.request(this)
-            return
-        }
-
-        val store = ConfigStore(this)
-        if (!store.exists()) {
-            Toast.makeText(this, "请先添加配置", Toast.LENGTH_SHORT)
-                .apply { setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL, 0, 96) }
-                .show()
-            QuickSettingsTileUpdater.request(this)
-            return
-        }
-
-        ProxyTProxyService.start(this)
-        QuickSettingsTileUpdater.request(this)
-    }
-
     private fun getInstalledApps(): List<Map<String, Any>> {
         val packageManager = packageManager
         val applications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -723,7 +698,6 @@ class MainActivity : FlutterActivity() {
             "mclash-import-configs", "mclash-add-subscription", "mclash-update-subscription",
             "mclash-refresh-subscription", "mclash-edit-airport", "mclash-save-config-content",
         )
-        const val EXTRA_START_FROM_TILE = "start_from_quick_settings_tile"
 
         private const val CHANNEL = "mclash/native"
         private const val REQUEST_CONFIG = 7001

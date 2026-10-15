@@ -95,10 +95,9 @@ internal object SubscriptionConfig {
         return urls
     }
 
-    // Number subscriptions in input order and prefix their node names.
+    // Extract only nodes before local overrides; prefix names only for multiple sources.
     fun mergeSources(sources: List<String>): String {
         require(sources.isNotEmpty()) { "请输入订阅链接" }
-        if (sources.size == 1) return sources.single()
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {
             codePointLimit = 8 * 1024 * 1024
             isAllowDuplicateKeys = false
@@ -118,10 +117,17 @@ internal object SubscriptionConfig {
             require(batch.map { it["name"] }.distinct().size == batch.size) {
                 "第 ${index + 1} 个订阅节点名称重复"
             }
+            val nodeNames = batch.map { it["name"] }.toSet()
+            val groupNames = (source["proxy-groups"] as? List<*>).orEmpty()
+                .filterIsInstance<Map<*, *>>().map { it["name"] }.toSet()
+            for (node in batch) {
+                val upstream = node["dialer-proxy"]
+                if (upstream in groupNames && upstream !in nodeNames) node.remove("dialer-proxy")
+            }
             batch
         }
         val merged = batches.flatMapIndexed { index, batch ->
-            val renamed = batch.associate { (it["name"] as String) to "${index + 1}-${it["name"]}" }
+            val renamed = batch.associate { (it["name"] as String) to (if (sources.size == 1) it["name"] as String else "${index + 1}-${it["name"]}") }
             for (node in batch) {
                 node["name"] = renamed[node["name"]]
                 val upstream = node["dialer-proxy"] as? String
@@ -139,7 +145,7 @@ internal object SubscriptionConfig {
             codePointLimit = 8 * 1024 * 1024
             isAllowDuplicateKeys = false
         }))
-        val source = loader.load<Any>(subscription.removePrefix("\uFEFF")) as? Map<*, *>
+        val source = loader.load<Any>(mergeSources(listOf(subscription))) as? Map<*, *>
             ?: error("订阅内容必须是 mihomo YAML 配置")
         val downloaded = source["proxies"] as? List<*>
         require(!downloaded.isNullOrEmpty()) { "订阅没有可内置的 proxies 节点，请使用包含节点的 Mihomo 订阅" }

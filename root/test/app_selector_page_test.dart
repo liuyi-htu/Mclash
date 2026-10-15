@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pages/app_selector_page.dart';
@@ -69,6 +70,14 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('系统应用'), findsNothing);
           expect(find.text('org.example.browser'), findsOneWidget);
+          expect(
+              tester
+                  .renderObject<RenderParagraph>(
+                      find.text('一个很长的浏览器应用名称用于检查字体显示'))
+                  .text
+                  .style!
+                  .fontWeight,
+              FontWeight.w400);
           expect(tester.takeException(), isNull);
           await tester.tap(find.byType(CheckboxListTile));
           await tester.pumpAndSettle();

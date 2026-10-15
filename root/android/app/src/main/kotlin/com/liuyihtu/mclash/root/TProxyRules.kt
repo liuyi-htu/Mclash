@@ -11,7 +11,7 @@ internal object TProxyRules {
     private const val DNS = "MCLASH_R_DNS"
     private const val V6 = "MCLASH_R_V6"
 
-    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean, ipv6: Boolean = false): String {
+    fun install(appUid: Int, onlySelected: Boolean, selectedUids: Set<Int>, bypassLan: Boolean, ipv6: Boolean = false, tun: Boolean = false): String {
         require(appUid > 0)
         require(selectedUids.all { it > 0 && it != appUid })
         require(!onlySelected || selectedUids.isNotEmpty()) { "请至少选择一个已安装的应用" }
@@ -27,10 +27,12 @@ internal object TProxyRules {
             // Refuse collisions rather than replacing a route owned by another application.
             appendLine("[ -z \"${'$'}(ip -4 rule show | awk '${'$'}1 == \"$PRIORITY:\" {print}')\" ] || { echo '策略路由优先级 $PRIORITY 已占用'; exit 1; }")
             appendLine("[ -z \"${'$'}(ip -4 route show table $TABLE 2>/dev/null)\" ] || { echo '路由表 $TABLE 已占用'; exit 1; }")
+            if (tun) append(TunRules.checkReturnPriority(ipv6))
             appendLine("iptables -w 5 -t mangle -N $OUT")
             appendLine("iptables -w 5 -t mangle -N $PRE")
             appendLine("iptables -w 5 -t nat -N $DNS")
             appendLine("ip6tables -w 5 -t filter -N $V6")
+            if (tun) append(TunRules.install(ipv6))
             // Android enables tcp_fwmark_accept: transparent listener replies can
             // inherit CAPTURE from the SYN. Clear only our bit before bypassing
             // OUTPUT, otherwise the reply is intercepted again in PREROUTING.
@@ -87,15 +89,16 @@ internal object TProxyRules {
                 }
             }
             if (!onlySelected) appendCapture(null, ipv6)
-            for (protocol in listOf("tcp", "udp")) {
+            if (!tun) for (protocol in listOf("tcp", "udp")) {
                 appendLine("iptables -w 5 -t mangle -A $PRE -p $protocol -j TPROXY --on-ip 127.0.0.1 --on-port ${RootRuntimeConfig.TPROXY_PORT} --tproxy-mark $CAPTURE")
             }
-            appendLine("ip -4 route add local 0.0.0.0/0 dev lo table $TABLE")
+            appendLine(if (tun) "ip -4 route add default dev mclash0 table $TABLE" else "ip -4 route add local 0.0.0.0/0 dev lo table $TABLE")
+            if (tun) append(TunRules.returnRoute(4))
             appendLine("ip -4 rule add pref $PRIORITY fwmark $CAPTURE lookup $TABLE")
-            if (ipv6) append(Ipv6TProxyRules.install(appUid, onlySelected, selectedUids, bypassLan))
+            if (ipv6) append(Ipv6TProxyRules.install(appUid, onlySelected, selectedUids, bypassLan, tun))
             append(HotspotRules.install(ipv6))
             // Only install hooks after every chain and route is ready.
-            appendLine("iptables -w 5 -t mangle -I PREROUTING 1 -i lo -m mark --mark $CAPTURE -j $PRE")
+            if (!tun) appendLine("iptables -w 5 -t mangle -I PREROUTING 1 -i lo -m mark --mark $CAPTURE -j $PRE")
             appendLine("iptables -w 5 -t nat -I OUTPUT 1 -j $DNS")
             appendLine("ip6tables -w 5 -t filter -I OUTPUT 1 -j $V6")
             appendLine("iptables -w 5 -t mangle -A OUTPUT -j $OUT")
@@ -113,6 +116,8 @@ internal object TProxyRules {
     /** Rollback works for a partially installed transaction as well as a normal stop. */
     fun cleanup(): String = """
         set +e
+        own_tun_routes=0
+        iptables -w 5 -t filter -S MCLASH_R_TUN >/dev/null 2>&1 && own_tun_routes=1
         ${HotspotRules.cleanup()}
         ${Ipv6TProxyRules.cleanup()}
         own_routes=0
@@ -136,8 +141,13 @@ internal object TProxyRules {
         ip6tables -w 5 -t filter -F $V6 2>/dev/null
         ip6tables -w 5 -t filter -X $V6 2>/dev/null
         if [ "${'$'}own_routes" = 1 ]; then
+            ${TunRules.cleanupReturnRoute(4)}
             ip -4 rule del pref $PRIORITY fwmark $CAPTURE lookup $TABLE 2>/dev/null
+            ip -4 route del default dev mclash0 table $TABLE 2>/dev/null
             ip -4 route del local 0.0.0.0/0 dev lo table $TABLE 2>/dev/null
+            if ip -4 route show table ${TProxyRules.TABLE} 2>/dev/null | awk '/dev mclash0/ {found=1} END {exit !found}'; then
+                echo 'Mclash TUN 路由仍存在，将重试'; exit 1
+            fi
             remaining_rules=${'$'}(ip -4 rule show) || { echo '无法核验策略路由清理结果'; exit 1; }
             if echo "${'$'}remaining_rules" | awk '${'$'}1 == "$PRIORITY:" && /fwmark 0x20000000\/0x20000000/ && /lookup $TABLE/ {found=1} END {exit !found}'; then
                 echo 'Mclash Root 策略路由仍存在，将重试'; exit 1
@@ -149,6 +159,7 @@ internal object TProxyRules {
         # Keep OUT until route removal is verified, so a retry retains ownership.
         iptables -w 5 -t mangle -F $OUT 2>/dev/null
         iptables -w 5 -t mangle -X $OUT 2>/dev/null
+        ${TunRules.cleanup()}
         failed=0
         ${HotspotRules.verifyCleanup()}
         iptables -w 5 -t mangle -S OUTPUT >/dev/null 2>&1 || failed=1

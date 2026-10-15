@@ -7,8 +7,6 @@ import java.util.Date
 import java.util.Locale
 
 internal object StartupLog {
-    private const val MAX_FILE_BYTES = 512 * 1024
-
     private fun file(context: Context): File =
         File(context.filesDir, "runtime/startup.log")
 
@@ -30,12 +28,8 @@ internal object StartupLog {
         val target = file(context)
         target.parentFile?.mkdirs()
 
-        if (target.exists() && target.length() > MAX_FILE_BYTES) {
-            val tail = target.readLines(Charsets.UTF_8).takeLast(200)
-            target.writeText(tail.joinToString("\n", postfix = "\n"), Charsets.UTF_8)
-        }
-
         target.appendText("${timestamp()} $message\n", Charsets.UTF_8)
+        DebugLogLimits.trim(target)
     }
 
     @Synchronized

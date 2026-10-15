@@ -131,7 +131,7 @@ class _SubscriptionManagementPageState
                                           MediaQuery.sizeOf(context).width < 380
                                               ? 13
                                               : 14,
-                                      fontWeight: FontWeight.w600))),
+                                      fontWeight: FontWeight.w400))),
                         )),
                         SizedBox(
                             width: 36,

@@ -7,6 +7,41 @@ import 'subscription_host_test.dart' show hostSource;
 import 'package:yaml/yaml.dart';
 
 void main() {
+  test('extracts original nodes before local overrides', () {
+    const source = """
+proxies:
+  - {name: Entry, type: http, server: entry.example, port: 80, dialer-proxy: Airport, udp: true, custom: {value: [1, false]}}
+  - {name: Exit, type: vmess, server: exit.example, network: ws, dialer-proxy: Entry, ws-opts: {headers: {Host: original.example}}}
+proxy-groups: [{name: Airport, type: select, proxies: [Entry]}, {name: Entry, type: select, proxies: [DIRECT]}]
+dns: {enable: false}
+rules: ['MATCH,Airport']
+rule-providers: {remote: {type: http}}
+""";
+    final original = loadYaml(source)['proxies'] as List;
+    final expected = [
+      Map.of(original[0] as Map)..remove('dialer-proxy'),
+      original[1],
+    ];
+    final raw = mergeSubscriptionSources([source]);
+    expect(loadYaml(raw), {'proxies': expected});
+    expect(mergeSubscriptionSources([raw]), raw);
+    final merged =
+        loadYaml(mergeSubscriptionSources([source, source]))['proxies'];
+    expect(merged[0]['dialer-proxy'], isNull);
+    expect(merged[1]['dialer-proxy'], '1-Entry');
+    expect(merged[3]['dialer-proxy'], '2-Entry');
+    final template =
+        File('../../assets/default-config.yaml').readAsStringSync();
+    final result = loadYaml(buildSubscriptionConfig(
+        '# Mclash HTTP/WS Host: "override.example"\n$template', source));
+    expect(result['proxies'][0], expected[0]);
+    expect(result['proxies'][1]['dialer-proxy'], 'Entry');
+    expect(
+        result['proxies'][1]['ws-opts']['headers']['Host'], 'override.example');
+    expect(result['dns'], loadYaml(template)['dns']);
+    expect(result['rules'], loadYaml(template)['rules']);
+  });
+
   test('merge preserves nested options and remaps duplicate node dialers', () {
     final merged = mergeSubscriptionSources([
       'proxies: [{name: Same, type: http}, {name: "Same (订阅 2)", type: http}]',

@@ -17,10 +17,9 @@ Object? _plainSubscriptionValue(Object? value) {
   return value;
 }
 
-/// Resolves names in source order and retains dialer references within a source.
+/// Extracts only nodes, drops source-group dialers, and remaps batch node references.
 String mergeSubscriptionSources(List<String> sources) {
   if (sources.isEmpty) throw const FormatException('请输入订阅链接');
-  if (sources.length == 1) return sources.single;
   final batches = <List<Map<String, dynamic>>>[];
   for (var i = 0; i < sources.length; i++) {
     final source = loadYaml(sources[i]);
@@ -42,13 +41,26 @@ String mergeSubscriptionSources(List<String> sources) {
     if (batch.map((node) => node['name']).toSet().length != batch.length) {
       throw FormatException('第 ${i + 1} 个订阅节点名称重复');
     }
+    final nodeNames = batch.map((node) => node['name']).toSet();
+    final groups = source is Map ? source['proxy-groups'] : null;
+    final groupNames = groups is List
+        ? groups.whereType<Map>().map((group) => group['name']).toSet()
+        : <Object?>{};
+    for (final node in batch) {
+      final upstream = node['dialer-proxy'];
+      if (groupNames.contains(upstream) && !nodeNames.contains(upstream)) {
+        node.remove('dialer-proxy');
+      }
+    }
     batches.add(batch);
   }
   final merged = <Map<String, dynamic>>[];
   for (var i = 0; i < batches.length; i++) {
     final renamed = {
       for (final node in batches[i])
-        node['name'] as String: '${i + 1}-${node['name']}'
+        node['name'] as String: sources.length == 1
+            ? node['name'] as String
+            : '${i + 1}-${node['name']}'
     };
     for (final node in batches[i]) {
       node['name'] = renamed[node['name']];
@@ -65,7 +77,7 @@ String mergeSubscriptionSources(List<String> sources) {
 /// Refreshes nodes while retaining user routing and proxy groups.
 String buildSubscriptionConfig(String template, String subscription,
     {String? previousConfig}) {
-  final source = loadYaml(subscription);
+  final source = loadYaml(mergeSubscriptionSources([subscription]));
   final downloaded = source is YamlMap ? source['proxies'] : null;
   if (downloaded is! YamlList || downloaded.isEmpty) {
     throw const FormatException(

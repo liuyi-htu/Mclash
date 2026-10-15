@@ -260,7 +260,7 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                    fontSize: 14, fontWeight: FontWeight.w600),
+                                    fontSize: 14, fontWeight: FontWeight.w400),
                           ),
                           subtitle: Text(
                             app.isSystemApp

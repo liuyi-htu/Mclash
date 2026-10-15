@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.net.VpnService
-import android.net.TrafficStats
 import android.os.Build
 import android.view.Gravity
 import android.view.ViewTreeObserver
@@ -147,12 +146,10 @@ class MainActivity : FlutterActivity() {
                         else -> "stopped"
                     },
                 )
-                "getTrafficStats" -> result.success(
-                    mapOf(
-                        "rxBytes" to TrafficStats.getUidRxBytes(android.os.Process.myUid()),
-                        "txBytes" to TrafficStats.getUidTxBytes(android.os.Process.myUid()),
-                    ),
-                )
+                "getTrafficStats" -> runAsync(result, "mclash-traffic") {
+                    if (!ProxyVpnService.running) MihomoTrafficStats.decode(emptyMap())
+                    else MihomoTrafficStats.read()
+                }
                 "getStartupLog" -> result.success(startupDiagnostics())
                 "getDebugLog" -> result.success(readDebugLog(call))
                 "getDebugLoggingEnabled" -> result.success(preferences.debugLoggingEnabled)

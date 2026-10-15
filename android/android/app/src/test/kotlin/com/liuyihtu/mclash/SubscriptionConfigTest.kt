@@ -8,6 +8,35 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun extractsOriginalNodesBeforeLocalOverrides() {
+        val source = """
+            proxies:
+              - {name: Entry, type: http, server: entry.example, port: 80, dialer-proxy: Airport, udp: true, custom: {value: [1, false]}}
+              - {name: Exit, type: vmess, server: exit.example, network: ws, dialer-proxy: Entry, ws-opts: {headers: {Host: original.example}}}
+            proxy-groups: [{name: Airport, type: select, proxies: [Entry]}, {name: Entry, type: select, proxies: [DIRECT]}]
+            dns: {enable: false}
+            rules: ['MATCH,Airport']
+            rule-providers: {remote: {type: http}}
+        """.trimIndent()
+        val original = Yaml().load<Map<String, Any>>(source)["proxies"] as List<Map<String, Any>>
+        val expected = original.mapIndexed { index, node -> node.toMutableMap().apply { if (index == 0) remove("dialer-proxy") } }
+        val raw = SubscriptionConfig.mergeSources(listOf(source))
+        assertEquals(mapOf("proxies" to expected), Yaml().load<Map<String, Any>>(raw))
+        assertEquals(raw, SubscriptionConfig.mergeSources(listOf(raw)))
+        val merged = Yaml().load<Map<String, Any>>(SubscriptionConfig.mergeSources(listOf(source, source)))["proxies"] as List<Map<String, Any>>
+        assertNull(merged[0]["dialer-proxy"])
+        assertEquals("1-Entry", merged[1]["dialer-proxy"])
+        assertEquals("2-Entry", merged[3]["dialer-proxy"])
+        val local = "# Mclash HTTP/WS Host: \"override.example\"\n" + template
+        val result = Yaml().load<Map<String, Any>>(SubscriptionConfig.build(local, source))
+        val nodes = result["proxies"] as List<Map<String, Any>>
+        assertEquals(expected[0], nodes[0])
+        assertEquals("Entry", nodes[1]["dialer-proxy"])
+        assertEquals(mapOf("headers" to mapOf("Host" to "override.example")), nodes[1]["ws-opts"])
+        assertEquals(Yaml().load<Map<String, Any>>(template)["dns"], result["dns"])
+        assertEquals(Yaml().load<Map<String, Any>>(template)["rules"], result["rules"])
+    }
+
     @Test fun refreshPreservesDirectPreferences() {
         val previous = """
             # Mclash 代理组正则: {"Enabled":"JP","Disabled":"JP"}

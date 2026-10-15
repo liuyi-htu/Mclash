@@ -1,3 +1,4 @@
+import 'share_link.dart';
 import 'dialog_typography.dart';
 import 'management_style.dart';
 import 'add_action_button.dart';
@@ -80,6 +81,8 @@ class _AddNodePageState extends State<AddNodePage> {
                 minLines: 1,
                 maxLines: 6,
                 decoration: managementFieldDecoration(context, '节点链接').copyWith(
+                    helperText: supportedNodeLinkHint,
+                    helperMaxLines: 3,
                     errorText: error,
                     errorMaxLines: 8,
                     errorStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -95,7 +98,10 @@ class _AddNodePageState extends State<AddNodePage> {
                       textStyle: Theme.of(context)
                           .textTheme
                           .labelLarge
-                          ?.copyWith(fontSize: 14, height: 1.45)),
+                          ?.copyWith(
+                              fontSize: 14,
+                              height: 1.45,
+                              fontWeight: FontWeight.w400)),
                   onPressed: _saving ? null : () => Navigator.of(context).pop(),
                   child: const Text('取消')),
               FilledButton(
@@ -104,7 +110,10 @@ class _AddNodePageState extends State<AddNodePage> {
                       textStyle: Theme.of(context)
                           .textTheme
                           .labelLarge
-                          ?.copyWith(fontSize: 14, height: 1.45)),
+                          ?.copyWith(
+                              fontSize: 14,
+                              height: 1.45,
+                              fontWeight: FontWeight.w400)),
                   onPressed: _saving
                       ? null
                       : () async {

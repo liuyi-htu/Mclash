@@ -10,8 +10,13 @@ class DialogTypography extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    TextStyle? body(TextStyle? style) =>
-        style?.copyWith(fontSize: 14, height: 1.45, letterSpacing: 0);
+    // Dropdowns and text fields use titleMedium, which is semibold in the
+    // page theme. Modal controls should use the same regular weight as body text.
+    TextStyle? body(TextStyle? style) => style?.copyWith(
+        fontSize: 14,
+        height: 1.45,
+        letterSpacing: 0,
+        fontWeight: FontWeight.w400);
     final title = theme.textTheme.titleMedium?.copyWith(
         fontSize: 18,
         height: 1.45,

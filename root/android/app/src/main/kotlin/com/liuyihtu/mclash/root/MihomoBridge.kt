@@ -30,7 +30,7 @@ internal object MihomoProcess {
 
     fun previewConfig(context: Context, source: File): String {
         val settings = AppPreferences(context)
-        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode, settings.rootIpv6)
+        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode, settings.rootIpv6, settings.rootProxyMode == "tun", settings.rootTunStack)
     }
 
     fun validateConfig(context: Context, source: File) = validateWithBinary(context, source, binary(context))
@@ -61,6 +61,7 @@ internal object MihomoProcess {
         val core = binary(context)
         val config = File(directory, "runtime.yaml").apply { writeText(previewConfig(context, source)) }
         val ipv6 = AppPreferences(context).rootIpv6
+        val tun = AppPreferences(context).rootProxyMode == "tun"
         val appUid = android.os.Process.myUid()
         val ready = File(directory, "ready").apply { writeText("") }
         val ports = File(directory, "ports-ready").apply { delete() }
@@ -69,8 +70,11 @@ internal object MihomoProcess {
         File(directory, "supervisor.log").writeText("")
         File(directory, "supervisor.pid").writeText("")
         File(directory, "supervisor.stamp").writeText("")
+        File(directory, "sharing.policy").writeText(AppPreferences(context).let { HotspotRules.sharingPolicy(it.networkSharingEnabled, it.sharedInterfaces) })
+        File(directory, "sharing.applied").delete()
         File(directory, "hotspot.snapshot").delete()
-        File(directory, "hotspot-monitor.sh").writeText(RootHotspotMonitor.script(AppPreferences(context).rootBypassLan, ipv6))
+        File(directory, "log-maintenance.sh").writeText(DebugLogLimits.maintenanceScript())
+        File(directory, "hotspot-monitor.sh").writeText(RootHotspotMonitor.script(AppPreferences(context).rootBypassLan, ipv6, tun))
         File(directory, "install.sh").apply { writeText(rules) }
         File(directory, "cleanup.sh").apply { writeText(TProxyRules.cleanup()) }
         val script = File(directory, "supervisor.sh").apply {
@@ -86,6 +90,7 @@ internal object MihomoProcess {
                 if grep -q '/uid_$appUid/' /proc/${'$'}${'$'}/cgroup; then
                     echo ${'$'}${'$'} > /sys/fs/cgroup/cgroup.procs
                 fi
+                ${if (tun) "! ip link show dev mclash0 >/dev/null 2>&1 || { echo 'mclash0 接口已占用'; exit 1; }" else ""}
                 core_pid=''
                 # Cache rollback before launch; uninstall may remove this directory.
                 cleanup_rules=${'$'}(cat ./cleanup.sh)
@@ -119,7 +124,7 @@ internal object MihomoProcess {
                 ${RootShell.quote(core.absolutePath)} -d ${RootShell.quote(directory.absolutePath)} -f ${RootShell.quote(config.absolutePath)} >> ${RootShell.quote(log.absolutePath)} 2>&1 &
                 core_pid=${'$'}!
                 listener_ready() {
-                    awk '${'$'}2 ~ /:45E2${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6 &&
+                    ${if (tun) "ip link show dev mclash0 >/dev/null 2>&1" else "awk '${'$'}2 ~ /:45E2${'$'}/ && ${'$'}4 == \"0A\" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6"} &&
                     awk '${'$'}2 ~ /:2382${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6
                 }
                 core_alive() {
@@ -129,12 +134,14 @@ internal object MihomoProcess {
                 }
                 n=0
                 while ! listener_ready; do
+                    [ "${'$'}((n % 20))" -ne 0 ] || /system/bin/sh ./log-maintenance.sh || true
                     owner_alive && core_alive || { echo '启动期间进程退出或被取消'; exit 1; }
                     [ "${'$'}n" -lt 900 ] || { echo '等待内核监听超时'; exit 1; }
                     sleep 0.1; n=${'$'}((n + 1))
                 done
                 echo ready > ./ports-ready
-                ${if (ipv6) ipv6ListenerCheck() else ""}
+                ${if (ipv6 && !tun) ipv6ListenerCheck() else ""}
+                ${if (tun) "echo 0 > /proc/sys/net/ipv4/conf/mclash0/rp_filter" else ""}
                 /system/bin/sh ./install.sh >> ./supervisor.log 2>&1 || { cat ./supervisor.log; exit 1; }
                 timeout 15 /system/bin/sh ./hotspot-monitor.sh
                 echo ready > ./ready
@@ -158,11 +165,85 @@ internal object MihomoProcess {
                 if (ready.readText().trim() == "ready") return
                 Thread.sleep(200)
             }
-            error("TProxy 启动超时：\n${diagnostics(directory)}")
+            error("Root 代理启动超时：\n${diagnostics(directory)}")
         } catch (error: Throwable) {
             stop()
             throw error
         }
+    }
+
+    /** Apply through the supervisor so refresh, stop and rule updates cannot race. */
+    @Synchronized
+    fun setNetworkSharing(context: Context, enabled: Boolean, interfaces: Set<String>): Map<String, Any> {
+        check(ProxyTProxyService.running && !ProxyTProxyService.starting && isRunning()) {
+            "请先开启代理再设置网络共享"
+        }
+        require(interfaces.all { it != "lo" && it.matches(Regex("[a-zA-Z0-9_.-]{1,15}")) }) {
+            "共享接口名称无效"
+        }
+        val directory = File(context.filesDir, "mihomo")
+        val policy = File(directory, "sharing.policy")
+        val previous = policy.readText()
+        val settings = AppPreferences(context)
+        val oldInterfaces = settings.sharedInterfaces
+        val oldEnabled = settings.networkSharingEnabled
+        val available = if (enabled) networkSharingInterfaces() else emptySet()
+        require(!enabled || (interfaces - oldInterfaces).all { it in available }) {
+            "接口已断开，请刷新后重新选择"
+        }
+        val content = HotspotRules.sharingPolicy(enabled, interfaces)
+        fun write(value: String) {
+            val temporary = File(directory, "sharing.policy.tmp")
+            temporary.writeText(value)
+            check(temporary.renameTo(policy)) { "无法保存网络共享设置" }
+        }
+        write(content)
+        try {
+            awaitSharingApplied(directory)
+            check(isRunning()) { "代理已停止" }
+            settings.saveNetworkSharing(enabled, interfaces)
+        } catch (error: Throwable) {
+            write(previous)
+            runCatching { settings.saveNetworkSharing(oldEnabled, oldInterfaces) }
+            runCatching { awaitSharingApplied(directory) }
+            throw error
+        }
+        return mapOf(
+            "enabled" to enabled,
+            "interfaces" to interfaces.sorted(),
+            "availableInterfaces" to available.sorted(),
+        )
+    }
+
+    private fun awaitSharingApplied(directory: File) {
+        RootShell.run("""
+                cd ${RootShell.quote(directory.absolutePath)}
+                n=0
+                while ! cmp -s ./sharing.policy ./sharing.applied; do
+                    [ ! -f ./stop ] && [ "${'$'}(cat ./ready)" = ready ] || exit 1
+                    [ "${'$'}n" -lt 150 ] || { echo '网络共享规则更新超时'; exit 1; }
+                    sleep 0.1; n=${'$'}((n + 1))
+                done
+            """.trimIndent(), 20)
+    }
+
+    fun networkSharingInterfaces(): Set<String> {
+        val dump = RootShell.run("set -eu; dumpsys tethering | sed -n '/Tether state:/,/Hardware offload:/p'")
+        check(dump.contains("Tether state:")) { "无法读取可共享接口" }
+        return HotspotRules.interfaces(dump)
+    }
+
+    @Synchronized
+    fun networkSharing(context: Context): Map<String, Any> {
+        val active = ProxyTProxyService.running && !ProxyTProxyService.starting && isRunning()
+        val policy = if (active) File(context.filesDir, "mihomo/sharing.policy").takeIf { it.isFile }?.readLines().orEmpty() else emptyList()
+        val settings = AppPreferences(context)
+        val enabled = if (active) policy.firstOrNull() == "1" else settings.networkSharingEnabled
+        return mapOf(
+            "enabled" to enabled,
+            "interfaces" to settings.sharedInterfaces.sorted(),
+            "availableInterfaces" to if (active && enabled) networkSharingInterfaces().sorted() else emptyList<String>(),
+        )
     }
 
     internal fun ipv6ListenerCheck(): String = """
@@ -196,11 +277,33 @@ internal object MihomoProcess {
 
     fun isRunning(): Boolean = home?.let(::daemonAlive) == true
 
+    @Synchronized
     fun attach(context: Context): Boolean {
         val directory = File(context.filesDir, "mihomo")
         home = directory
-        return File(directory, "ready").takeIf { it.isFile }?.readText()?.trim() == "ready" &&
+        val active = File(directory, "ready").takeIf { it.isFile }?.readText()?.trim() == "ready" &&
             daemonAlive(directory) && canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)
+        if (active) {
+            File(directory, "log-maintenance.sh").writeText(DebugLogLimits.maintenanceScript())
+            val settings = AppPreferences(context)
+            val policy = File(directory, "sharing.policy")
+            val monitor = File(directory, "hotspot-monitor.sh")
+            val existing = monitor.takeIf { it.isFile }?.readText().orEmpty()
+            val legacy = !policy.isFile || !existing.contains("./sharing.policy")
+            if (legacy) {
+                // Upgrade a live supervisor from automatic hotspot interception.
+                policy.writeText(HotspotRules.sharingPolicy(settings.networkSharingEnabled, settings.sharedInterfaces))
+            }
+            val expected = RootHotspotMonitor.script(settings.rootBypassLan, settings.rootIpv6, settings.rootProxyMode == "tun")
+            if (existing != expected) {
+                // Refresh fixes even when the app reconnects to an existing supervisor.
+                val temporary = File(directory, "hotspot-monitor.sh.tmp")
+                temporary.writeText(expected)
+                check(temporary.renameTo(monitor)) { "无法更新网络共享监控" }
+            }
+            if (legacy) awaitSharingApplied(directory)
+        }
+        return active
     }
 
     @Synchronized

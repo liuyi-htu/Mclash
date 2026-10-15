@@ -33,6 +33,8 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
         _registryProcessRunner = registryProcessRunner,
         _serviceProcessRunner = serviceProcessRunner;
 
+  bool _addingSubscription = false;
+
   final Duration statusTimeout;
   final Future<bool> Function()? controllerHealthCheck;
   final Duration subscriptionIdleTimeout;
@@ -1173,6 +1175,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       }
       totalBytes += utf8.encode(sources[link]!).length;
       if (totalBytes > 16 * 1024 * 1024) throw StateError('订阅总内容超过 16 MB 限制');
+      // Cache original nodes before applying local Host or chain overrides.
+      sources[link] = mergeSubscriptionSources([sources[link]!]);
     }
     return _SubscriptionDownload(
       content: buildSubscriptionConfig(
@@ -1306,7 +1310,29 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String url,
     Map<String, String>? subscriptionNames,
   }) async {
+    if (_addingSubscription) throw StateError('正在添加机场配置，请稍后再试');
+    _addingSubscription = true;
+    try {
+      return await _addSubscription(
+          name: name, url: url, subscriptionNames: subscriptionNames);
+    } finally {
+      _addingSubscription = false;
+    }
+  }
+
+  void _requireSingleSubscription(Map<String, dynamic> state) {
+    if (_stateMap(state, 'profileTypes').containsValue('subscription')) {
+      throw StateError('只能添加一个机场配置，请在已有配置中添加机场');
+    }
+  }
+
+  Future<List<ConfigProfile>> _addSubscription({
+    required String name,
+    required String url,
+    Map<String, String>? subscriptionNames,
+  }) async {
     await _requireConfigStopped();
+    _requireSingleSubscription(await _readSettings());
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
     final cleanUrl = normalizeSubscriptionLinks(url);
@@ -1314,6 +1340,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final id = _newSubscriptionId();
     await _requireConfigStopped();
     final state = await _readSettings();
+    _requireSingleSubscription(state);
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final types = _stateMap(state, 'profileTypes')..[id] = 'subscription';
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
