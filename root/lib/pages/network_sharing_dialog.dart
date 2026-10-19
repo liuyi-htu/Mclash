@@ -1,3 +1,4 @@
+import '../shared/settings_sheet.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,9 +91,8 @@ class _NetworkSharingDialogState extends State<NetworkSharingDialog> {
     return PopScope(
       canPop: !_busy,
       child: DialogTypography(
-        child: AlertDialog(
+        child: SettingsSheetContent(
           title: const Text('网络共享'),
-          scrollable: true,
           content: SizedBox(
             width: 360,
             child: Column(

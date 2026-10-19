@@ -7,159 +7,128 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
+/** Temporary operation host, never the owner of a running Root proxy. */
 class ProxyTProxyService : Service() {
     private val worker = Executors.newSingleThreadExecutor()
-    @Volatile private var stopping = false
+    private val main = Handler(Looper.getMainLooper())
+    private val pending = AtomicInteger()
+    private val operations = RootOperationState(pendingStarts)
+    private var latestStartId = 0
 
     override fun onCreate() {
         super.onCreate()
         getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel("root-proxy", "Root 代理服务", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel("root-proxy", "Root 代理操作", NotificationManager.IMPORTANCE_LOW),
         )
+        MihomoProcess.initialize(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val stopRequested = intent?.action == ACTION_STOP ||
-            (intent?.action == ACTION_TOGGLE && (running || starting))
-        if (stopRequested) {
-            stopping = true
-            tileStopPending = true
-            QuickSettingsTileUpdater.request(this)
-            worker.execute { stopProxy() }
-        } else if (!running && !starting) {
+        latestStartId = startId
+        if (intent?.action !in setOf(ACTION_START, ACTION_STOP, ACTION_TOGGLE)) {
+            if (pending.get() == 0) stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
+        val action = if (intent!!.action == ACTION_TOGGLE && tileActive(this)) ACTION_STOP else intent.action
+        val stop = action == ACTION_STOP
+        startForeground(2, notification(if (stop) "正在停止并清理 Root 代理" else "正在启动 Root 代理"))
+        pending.incrementAndGet()
+        try {
+            if (stop) {
+                operations.admit(startId, true)
+                tileStopPending = true
+            } else {
+                RuntimeEdits.start { operations.admit(startId, false) }
+            }
+        } catch (error: Throwable) {
+            lastError = error.message
+            pending.decrementAndGet()
+            finishRequest()
+            return START_NOT_STICKY
+        }
+        QuickSettingsTileUpdater.request(this)
+        worker.execute {
             try {
-                RuntimeEdits.start {
-                    stopping = false
-                    starting = true
-                    lastError = null
+                lastError = null
+                if (stop || (action == ACTION_TOGGLE && MihomoProcess.attach(this))) {
+                    stopProxy()
+                } else {
+                    startProxy { operations.cancelled(startId) }
                 }
             } catch (error: Throwable) {
-                restoring = false
-                tileStopPending = false
-                QuickSettingsTileUpdater.request(this)
-                lastError = error.message
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            startForeground(2, notification("正在启动 Root 代理"))
-            QuickSettingsTileUpdater.request(this)
-            worker.execute {
-                // A surviving Root daemon may outlive the application's process.
-                if (intent?.action == ACTION_TOGGLE) {
-                    try {
-                        if (MihomoProcess.attach(this)) {
-                            stopProxy()
-                            return@execute
-                        }
-                    } catch (error: Throwable) {
-                        lastError = error.message ?: error.javaClass.simpleName
-                        StartupLog.append(this, "快捷开关状态检查失败：$lastError")
-                        stopProxy()
-                        return@execute
-                    }
-                }
-                tileStopPending = false
-                QuickSettingsTileUpdater.request(this)
-                startProxy()
+                lastError = error.message ?: error.javaClass.simpleName
+                StartupLog.append(this, "Root 操作失败：$lastError")
+            } finally {
+                operations.complete(stop)
+                pending.decrementAndGet()
+                main.post { finishRequest() }
             }
         }
-        restoring = false
-        return if (stopRequested) START_NOT_STICKY else START_STICKY
+        return START_NOT_STICKY
     }
 
-    private fun startProxy() {
+    private fun finishRequest() {
+        if (pending.get() != 0) return
+        tileStopPending = false
+        QuickSettingsTileUpdater.request(this)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelfResult(latestStartId)
+    }
+
+    private fun startProxy(cancelled: () -> Boolean) {
+        if (MihomoProcess.attach(this)) return
         try {
             StartupLog.reset(this)
             StartupLog.append(this, "Root 代理启动；ABI=${Build.SUPPORTED_ABIS.joinToString()}")
             StartupLog.append(this, RootShell.requireRoot())
             val preferences = AppPreferences(this)
             val store = ConfigStore(this)
-            if (!MihomoProcess.attach(this)) {
-                require(Settings.Global.getString(contentResolver, "private_dns_mode") != "hostname") {
-                    "请先在 Android 网络设置中关闭严格私人 DNS，再启动代理"
-                }
-                RootRuntimeMode.capture(this)
-                MihomoProcess.recover(this)
-                require(store.exists()) { "请先选择有效配置" }
-                val onlySelected = preferences.appProxyMode == AppPreferences.MODE_ONLY_SELECTED
-                val uids = preferences.selectedPackages.mapNotNull { name ->
-                    runCatching { packageManager.getApplicationInfo(name, 0).uid }.getOrNull()
-                }.filter { it != android.os.Process.myUid() && it > 0 }.toSet()
-                val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids, preferences.rootBypassLan, preferences.rootIpv6, preferences.rootProxyMode == "tun")
-                check(!stopping) { "启动已取消" }
-                MihomoProcess.start(this, store.configFile, rules) { stopping }
+            require(Settings.Global.getString(contentResolver, "private_dns_mode") != "hostname") {
+                "请先在 Android 网络设置中关闭严格私人 DNS，再启动代理"
             }
-            running = true
-            starting = false
-            StartupLog.append(this, "${preferences.rootProxyMode.uppercase()} 接管完成；网络共享${if (preferences.networkSharingEnabled) "开启" else "关闭"}，仅接管手动选择的接口；IPv6 ${if (preferences.rootIpv6) "TCP/UDP 接管" else "按应用及热点阻断"}")
-            getSystemService(NotificationManager::class.java).notify(2,
-                notification("${preferences.rootProxyMode.uppercase()} · ${store.activeProfile()?.name ?: "当前配置"}"))
-            QuickSettingsTileUpdater.request(this)
-            Thread({
-                while (running && !stopping && MihomoProcess.isRunning()) {
-                    Thread.sleep(2000)
-                    if (!running || stopping || !MihomoProcess.isRunning()) break
-                    RootRuntimeMode.capture(this)
-
-                }
-                if (running && !stopping) {
-                    lastError = "Root 内核或守护进程已退出，请查看启动日志"
-                    worker.execute { stopProxy() }
-                }
-            }, "root-proxy-monitor").apply { isDaemon = true; start() }
+            MihomoProcess.recover(this)
+            require(store.exists()) { "请先选择有效配置" }
+            val onlySelected = preferences.appProxyMode == AppPreferences.MODE_ONLY_SELECTED
+            val uids = preferences.selectedPackages.mapNotNull { name ->
+                runCatching { packageManager.getApplicationInfo(name, 0).uid }.getOrNull()
+            }.filter { it != android.os.Process.myUid() && it > 0 }.toSet()
+            val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids,
+                preferences.rootBypassLan, preferences.rootIpv6, preferences.rootProxyMode == "tun")
+            check(!cancelled()) { "启动已取消" }
+            MihomoProcess.start(this, store.configFile, rules, cancelled)
+            StartupLog.append(this, "${preferences.rootProxyMode.uppercase()} 接管完成；Root Supervisor 独立运行，Android 操作服务退出")
         } catch (error: Throwable) {
-            lastError = error.message ?: error.javaClass.simpleName
-            StartupLog.append(this, "启动失败：$lastError")
-            stopProxy()
+            // Never hide a rollback failure behind the original startup failure.
+            try {
+                if (!MihomoProcess.stop()) MihomoProcess.recover(this)
+            } catch (cleanup: Throwable) {
+                throw IllegalStateException("启动失败且规则清理失败：${cleanup.message}", error)
+            }
+            throw error
         }
     }
 
     private fun stopProxy() {
-        stopping = true
-        tileStopPending = true
-        QuickSettingsTileUpdater.request(this)
-        try {
-            RootRuntimeMode.capture(this)
-            if (!MihomoProcess.stop()) MihomoProcess.recover(this)
-            running = false
-            starting = false
-            tileStopPending = false
-            if (lastError?.startsWith("停止清理失败：") == true) lastError = null
-            StartupLog.append(this, "Root 服务已停止，接管规则已清理")
-            QuickSettingsTileUpdater.request(this)
-            stopForeground(STOP_FOREGROUND_REMOVE)
-            stopSelf()
-        } catch (error: Throwable) {
-            lastError = "停止清理失败：${error.message}"
-            tileStopPending = false
-            QuickSettingsTileUpdater.request(this)
-            StartupLog.append(this, lastError!!)
-            // Keep the foreground service and busy state until cleanup can be retried.
-            getSystemService(NotificationManager::class.java).notify(2, notification(lastError!!))
-        }
+        RootRuntimeMode.capture(this)
+        if (!MihomoProcess.stop()) MihomoProcess.recover(this)
+        StartupLog.append(this, "Root 代理已停止，接管规则已清理")
     }
 
     override fun onDestroy() {
-        stopping = true
-        // Explicit STOP owns shutdown. Activity/service destruction must not stop the daemon.
-        running = false
-        starting = false
-        tileStopPending = false
+        // No stop, mode capture, polling or cleanup when Android destroys us.
         worker.shutdown()
         super.onDestroy()
-    }
-
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        worker.execute { RootRuntimeMode.capture(this) }
-        super.onTaskRemoved(rootIntent)
     }
 
     private fun notification(text: String) = NotificationCompat.Builder(this, "root-proxy")
@@ -169,48 +138,40 @@ class ProxyTProxyService : Service() {
         .setOngoing(true)
         .setContentIntent(PendingIntent.getActivity(this, 0,
             packageManager.getLaunchIntentForPackage(packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        .addAction(0, "停止", PendingIntent.getService(this, 1,
-            Intent(this, ProxyTProxyService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE))
         .build()
 
     companion object {
         private const val ACTION_TOGGLE = "com.liuyihtu.mclash.root.TOGGLE"
         private const val ACTION_START = "com.liuyihtu.mclash.root.START"
         private const val ACTION_STOP = "com.liuyihtu.mclash.root.STOP"
-        @Volatile var running = false; private set
-        @Volatile var starting = false; private set
-        @Volatile var restoring = false; private set
+        private val pendingStarts = AtomicInteger()
+        // Compatibility accessors: no Android-service lifetime flag is retained.
+        val running: Boolean get() = MihomoProcess.isRunning()
+        val starting: Boolean get() = pendingStarts.get() > 0
         @Volatile var tileStopPending = false; private set
         @Volatile var lastError: String? = null; private set
         fun clearLastError() { lastError = null }
-        fun restore(context: Context) {
-            if (!running && !starting && !restoring && java.io.File(context.filesDir, "mihomo/ready")
-                    .takeIf { it.isFile }?.readText()?.trim() == "ready") {
-                restoring = true
-                try { start(context) } catch (error: Throwable) { restoring = false; throw error }
-            }
+        fun restore(context: Context) { MihomoProcess.initialize(context) }
+        fun tileActive(context: Context): Boolean {
+            restore(context)
+            return starting || running || MihomoProcess.hasCleanupFailure()
         }
-        fun tileActive(context: Context): Boolean = running || starting || restoring || runCatching {
-            java.io.File(context.filesDir, "mihomo/ready")
-                .takeIf { it.isFile }?.readText()?.trim() == "ready"
-        }.getOrDefault(false)
+        private fun dispatch(context: Context, action: String) {
+            restore(context)
+            ContextCompat.startForegroundService(context, Intent(context, ProxyTProxyService::class.java).setAction(action))
+        }
         fun toggle(context: Context) {
-            tileStopPending = tileActive(context)
-            try {
-                ContextCompat.startForegroundService(context,
-                    Intent(context, ProxyTProxyService::class.java).setAction(ACTION_TOGGLE))
-            } catch (error: Throwable) {
-                tileStopPending = false
-                throw error
-            }
+            val stop = tileActive(context)
+            tileStopPending = stop
+            try { dispatch(context, if (stop) ACTION_STOP else ACTION_TOGGLE) }
+            catch (error: Throwable) { tileStopPending = false; throw error }
         }
-        fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, ProxyTProxyService::class.java).setAction(ACTION_START))
-        }
+        fun start(context: Context) = dispatch(context, ACTION_START)
         fun stop(context: Context) {
-            if (running || starting || MihomoProcess.isRunning()) {
-                context.startService(Intent(context, ProxyTProxyService::class.java).setAction(ACTION_STOP))
-            }
+            tileStopPending = true
+            lastError = null
+            try { dispatch(context, ACTION_STOP) }
+            catch (error: Throwable) { tileStopPending = false; throw error }
         }
     }
 }

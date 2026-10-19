@@ -21,6 +21,7 @@ class RootHotspotMonitorTest {
             tool("ip", "case \"${'$'}*\" in *-4*) echo '1: lo inet 127.0.0.1/8';; *) echo '1: lo inet6 ::1/128';; esac")
             tool("iptables-restore", "cat >> ./restore.calls")
             tool("ip6tables-restore", "cat >> ./restore.calls")
+            tool("tc", "exit 0") // Legacy tethering without an Android BPF fast path.
             val script = File(dir, "monitor.sh").apply { writeText("printf() { /usr/bin/printf \"${'$'}@\"; }\n" + RootHotspotMonitor.script(true, true)) }
             fun run(): Int {
                 val builder = ProcessBuilder("/bin/sh", script.absolutePath).directory(dir).redirectErrorStream(true)
@@ -73,6 +74,7 @@ class RootHotspotMonitorTest {
         val script = RootHotspotMonitor.script(false, false)
         assertTrue(script.startsWith("BYPASS_LAN=0\nIPV6=0\n"))
         assertTrue(script.contains("-p ${'$'}proto -j REJECT"))
-        assertTrue(script.contains("iptables-restore -w 5 --noflush"))
+        assertTrue(script.contains("apply_batch iptables-restore"))
+        assertTrue(script.contains("\"${'$'}tool\" -w 5 --noflush"))
     }
 }

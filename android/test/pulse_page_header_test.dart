@@ -1,3 +1,4 @@
+import 'package:mclash/shared/glass_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/shared/pulse_dashboard.dart';
@@ -88,7 +89,7 @@ void main() {
               .widget<Material>(find.byKey(const ValueKey('service-toggle')))
               .color,
           state.$1 && !state.$2
-              ? Theme.of(context).colorScheme.primary
+              ? pulseGlassFill(context)
               : Theme.of(context).colorScheme.surfaceContainerLow);
       if (!state.$2) await tester.tap(button);
     }

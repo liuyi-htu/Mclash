@@ -44,6 +44,11 @@ struct _ThreadData
 };
 
 static atomic_int is_running;
+static pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t state_changed = PTHREAD_COND_INITIALIZER;
+static int ready;
+static jclass service_class;
+static jmethodID exit_method;
 static int thread_joinable;
 static JavaVM *java_vm;
 static pthread_t work_thread;
@@ -87,7 +92,11 @@ JNI_OnLoad (JavaVM *vm, void *reserved)
         return JNI_ERR;
     res = (*env)->RegisterNatives (env, klass, native_methods,
                                    N_ELEMENTS (native_methods));
+    service_class = (*env)->NewGlobalRef (env, klass);
+    exit_method = (*env)->GetStaticMethodID (env, klass, "tunnelExited", "(I)V");
     (*env)->DeleteLocalRef (env, klass);
+    if (!service_class || !exit_method)
+        return JNI_ERR;
     if (res < 0)
         return JNI_ERR;
 
@@ -102,9 +111,23 @@ thread_handler (void *data)
 {
     ThreadData *tdata = data;
 
-    hev_socks5_tunnel_main (tdata->path, tdata->fd);
+    int result = hev_socks5_tunnel_main (tdata->path, tdata->fd);
 
+    pthread_mutex_lock (&state_mutex);
     atomic_store_explicit (&is_running, 0, memory_order_release);
+    pthread_cond_broadcast (&state_changed);
+    pthread_mutex_unlock (&state_mutex);
+
+    /* Deliver an event; no periodic Java/JNI health polling. */
+    if (java_vm) {
+        JNIEnv *env = NULL;
+        if ((*java_vm)->AttachCurrentThread (java_vm, (void **)&env, NULL) == JNI_OK) {
+            (*env)->CallStaticVoidMethod (env, service_class, exit_method, (jint)result);
+            if ((*env)->ExceptionCheck (env))
+                (*env)->ExceptionClear (env);
+            (*java_vm)->DetachCurrentThread (java_vm);
+        }
+    }
 
     free (tdata->path);
     free (tdata);
@@ -147,7 +170,10 @@ native_start_service (JNIEnv *env, jobject thiz, jstring config_path, jint fd)
         goto exit;
     }
 
+    pthread_mutex_lock (&state_mutex);
+    ready = 0;
     atomic_store_explicit (&is_running, 1, memory_order_release);
+    pthread_mutex_unlock (&state_mutex);
     res = pthread_create (&work_thread, NULL, thread_handler, tdata);
     if (res != 0) {
         atomic_store_explicit (&is_running, 0, memory_order_release);
@@ -157,7 +183,15 @@ native_start_service (JNIEnv *env, jobject thiz, jstring config_path, jint fd)
     }
 
     thread_joinable = 1;
-    result = JNI_TRUE;
+    pthread_mutex_lock (&state_mutex);
+    while (!ready && atomic_load_explicit (&is_running, memory_order_acquire))
+        pthread_cond_wait (&state_changed, &state_mutex);
+    result = ready && atomic_load_explicit (&is_running, memory_order_acquire);
+    pthread_mutex_unlock (&state_mutex);
+    if (!result) {
+        pthread_join (work_thread, NULL);
+        thread_joinable = 0;
+    }
 exit:
     pthread_mutex_unlock (&mutex);
     return result;
@@ -177,11 +211,23 @@ native_stop_service (JNIEnv *env, jobject thiz)
         hev_socks5_tunnel_quit ();
     res = pthread_join (work_thread, NULL);
 
-    thread_joinable = 0;
-    atomic_store_explicit (&is_running, 0, memory_order_release);
+    if (res == 0) {
+        thread_joinable = 0;
+        atomic_store_explicit (&is_running, 0, memory_order_release);
+    }
 exit:
     pthread_mutex_unlock (&mutex);
     return res == 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+/* Called only once tunnel resources and forwarding tasks have been initialized. */
+void
+hev_jni_tunnel_ready (void)
+{
+    pthread_mutex_lock (&state_mutex);
+    ready = 1;
+    pthread_cond_broadcast (&state_changed);
+    pthread_mutex_unlock (&state_mutex);
 }
 
 static jboolean

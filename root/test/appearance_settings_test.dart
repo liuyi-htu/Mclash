@@ -123,6 +123,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.color, const Color(0xFF26745A));
     final slider = find.byKey(const ValueKey('global-font-slider'));
+    await tester.ensureVisible(slider);
     await tester.drag(slider, const Offset(70, 0));
     await tester.pumpAndSettle();
     expect(controller.fontScale, greaterThan(1));

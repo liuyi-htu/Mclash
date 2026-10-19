@@ -15,6 +15,8 @@ void main() {
                 busy: busy,
                 status: '运行中',
                 download: '1 MB/s',
+                downloadTotal: '486 MB',
+                uploadTotal: '21 MB',
                 upload: '2 KB/s',
                 mode: 'rule',
                 changingMode: false,
@@ -26,6 +28,10 @@ void main() {
     expect(find.text('全部检测'), findsNothing);
     expect(find.textContaining('出口节点'), findsNothing);
     expect(find.text('1 MB/s'), findsOneWidget);
+    expect(find.text('本次 486 MB'), findsOneWidget);
+    expect(find.text('本次 21 MB'), findsOneWidget);
+    expect(find.textContaining('↓'), findsNothing);
+    expect(find.textContaining('↑'), findsNothing);
     await tester.tap(find.text('全局'));
     expect(selected, 'global');
     await tester.tap(find.descendant(

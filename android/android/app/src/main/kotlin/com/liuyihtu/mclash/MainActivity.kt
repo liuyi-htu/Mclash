@@ -1,6 +1,7 @@
 package com.liuyihtu.mclash
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -60,6 +61,20 @@ class MainActivity : FlutterActivity() {
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::preferences.isInitialized) {
+            runCatching { applyRecentsVisibility(preferences.hideFromRecents) }
+                .onFailure { StartupLog.append(this, "恢复最近任务设置失败：${it.message}") }
+        }
+    }
+
+    private fun applyRecentsVisibility(hidden: Boolean) {
+        val tasks = getSystemService(ActivityManager::class.java).appTasks
+        check(tasks.isNotEmpty()) { "未找到当前应用任务" }
+        tasks.forEach { it.setExcludeFromRecents(hidden) }
+    }
+
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
         windowChannel?.invokeMethod("windowChanged", null)
@@ -69,6 +84,22 @@ class MainActivity : FlutterActivity() {
         try {
             if (call.method in MUTATING_METHODS) requireProxyStopped()
             when (call.method) {
+                "getHideFromRecents" -> result.success(preferences.hideFromRecents)
+                "setHideFromRecents" -> {
+                    val hidden = call.argument<Boolean>("enabled") ?: error("缺少最近任务设置")
+                    val previous = preferences.hideFromRecents
+                    try {
+                        applyRecentsVisibility(hidden)
+                        preferences.hideFromRecents = hidden
+                    } catch (error: Throwable) {
+                        runCatching { applyRecentsVisibility(previous) }
+                        if (preferences.hideFromRecents != previous) {
+                            runCatching { preferences.hideFromRecents = previous }
+                        }
+                        throw error
+                    }
+                    result.success(null)
+                }
                 "getAppDataDirectory" -> result.success(filesDir.absolutePath)
                 "getUsageNoticeAccepted" -> result.success(
                     preferences.acceptedUsageNoticeVersion >= USAGE_NOTICE_VERSION,
@@ -398,7 +429,7 @@ class MainActivity : FlutterActivity() {
             val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
             while (ProxyVpnService.stopping && System.currentTimeMillis() < deadline) Thread.sleep(100)
             runOnUiThread {
-                if (ProxyVpnService.stopping) result.error("stop_timeout", "代理停止超时", null)
+                if (ProxyVpnService.stopping) result.error("stop_timeout", ProxyVpnService.lastError ?: "代理停止超时", null)
                 else result.success(null)
             }
         }, "mclash-stop-waiter").start()
@@ -416,7 +447,7 @@ class MainActivity : FlutterActivity() {
             }
             if (ProxyVpnService.running || ProxyVpnService.starting || ProxyVpnService.stopping) {
                 runOnUiThread {
-                    result.error("restart_timeout", "代理停止超时，无法应用新配置", null)
+                    result.error("restart_timeout", ProxyVpnService.lastError ?: "代理停止超时，无法应用新配置", null)
                 }
                 return@Thread
             }

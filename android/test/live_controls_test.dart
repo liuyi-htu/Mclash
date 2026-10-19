@@ -109,14 +109,19 @@ void main() {
   late _Controller controller;
   HttpOverrides? previous;
   var running = true;
+  var trafficReads = 0;
+  var statusReads = 0;
 
   setUp(() {
     running = true;
+    trafficReads = statusReads = 0;
     previous = HttpOverrides.current;
     controller = _Controller();
     HttpOverrides.global = controller;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getTrafficStats') trafficReads++;
+      if (call.method == 'getProxyStatus') statusReads++;
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => false,
@@ -136,6 +141,74 @@ void main() {
     HttpOverrides.global = previous;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets(
+      'traffic samples only the running visible home tab and pauses in background',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 2));
+    expect(trafficReads, greaterThan(0));
+    await tester.tap(find.text('代理'));
+    await tester.pumpAndSettle();
+    final panelReads = trafficReads;
+    await tester.pump(const Duration(seconds: 4));
+    expect(trafficReads, panelReads);
+    // Status remains necessary on visible tabs for external stop / reconnect.
+    final visibleStatusReads = statusReads;
+    await tester.pump(const Duration(seconds: 1));
+    expect(statusReads, greaterThan(visibleStatusReads));
+    await tester.tap(find.text('首页'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+    expect(trafficReads, greaterThan(panelReads));
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    final backgroundTraffic = trafficReads;
+    final backgroundStatus = statusReads;
+    await tester.pump(const Duration(seconds: 10));
+    expect(trafficReads, backgroundTraffic);
+    expect(statusReads, backgroundStatus);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    final resumedReads = trafficReads;
+    await tester.pump(const Duration(seconds: 1));
+    expect(trafficReads - resumedReads, 1); // no duplicate timer after resume
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a full page pauses home sampling and pop resumes one timer',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    final navigator =
+        tester.state<NavigatorState>(find.byType(Navigator).first);
+    unawaited(navigator.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('Covered')))));
+    await tester.pumpAndSettle();
+    final coveredTraffic = trafficReads;
+    final coveredStatus = statusReads;
+    await tester.pump(const Duration(seconds: 10));
+    expect(trafficReads, coveredTraffic);
+    expect(statusReads, coveredStatus);
+    navigator.pop();
+    await tester.pumpAndSettle();
+    final afterPop = trafficReads;
+    await tester.pump(const Duration(seconds: 1));
+    expect(trafficReads - afterPop, 1);
+    running = false;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    final stoppedReads = trafficReads;
+    await tester.pump(const Duration(seconds: 3));
+    expect(trafficReads, stoppedReads);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('open panel follows an external stop and reconnect',
@@ -231,6 +304,23 @@ void main() {
             of: find.byType(GridView), matching: find.text('Node A'));
         final second = find.descendant(
             of: find.byType(GridView), matching: find.text('Node B'));
+        expect(tester.widget<Text>(first).style!.fontWeight, FontWeight.normal);
+        expect(
+            tester.widget<Text>(second).style!.fontWeight, FontWeight.normal);
+        final selectedSemantics = tester.widget<Semantics>(find
+            .ancestor(
+                of: first,
+                matching: find.byWidgetPredicate(
+                    (w) => w is Semantics && w.properties.selected != null))
+            .first);
+        final otherSemantics = tester.widget<Semantics>(find
+            .ancestor(
+                of: second,
+                matching: find.byWidgetPredicate(
+                    (w) => w is Semantics && w.properties.selected != null))
+            .first);
+        expect(selectedSemantics.properties.selected, isTrue);
+        expect(otherSemantics.properties.selected, isFalse);
         expect(tester.getTopLeft(first).dy, tester.getTopLeft(second).dy);
         expect(tester.getTopLeft(second).dx,
             greaterThan(tester.getTopLeft(first).dx));

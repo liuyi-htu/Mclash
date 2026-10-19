@@ -14,6 +14,15 @@ object TProxyService {
         System.loadLibrary("hev-socks5-tunnel")
     }
 
+    @Volatile
+    var onExit: ((Int) -> Unit)? = null
+
+    @Keep
+    @JvmStatic
+    fun tunnelExited(code: Int) {
+        onExit?.invoke(code)
+    }
+
     @Keep
     external fun TProxyStartService(configPath: String, fd: Int): Boolean
 

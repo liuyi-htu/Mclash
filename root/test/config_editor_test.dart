@@ -158,7 +158,7 @@ void main() {
     expect(find.text('当前运行配置'), findsOneWidget);
     expect(find.text('保存'), findsNothing);
     running = false;
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     field = tester.widget<TextField>(find.byType(TextField));
     expect(field.readOnly, isFalse);

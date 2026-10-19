@@ -24,9 +24,15 @@ internal object MihomoProcess {
 
     @Volatile
     private var process: Process? = null
+    private var processCommand: List<String>? = null
 
     @Synchronized
-    fun start(context: Context, importedConfig: File, cancelled: () -> Boolean = { false }): Int {
+    fun start(
+        context: Context,
+        importedConfig: File,
+        cancelled: () -> Boolean = { false },
+        onExit: (Int) -> Unit = {},
+    ): Int {
         require(importedConfig.isFile && importedConfig.length() > 0) {
             "mihomo 配置不存在或为空"
         }
@@ -79,6 +85,8 @@ internal object MihomoProcess {
         errorReader?.join(1000)
         synchronized(recentErrors) { recentErrors.clear() }
         val next = processBuilder.start()
+        process = next
+        processCommand = processBuilder.command().toList()
         if (!debugLoggingEnabled) {
             errorReader = Thread({
                 runCatching {
@@ -94,7 +102,11 @@ internal object MihomoProcess {
             }, "mihomo-error-reader").apply { isDaemon = true; start() }
         }
 
-        process = next
+        next.outputStream.close()
+        Thread({
+            val code = next.waitFor()
+            if (process === next) onExit(code)
+        }, "mihomo-exit-waiter").apply { isDaemon = true; start() }
         try {
             waitForPort(
                 process = next,
@@ -124,7 +136,7 @@ internal object MihomoProcess {
                 cancelled = cancelled,
             )
         } catch (error: Throwable) {
-            stop()
+            runCatching { stop() }.onFailure(error::addSuppressed)
             throw error
         }
         return LOCAL_PROXY_PORT
@@ -149,10 +161,12 @@ internal object MihomoProcess {
         val candidate = File.createTempFile("validate-", ".yaml", home)
         val diagnostics = File.createTempFile("validate-", ".log", home)
         var validator: Process? = null
+        var validatorCommand: List<String>? = null
         try {
             prepareRuntimeConfig(source, home, AppPreferences(context).vpnIpv6Enabled, false, candidate)
             val binary = File(context.applicationInfo.nativeLibraryDir, "libmihomo.so")
-            validator = ProcessBuilder(binary.absolutePath, "-t", "-d", home.absolutePath, "-f", candidate.absolutePath)
+            validatorCommand = listOf(binary.absolutePath, "-t", "-d", home.absolutePath, "-f", candidate.absolutePath)
+            validator = ProcessBuilder(validatorCommand)
                 .directory(home).redirectErrorStream(true).redirectOutput(diagnostics).start()
             check(validator.waitFor(30, TimeUnit.SECONDS)) { "配置校验超时，原配置未修改" }
             check(validator.exitValue() == 0) {
@@ -160,22 +174,27 @@ internal object MihomoProcess {
                     diagnostics.readText().takeLast(32768)
             }
         } finally {
-            validator?.let { if (it.isAlive) { it.destroyForcibly(); it.waitFor(2, TimeUnit.SECONDS) } }
-            candidate.delete()
-            diagnostics.delete()
+            try {
+                validator?.let { child ->
+                    ProcessCleanup.terminate(child, gracefulSeconds = 0,
+                        forceFallback = { AndroidProcessTermination.killOwnedChild(child, checkNotNull(validatorCommand)) })
+                }
+            } finally {
+                candidate.delete()
+                diagnostics.delete()
+            }
         }
     }
 
     @Synchronized
     fun stop() {
         val current = process ?: return
+        ProcessCleanup.terminate(current,
+            forceFallback = { AndroidProcessTermination.killOwnedChild(current, checkNotNull(processCommand)) })
+        errorReader?.join(1000)
+        errorReader = null
         process = null
-        if (!current.isAlive) return
-        current.destroy()
-        if (!current.waitFor(3, TimeUnit.SECONDS)) {
-            current.destroyForcibly()
-            current.waitFor(2, TimeUnit.SECONDS)
-        }
+        processCommand = null
     }
 
     fun isRunning(): Boolean = process?.isAlive == true

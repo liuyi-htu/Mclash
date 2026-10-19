@@ -9,7 +9,7 @@ internal object RootShell {
         .redirectErrorStream(true).start()
 
     fun run(script: String, timeoutSeconds: Long = 30): String {
-        val process = start(script)
+        val process = start("timeout -s KILL $timeoutSeconds /system/bin/sh -c ${quote(script)}")
         val output = StringBuilder()
         val reader = Thread({
             runCatching {
@@ -24,7 +24,7 @@ internal object RootShell {
             }
         }, "root-shell-output").apply { isDaemon = true; start() }
         try {
-            check(process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            check(process.waitFor(timeoutSeconds + 2, TimeUnit.SECONDS)) {
                 "Root 命令超时，请检查 su 授权"
             }
             reader.join(1000)
@@ -39,7 +39,7 @@ internal object RootShell {
     fun requireRoot(): String = run("""
         set -eu
         [ "${'$'}(id -u)" = 0 ] || { echo '请授予 Mclash Root 超级用户权限'; exit 1; }
-        for tool in ip iptables ip6tables iptables-restore ip6tables-restore dumpsys sed awk tr grep sort timeout nohup setsid; do
+        for tool in ip iptables ip6tables iptables-restore ip6tables-restore dumpsys sed awk tr grep sort timeout nohup setsid mkfifo cmp readlink chown mv; do
             command -v "${'$'}tool" >/dev/null || { echo "缺少命令：${'$'}tool"; exit 1; }
         done
         iptables -w 5 -t mangle -S OUTPUT >/dev/null || { echo '无法访问 IPv4 mangle 表'; exit 1; }

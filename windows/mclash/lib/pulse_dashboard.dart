@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'pulse_icons.dart';
+import 'glass_style.dart';
 
 PreferredSizeWidget pulseAppBar(BuildContext context,
     {String badge = '',
@@ -113,7 +114,14 @@ class PulseDashboard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: colors.primaryContainer,
+                    color: colors.surfaceContainerLow,
+                    border: Border.all(color: colors.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFF828282).withValues(alpha: .2),
+                          blurRadius: 14,
+                          offset: const Offset(0, 3))
+                    ],
                     borderRadius: BorderRadius.circular(20)),
                 child: Row(children: [
                   Expanded(
@@ -141,8 +149,11 @@ class PulseDashboard extends StatelessWidget {
                     toggled: running,
                     child: Material(
                         key: const ValueKey('service-toggle'),
+                        elevation: running && !busy ? 3 : 0,
+                        shadowColor:
+                            const Color(0xFF828282).withValues(alpha: .2),
                         color: running && !busy
-                            ? colors.primary
+                            ? pulseGlassFill(context)
                             : colors.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(16),
                         child: IconButton(
@@ -162,7 +173,7 @@ class PulseDashboard extends StatelessWidget {
                                         strokeWidth: 2, color: colors.primary))
                                 : PulseIcon(Icons.power_settings_new,
                                     color: running
-                                        ? colors.onPrimary
+                                        ? colors.primary
                                         : colors.onSurfaceVariant))),
                   ),
                 ]),
@@ -184,14 +195,13 @@ class PulseDashboard extends StatelessWidget {
                         value: download,
                         total: downloadTotal == null
                             ? null
-                            : '↓ 本次 $downloadTotal')),
+                            : '本次 $downloadTotal')),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _SpeedCard(
                         label: '上传速度',
                         value: upload,
-                        total:
-                            uploadTotal == null ? null : '↑ 本次 $uploadTotal')),
+                        total: uploadTotal == null ? null : '本次 $uploadTotal')),
               ]),
               const SizedBox(height: 12),
             ]));
@@ -225,8 +235,11 @@ class PulseModeControl extends StatelessWidget {
                         child: Opacity(
                             opacity: onChanged == null ? .4 : 1,
                             child: Material(
+                                elevation: mode == item.$1 ? 3 : 0,
+                                shadowColor: const Color(0xFF828282)
+                                    .withValues(alpha: .2),
                                 color: mode == item.$1
-                                    ? colors.primaryContainer
+                                    ? pulseGlassFill(context)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(11),
                                 child: InkWell(
@@ -239,19 +252,15 @@ class PulseModeControl extends StatelessWidget {
                                             const BoxConstraints(minHeight: 44),
                                         child: Center(
                                             child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 4),
+                                                padding: const EdgeInsets.symmetric(
+                                                    vertical: 4),
                                                 child: Text(item.$2,
                                                     style: TextStyle(
                                                         fontSize: 13,
                                                         height: 1.45,
-                                                        fontWeight: mode == item.$1
-                                                            ? FontWeight.w600
-                                                            : FontWeight.w400,
-                                                        color: mode == item.$1
-                                                            ? colors.primary
-                                                            : colors.onSurfaceVariant)))))))))),
+                                                        fontWeight:
+                                                            mode == item.$1 ? FontWeight.w600 : FontWeight.w400,
+                                                        color: mode == item.$1 ? colors.primary : colors.onSurfaceVariant)))))))))),
               ],
             ])));
   }

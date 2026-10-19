@@ -34,6 +34,8 @@ class MihomoRecoveryTest {
             fun process(pid: Int, comm: String, directory: String, binary: String = "/data/app/example/lib/arm64/libmihomo.so"): File {
                 val folder = File(proc, pid.toString()).apply { mkdirs() }
                 File(folder, "comm").writeText("$comm\n")
+                File(folder, "stat").writeText("$pid ($comm) S 1 " + "0 ".repeat(17) + "777 0\n")
+                File(folder, "status").writeText("Uid:\t0\t0\t0\t0\n")
                 return File(folder, "cmdline").apply {
                     writeText("$binary\u0000-d\u0000$directory\u0000-f\u0000runtime.yaml\u0000")
                 }

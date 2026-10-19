@@ -32,6 +32,14 @@ internal class AppPreferences(context: Context) {
         get() = preferences.getBoolean(KEY_DEBUG_LOGGING_ENABLED, false)
         set(value) = preferences.edit().putBoolean(KEY_DEBUG_LOGGING_ENABLED, value).apply()
 
+    var hideFromRecents: Boolean
+        get() = preferences.getBoolean("hide_from_recents", false)
+        set(value) {
+            check(preferences.edit().putBoolean("hide_from_recents", value).commit()) {
+                "无法保存最近任务设置"
+            }
+        }
+
     var delayTestUrl: String
         get() {
             val stored = preferences.getString(KEY_DELAY_TEST_URL, DEFAULT_DELAY_TEST_URL)

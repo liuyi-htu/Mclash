@@ -143,11 +143,13 @@ void main() {
   late _Controller controller;
   HttpOverrides? previous;
   var running = true;
+  var failStop = false;
   final rememberedModes = <String>[];
   final nativeCalls = <String>[];
 
   setUp(() {
     running = true;
+    failStop = false;
     rememberedModes.clear();
     nativeCalls.clear();
     previous = HttpOverrides.current;
@@ -156,6 +158,9 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       nativeCalls.add(call.method);
+      if (call.method == 'stop' && failStop) {
+        throw PlatformException(code: 'stop_failed', message: 'cleanup failed');
+      }
       if (call.method == 'rememberProxyMode') {
         if (controller.failPersistence) throw StateError('storage unavailable');
         rememberedModes.add(call.arguments['mode'] as String);
@@ -243,6 +248,62 @@ void main() {
     });
   }
 
+  testWidgets(
+      'traffic samples only on home and all polling pauses in background or a covered page',
+      (tester) async {
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    int traffic() => nativeCalls.where((m) => m == 'getTrafficStats').length;
+    int status() => nativeCalls.where((m) => m == 'getProxyStatus').length;
+    final initial = traffic();
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(traffic(), greaterThan(initial));
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    final settingsTraffic = traffic();
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(traffic(), settingsTraffic);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    final pausedStatus = status();
+    await tester.pump(const Duration(seconds: 9));
+    expect(status(), pausedStatus);
+    expect(traffic(), settingsTraffic);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    final navigator = Navigator.of(tester.element(find.byType(Scaffold).first));
+    navigator.push<void>(MaterialPageRoute(
+        builder: (_) => const Scaffold(body: Text('covered'))));
+    await tester.pumpAndSettle();
+    final coveredStatus = status();
+    await tester.pump(const Duration(seconds: 9));
+    await tester.pumpAndSettle();
+    expect(status(), coveredStatus);
+    navigator.pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('首页'));
+    await tester.pumpAndSettle();
+    expect(traffic(), greaterThan(settingsTraffic));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('failed stop keeps the independently running core selected',
+      (tester) async {
+    failStop = true;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('停止服务'));
+    await tester.pumpAndSettle();
+    expect(nativeCalls, contains('stop'));
+    expect(find.byTooltip('停止服务'), findsOneWidget);
+    expect(find.byTooltip('启动服务'), findsNothing);
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('open panel follows an external stop and reconnect',
       (tester) async {
     await tester.pumpWidget(const MclashApp());
@@ -253,13 +314,13 @@ void main() {
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
         true);
     running = false;
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
     expect(
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
         false);
     running = true;
-    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
     expect(
         tester.widget<ProxyPanelPage>(find.byType(ProxyPanelPage)).proxyRunning,
@@ -336,6 +397,23 @@ void main() {
             of: find.byType(GridView), matching: find.text('Node A'));
         final second = find.descendant(
             of: find.byType(GridView), matching: find.text('Node B'));
+        expect(tester.widget<Text>(first).style!.fontWeight, FontWeight.normal);
+        expect(
+            tester.widget<Text>(second).style!.fontWeight, FontWeight.normal);
+        final selectedSemantics = tester.widget<Semantics>(find
+            .ancestor(
+                of: first,
+                matching: find.byWidgetPredicate(
+                    (w) => w is Semantics && w.properties.selected != null))
+            .first);
+        final otherSemantics = tester.widget<Semantics>(find
+            .ancestor(
+                of: second,
+                matching: find.byWidgetPredicate(
+                    (w) => w is Semantics && w.properties.selected != null))
+            .first);
+        expect(selectedSemantics.properties.selected, isTrue);
+        expect(otherSemantics.properties.selected, isFalse);
         expect(tester.getTopLeft(first).dy, tester.getTopLeft(second).dy);
         expect(tester.getTopLeft(second).dx,
             greaterThan(tester.getTopLeft(first).dx));
@@ -445,7 +523,7 @@ void main() {
     expect(selectedMode(tester), isNot(contains('rule')));
     expect(selectedMode(tester), isEmpty);
     for (var i = 0; i < 3; i++) {
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
     }
     expect(selectedMode(tester), {'global'});
@@ -463,7 +541,7 @@ void main() {
     await tester.pumpAndSettle();
     for (final mode in ['global', 'direct', 'rule']) {
       controller.mode = mode;
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
       expect(selectedMode(tester), {mode});
     }
@@ -488,7 +566,7 @@ void main() {
     await tester.pumpWidget(const MclashApp());
     await tester.pumpAndSettle();
     controller.pendingModeRead = Completer<Map<String, Object>>();
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pump();
     await tester.tap(find.text('全局'));
     await tester.pumpAndSettle();
