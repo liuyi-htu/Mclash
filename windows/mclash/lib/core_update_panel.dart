@@ -1,3 +1,4 @@
+import 'settings_sheet.dart';
 import 'dialog_typography.dart';
 import 'package:flutter/material.dart';
 
@@ -123,11 +124,8 @@ class CoreUpdateDialogContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DialogTypography(
-          child: AlertDialog(
-        alignment: Alignment.center,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: SettingsSheetContent(
         title: const Text('更新内核', style: TextStyle(fontSize: 18)),
-        contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
         content:
             SizedBox(width: 400, child: SingleChildScrollView(child: panel)),
       ));

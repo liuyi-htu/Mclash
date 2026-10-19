@@ -39,6 +39,7 @@
 #include "hev-socks5-session-udp.h"
 
 #include "hev-socks5-tunnel.h"
+#include "hev-jni.h"
 
 enum
 {
@@ -736,6 +737,9 @@ hev_socks5_tunnel_run (void)
     hev_task_run (task_lwip_timer, lwip_timer_task_entry, NULL);
 
     WRITE_ONCE (run, 1);
+#if defined(ANDROID) && defined(ENABLE_LIBRARY)
+    hev_jni_tunnel_ready ();
+#endif
     hev_task_system_run ();
 
     return 0;

@@ -332,6 +332,12 @@ class NativeProxyService {
     return await _channel.invokeMethod<bool>('getDebugLoggingEnabled') ?? false;
   }
 
+  Future<bool> getHideFromRecents() async =>
+      await _channel.invokeMethod<bool>('getHideFromRecents') ?? false;
+
+  Future<void> setHideFromRecents(bool enabled) => _channel.invokeMethod<void>(
+      'setHideFromRecents', <String, Object>{'enabled': enabled});
+
   Future<String> getDelayResults() async {
     return await _channel.invokeMethod<String>('getDelayResults') ?? '{}';
   }

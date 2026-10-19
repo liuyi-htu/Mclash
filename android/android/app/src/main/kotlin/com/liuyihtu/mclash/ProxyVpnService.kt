@@ -17,29 +17,29 @@ import hev.htproxy.TProxyService
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledFuture
 
 class ProxyVpnService : VpnService() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val worker = Executors.newSingleThreadExecutor()
-
     private val logMaintenance = Executors.newSingleThreadScheduledExecutor()
+    private var logMaintenanceTask: ScheduledFuture<*>? = null
 
-    private var tunDescriptor: ParcelFileDescriptor? = null
-    private var tunnelStarted = false
+    private var latestStartId = 0
+    private var cleanupQueued = false
+    private var cleanupComplete = false
+    private var cleanupRequest: VpnLifecycle.StopRequest? = null
+    private var destroyed = false
+    private var session = 0
     private var activeConfigName = "未命名配置"
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        logMaintenance.scheduleWithFixedDelay({
-            for (path in listOf("mihomo/mihomo.log", "runtime/hev.log")) {
-                runCatching { DebugLogLimits.trim(File(filesDir, path)) }
-            }
-        }, 0, 2, TimeUnit.SECONDS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
         when (intent?.action) {
             ACTION_STOP -> {
                 requestStop(startId)
@@ -52,31 +52,48 @@ class ProxyVpnService : VpnService() {
     override fun onBind(intent: Intent?): IBinder? = super.onBind(intent)
 
     override fun onDestroy() {
+        destroyed = true
         logMaintenance.shutdownNow()
-        if (running || starting || stopping || MihomoProcess.isRunning()) requestStop(null)
-        worker.shutdown()
+        if (cleanupComplete) {
+            lifecycle.finishStop(success = true, request = cleanupRequest)
+            QuickSettingsTileUpdater.request(this)
+        } else {
+            requestStop(null)
+        }
         super.onDestroy()
     }
 
+    override fun onRevoke() {
+        lifecycle.requestStop()
+        mainHandler.post { requestStop(latestStartId) }
+    }
+
     private fun startProxy() {
-        if (running || starting || stopping) return
+        if (destroyed || running || starting || stopping) return
         lastError = null
-        stopping = false
         try {
             RuntimeEdits.start {
-                starting = true
-                startRequested = false
+                check(lifecycle.beginStart()) { "代理启动已取消或正在停止" }
             }
         } catch (error: Throwable) {
-            startRequested = false
+            lifecycle.cancelStartRequest()
             lastError = error.message
             stopSelf()
             return
         }
+        cleanupComplete = false
+        val currentSession = ++session
         QuickSettingsTileUpdater.request(this)
         StartupLog.reset(this)
         StartupLog.append(this, "收到启动请求；ABI=${Build.SUPPORTED_ABIS.joinToString()}")
-        startForeground(NOTIFICATION_ID, buildNotification("正在启动 mihomo"))
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification("正在启动 mihomo"))
+        } catch (error: Throwable) {
+            lastError = "无法启动前台 VPN 服务：${error.message}"
+            StartupLog.append(this, lastError.orEmpty())
+            requestStop(latestStartId)
+            return
+        }
 
         worker.execute {
             try {
@@ -90,6 +107,15 @@ class ProxyVpnService : VpnService() {
                 require(configStore.exists()) { "请先上传配置文件" }
 
                 val preferences = AppPreferences(this)
+                // No periodic disk checks when both native logs are disabled.
+                if (preferences.debugLoggingEnabled) {
+                    logMaintenanceTask = logMaintenance.scheduleWithFixedDelay({
+                        for (path in listOf("mihomo/mihomo.log", "runtime/hev.log")) {
+                            runCatching { DebugLogLimits.trim(File(filesDir, path)) }
+                                .onFailure { StartupLog.append(this, "日志维护失败：${it.message}") }
+                        }
+                    }, 0, 2, TimeUnit.SECONDS)
+                }
                 val vpnMtu = preferences.vpnMtu
                 val tcpBufferSize = preferences.tcpBufferSize
                 val ipv4DnsServers = listOf(VpnDnsRuntime.VPN_DNS_ADDRESS)
@@ -109,7 +135,11 @@ class ProxyVpnService : VpnService() {
 
                 // Start official mihomo first, while the process still has an ordinary network route.
                 StartupLog.append(this, "开始启动官方 mihomo")
-                val socksPort = MihomoProcess.start(this, configStore.configFile) { stopping }
+                val socksPort = MihomoProcess.start(
+                    this, configStore.configFile,
+                    cancelled = { stopping },
+                    onExit = { code -> componentExited(currentSession, "mihomo 已退出：code=$code") },
+                )
                 StartupLog.append(this, "mihomo 已监听 127.0.0.1:$socksPort")
                 if (stopping) error("启动已取消")
 
@@ -146,6 +176,10 @@ class ProxyVpnService : VpnService() {
                     this,
                     "启动 HevSocks5Tunnel：config=${hevConfig.absolutePath}, fd=${tun.fd}",
                 )
+                TProxyService.onExit = { code ->
+                    componentExited(currentSession, "HevSocks5Tunnel 已退出：code=$code")
+                }
+                tunnelListenerInstalled = true
                 check(TProxyService.TProxyStartService(hevConfig.absolutePath, tun.fd)) {
                     "HevSocks5Tunnel 启动失败"
                 }
@@ -153,11 +187,15 @@ class ProxyVpnService : VpnService() {
                 StartupLog.append(this, "HevSocks5Tunnel 启动调用完成")
 
                 if (stopping) error("启动已取消")
-                running = true
-                starting = false
-                QuickSettingsTileUpdater.request(this)
-                StartupLog.append(this, "代理启动完成")
                 mainHandler.post {
+                    if (destroyed || stopping || currentSession != session) return@post
+                    if (!MihomoProcess.isRunning() || !TProxyService.TProxyIsRunning()) {
+                        componentExited(currentSession, "原生组件在启动完成前退出")
+                        return@post
+                    }
+                    if (!lifecycle.finishStart()) return@post
+                    QuickSettingsTileUpdater.request(this)
+                    StartupLog.append(this, "代理启动完成（Hev 初始化就绪）")
                     val manager = getSystemService(NotificationManager::class.java)
                     manager.notify(
                         NOTIFICATION_ID,
@@ -171,14 +209,9 @@ class ProxyVpnService : VpnService() {
                     "启动失败：${error.javaClass.name}: ${error.message}\n" +
                         error.stackTraceToString(),
                 )
-                running = false
-                starting = false
-                QuickSettingsTileUpdater.request(this)
-                stopNativeComponents()
-                mainHandler.post {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                }
+                // Keep admission closed until queued cleanup has completed.
+                lifecycle.requestStop()
+                mainHandler.post { requestStop(latestStartId) }
             }
         }
     }
@@ -248,68 +281,95 @@ class ProxyVpnService : VpnService() {
     }
 
     private fun applyPerAppFilter(builder: Builder, preferences: AppPreferences) {
-        val selected = preferences.selectedPackages
-            .filterNot { it == packageName }
-            .sorted()
-
-        when (preferences.appProxyMode) {
-            AppPreferences.MODE_EXCLUDE_SELECTED -> {
-                // The mihomo child process shares this app UID. Excluding this package prevents a VPN loop.
-                addDisallowedSafely(builder, packageName)
-                selected.forEach { addDisallowedSafely(builder, it) }
-            }
-            else -> {
-                // The app itself is absent from the allow list, so mihomo's outbound sockets bypass the VPN.
-                selected.forEach { addAllowedSafely(builder, it) }
-            }
-        }
+        PerAppFilter.apply(
+            onlySelected = preferences.appProxyMode != AppPreferences.MODE_EXCLUDE_SELECTED,
+            selected = preferences.selectedPackages,
+            ownPackage = packageName,
+            // Some Android/OEM Builders accept stale names without throwing.
+            // Check installation explicitly; successful Builder calls alone are insufficient.
+            isInstalled = { name ->
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        packageManager.getApplicationInfo(name, PackageManager.ApplicationInfoFlags.of(0))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        packageManager.getApplicationInfo(name, 0)
+                    }
+                    true
+                } catch (_: PackageManager.NameNotFoundException) { false }
+            },
+            allow = { name ->
+                try { builder.addAllowedApplication(name); true }
+                catch (_: PackageManager.NameNotFoundException) { false }
+            },
+            disallow = { name ->
+                try { builder.addDisallowedApplication(name); true }
+                catch (_: PackageManager.NameNotFoundException) { false }
+            },
+        )
     }
 
-    private fun addAllowedSafely(builder: Builder, packageName: String) {
-        try {
-            builder.addAllowedApplication(packageName)
-        } catch (_: PackageManager.NameNotFoundException) {
-            // Ignore stale package names.
-        }
-    }
-
-    private fun addDisallowedSafely(builder: Builder, packageName: String) {
-        try {
-            builder.addDisallowedApplication(packageName)
-        } catch (_: PackageManager.NameNotFoundException) {
-            // Ignore stale package names.
+    private fun componentExited(currentSession: Int, message: String) {
+        mainHandler.post {
+            if (destroyed || stopping || currentSession != session || (!starting && !running)) return@post
+            lastError = message
+            StartupLog.append(this, message)
+            requestStop(latestStartId)
         }
     }
 
     private fun requestStop(startId: Int?) {
-        startRequested = false
-        stopping = true
+        cleanupRequest = lifecycle.requestStop()
         QuickSettingsTileUpdater.request(this)
-        if (worker.isShutdown) return
+        if (cleanupQueued || worker.isShutdown) return
+        cleanupQueued = true
         worker.execute {
-            StartupLog.append(this, "收到停止请求")
-            stopNativeComponents()
-            running = false
-            starting = false
-            stopping = false
-            QuickSettingsTileUpdater.request(this)
+            StartupLog.append(this, "收到停止请求：startId=$startId")
+            val failure = runCatching { stopNativeComponents() }.exceptionOrNull()
             mainHandler.post {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                if (startId != null) stopSelfResult(startId)
+                cleanupQueued = false
+                if (failure != null) {
+                    lastError = "代理清理失败：${failure.message}"
+                    StartupLog.append(this, "$lastError\n${failure.stackTraceToString()}")
+                    // Preserve stopping and resource handles for an explicit retry.
+                } else {
+                    cleanupComplete = true
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    // A successful stopSelfResult schedules onDestroy. Keep admission closed
+                    // until that old Service instance can no longer cancel a new start.
+                    if (destroyed || !stopSelfResult(latestStartId)) {
+                        lifecycle.finishStop(success = true, request = cleanupRequest)
+                    }
+                }
+                QuickSettingsTileUpdater.request(this)
             }
         }
     }
 
-    @Synchronized
     private fun stopNativeComponents() {
+        val failures = mutableListOf<Throwable>()
+        // Do not initialize a failed/missing JNI library during rollback.
+        if (tunnelListenerInstalled) {
+            runCatching { TProxyService.onExit = null; tunnelListenerInstalled = false }
+                .onFailure { failures += it }
+        }
         if (tunnelStarted) {
             logTunnelStats()
-            runCatching { TProxyService.TProxyStopService() }
-            tunnelStarted = false
+            runCatching {
+                check(TProxyService.TProxyStopService()) { "Hev 原生线程停止失败" }
+                tunnelStarted = false
+            }.onFailure { failures += it }
         }
-        runCatching { tunDescriptor?.close() }
-        tunDescriptor = null
-        runCatching { MihomoProcess.stop() }
+        // Closing TUN also removes the VPN route when another component fails.
+        runCatching { tunDescriptor?.close(); tunDescriptor = null }.onFailure { failures += it }
+        runCatching { MihomoProcess.stop() }.onFailure { failures += it }
+        logMaintenanceTask?.cancel(false)
+        logMaintenanceTask = null
+        if (failures.isNotEmpty()) {
+            val error = IllegalStateException(failures.joinToString("；") { it.message ?: it.javaClass.simpleName })
+            failures.forEach(error::addSuppressed)
+            throw error
+        }
     }
 
     private fun logTunnelStats() {
@@ -364,17 +424,19 @@ class ProxyVpnService : VpnService() {
         const val ACTION_START = "com.liuyihtu.mclash.START"
         const val ACTION_STOP = "com.liuyihtu.mclash.STOP"
 
-        @Volatile
-        var running: Boolean = false
-            private set
+        private val lifecycle = VpnLifecycle()
+        // JNI and Mihomo are process-wide singletons. Keep their handles and serial
+        // worker across Service destruction so a later explicit stop can retry cleanup.
+        private val worker = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "mclash-vpn-worker").apply { isDaemon = true }
+        }
+        private var tunDescriptor: ParcelFileDescriptor? = null
+        private var tunnelStarted = false
+        private var tunnelListenerInstalled = false
 
-        @Volatile
-        var starting: Boolean = false
-            private set
-
-        @Volatile
-        var stopping: Boolean = false
-            private set
+        val running: Boolean get() = lifecycle.phase == VpnLifecycle.Phase.RUNNING
+        val starting: Boolean get() = lifecycle.phase == VpnLifecycle.Phase.STARTING
+        val stopping: Boolean get() = lifecycle.phase == VpnLifecycle.Phase.STOPPING
 
         @Volatile
         var lastError: String? = null
@@ -384,30 +446,31 @@ class ProxyVpnService : VpnService() {
         private const val NOTIFICATION_ID = 1001
         private const val IPV6_TUN_ADDRESS = "fc00::1"
 
-        @Volatile
-        var startRequested: Boolean = false
-            private set
+        val startRequested: Boolean get() = lifecycle.phase == VpnLifecycle.Phase.REQUESTED
 
         fun start(context: android.content.Context) {
             RuntimeEdits.start {
-                check(!stopping) { "代理正在停止，请稍后再启动" }
-                if (running || starting || startRequested) return@start
+                if (!lifecycle.requestStart()) return@start
                 lastError = null
-                startRequested = true
                 try {
                     val intent = Intent(context, ProxyVpnService::class.java).setAction(ACTION_START)
                     ContextCompat.startForegroundService(context, intent)
                 } catch (error: Throwable) {
-                    startRequested = false
+                    lifecycle.cancelStartRequest()
                     throw error
                 }
             }
         }
 
         fun stop(context: android.content.Context) {
-            stopping = true
-            startRequested = false
-            context.startService(Intent(context, ProxyVpnService::class.java).setAction(ACTION_STOP))
+            val previous = lifecycle.requestStop()
+            try {
+                context.startService(Intent(context, ProxyVpnService::class.java).setAction(ACTION_STOP))
+            } catch (error: Throwable) {
+                lifecycle.restoreFailedStopDelivery(previous)
+                lastError = "无法发送停止请求：${error.message}"
+                throw error
+            }
         }
 
         fun clearLastError() {

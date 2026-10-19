@@ -1,4 +1,5 @@
 import '../shared/runtime_config_display.dart';
+import '../shared/page_visibility.dart';
 import '../shared/dialog_typography.dart';
 import 'dart:async';
 
@@ -27,7 +28,10 @@ class ConfigEditorPage extends StatefulWidget {
   State<ConfigEditorPage> createState() => _ConfigEditorPageState();
 }
 
-class _ConfigEditorPageState extends State<ConfigEditorPage> {
+class _ConfigEditorPageState extends State<ConfigEditorPage>
+    with WidgetsBindingObserver, RouteAware {
+  ModalRoute<dynamic>? _observedRoute;
+  bool _routeActive = true;
   final _service = NativeProxyService.instance;
   final _controller = TextEditingController();
   final _jumpController = TextEditingController();
@@ -54,13 +58,15 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   void initState() {
     super.initState();
     _load();
-    _stateTimer =
-        Timer.periodic(const Duration(seconds: 1), (_) => _checkRunningState());
+    WidgetsBinding.instance.addObserver(this);
+    _resumeStateChecks();
   }
 
   @override
   void dispose() {
     _stateTimer?.cancel();
+    rootRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     _searchController.dispose();
     _jumpController.dispose();
@@ -68,8 +74,72 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
     super.dispose();
   }
 
+  void _resumeStateChecks() {
+    _stateTimer?.cancel();
+    if (widget.runtimeView || !_routeActive) return;
+    final state = WidgetsBinding.instance.lifecycleState;
+    if (state != null && state != AppLifecycleState.resumed) return;
+    _stateTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) => _checkRunningState());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is! PageRoute<dynamic>) return;
+    if (route != _observedRoute) {
+      rootRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      rootRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPush() {
+    _routeActive = true;
+  }
+
+  @override
+  void didPop() {
+    _routeActive = false;
+    _stateTimer?.cancel();
+  }
+
+  @override
+  void didPushNext() {
+    _routeActive = false;
+    _stateTimer?.cancel();
+  }
+
+  @override
+  void didPopNext() {
+    _routeActive = true;
+    _checkRunningState();
+    _resumeStateChecks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkRunningState();
+      _resumeStateChecks();
+    } else {
+      _stateTimer?.cancel();
+    }
+  }
+
   Future<void> _checkRunningState() async {
-    if (widget.runtimeView || _loading || _saving || _checkingState) return;
+    if (!_routeActive ||
+        (WidgetsBinding.instance.lifecycleState != null &&
+            WidgetsBinding.instance.lifecycleState !=
+                AppLifecycleState.resumed) ||
+        widget.runtimeView ||
+        _loading ||
+        _saving ||
+        _checkingState) {
+      return;
+    }
     _checkingState = true;
     try {
       final running = await _service.getProxyStatus() != ProxyStatus.stopped;

@@ -148,6 +148,7 @@ internal object HotspotRules {
     }
 
     fun cleanup(): String = buildString {
+        appendLine(HotspotOffload.functions())
         for ((tool, table, chain) in chains + ipv6Chains) {
             val hook = if (table == "filter") "FORWARD" else "PREROUTING"
             appendLine("while $tool -w 5 -t $table -C $hook -j $chain 2>/dev/null; do")
@@ -156,6 +157,7 @@ internal object HotspotRules {
             appendLine("$tool -w 5 -t $table -F $chain 2>/dev/null")
             appendLine("$tool -w 5 -t $table -X $chain 2>/dev/null")
         }
+        appendLine("offload_cleanup || { echo '共享过滤器清理失败，将重试'; exit 1; }")
     }
 
     fun verifyCleanup(): String = buildString {

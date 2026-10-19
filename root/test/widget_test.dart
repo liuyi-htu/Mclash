@@ -1,3 +1,4 @@
+import 'package:mclash/shared/settings_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,7 @@ void main() {
   String? proxyStatus;
   var rejectLegacyStatus = false;
   var developerModeEnabled = false;
+  final nativeCalls = <String>[];
   var registrationReads = 0;
   var registrationExports = 0;
   bool? savedBypassLan;
@@ -22,6 +24,7 @@ void main() {
     proxyStatus = null;
     rejectLegacyStatus = false;
     developerModeEnabled = false;
+    nativeCalls.clear();
     registrationReads = 0;
     registrationExports = 0;
     savedBypassLan = null;
@@ -37,6 +40,7 @@ void main() {
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      nativeCalls.add(call.method);
       if (call.method == 'isRunning' && rejectLegacyStatus) {
         throw StateError('Status snapshots must not wait for restoration');
       }
@@ -114,6 +118,24 @@ void main() {
     expect(find.text('规则'), findsOneWidget);
   });
 
+  testWidgets('Root settings no longer expose recents hiding', (tester) async {
+    for (final active in [false, true]) {
+      running = active;
+      await tester.pumpWidget(const MclashApp());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('设置'));
+      await tester.pumpAndSettle();
+      expect(find.text('主题'), findsOneWidget);
+      expect(find.text('关于 Mclash Root'), findsOneWidget);
+      expect(find.text('隐藏多任务卡片'), findsNothing);
+      expect(find.byKey(const ValueKey('hide-from-recents')), findsNothing);
+      expect(nativeCalls, isNot(contains('getHideFromRecents')));
+      expect(nativeCalls, isNot(contains('setHideFromRecents')));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    }
+  });
+
   testWidgets('detects restoration state without showing a loading dialog',
       (tester) async {
     proxyStatus = 'starting';
@@ -157,7 +179,8 @@ void main() {
     await tester.tap(find.text('关于 Mclash Root'));
     await tester.pumpAndSettle();
     final title = find.descendant(
-        of: find.byType(AlertDialog), matching: find.text('Mclash Root'));
+        of: find.byType(SettingsSheetContent),
+        matching: find.text('Mclash Root'));
     for (var i = 0; i < 4; i++) {
       await tester.tap(title);
       await tester.pump();

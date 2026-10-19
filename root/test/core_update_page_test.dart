@@ -1,3 +1,4 @@
+import 'package:mclash/shared/settings_sheet.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -69,7 +70,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Builder(
           builder: (context) => TextButton(
-                onPressed: () => showDialog<void>(
+                onPressed: () => showSettingsSheet<void>(
                   context: context,
                   builder: (_) => CoreUpdateDialog(proxyStatus: sharedStatus),
                 ),
@@ -81,7 +82,7 @@ void main() {
     expect(find.text('关闭'), findsNothing);
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(SettingsSheetContent), findsNothing);
 
     pending = Completer<Map<String, Object>>();
     await tester.tap(find.text('打开'));
@@ -91,22 +92,23 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.tapAt(const Offset(5, 5));
     await tester.pump();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(SettingsSheetContent), findsOneWidget);
     pending!.complete({'version': 'v1.19.32', 'updated': true});
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(SettingsSheetContent), findsNothing);
   });
 
-  testWidgets('core update stays centered in landscape and scrolls to actions',
+  testWidgets('core update fits landscape and scrolls to actions',
       (tester) async {
     tester.view.physicalSize = const Size(900, 320);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await open(tester, check: false);
-    expect(tester.getCenter(find.byType(AlertDialog)), const Offset(450, 160));
+    expect(tester.getBottomRight(find.byType(SettingsSheetContent)).dy,
+        lessThanOrEqualTo(320));
     await tester.ensureVisible(find.byType(FilledButton));
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();

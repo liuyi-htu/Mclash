@@ -45,12 +45,12 @@ void main() {
     await tester.enterText(field, draft);
     await tester.pump();
     running = true;
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller!.text, draft);
     expect(tester.widget<TextField>(field).readOnly, true);
     running = false;
-    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller!.text, draft);
     expect(tester.widget<TextField>(field).readOnly, false);

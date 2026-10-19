@@ -1,6 +1,7 @@
 package com.liuyihtu.mclash
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -15,21 +16,24 @@ internal object StartupLog {
 
     @Synchronized
     fun reset(context: Context) {
-        if (!enabled(context)) return
-        val target = file(context)
-        target.parentFile?.mkdirs()
-        target.writeText("${timestamp()} debug log reset\n", Charsets.UTF_8)
+        runCatching {
+            if (!enabled(context)) return@runCatching
+            val target = file(context)
+            target.parentFile?.mkdirs()
+            target.writeText("${timestamp()} debug log reset\n", Charsets.UTF_8)
+        }.onFailure { Log.w("Mclash", "无法重置启动日志", it) }
     }
 
     @Synchronized
     fun append(context: Context, message: String) {
-        if (!enabled(context)) return
-
-        val target = file(context)
-        target.parentFile?.mkdirs()
-
-        target.appendText("${timestamp()} $message\n", Charsets.UTF_8)
-        DebugLogLimits.trim(target)
+        // Diagnostics must not abort startup rollback or native resource cleanup.
+        runCatching {
+            if (!enabled(context)) return@runCatching
+            val target = file(context)
+            target.parentFile?.mkdirs()
+            target.appendText("${timestamp()} $message\n", Charsets.UTF_8)
+            DebugLogLimits.trim(target)
+        }.onFailure { Log.w("Mclash", "无法写入启动日志", it) }
     }
 
     @Synchronized

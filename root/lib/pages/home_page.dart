@@ -1,3 +1,5 @@
+import '../shared/settings_sheet.dart';
+import '../shared/page_visibility.dart';
 import '../shared/dialog_typography.dart';
 import '../shared/app_appearance.dart';
 import '../shared/pulse_dashboard.dart';
@@ -27,7 +29,8 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage>
+    with WidgetsBindingObserver, RouteAware {
   final _service = NativeProxyService.instance;
 
   final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
@@ -43,6 +46,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _aboutTitleTapCount = 0;
   DateTime? _lastAboutTitleTap;
   Timer? _trafficTimer;
+  Timer? _statusTimer;
+  ModalRoute<dynamic>? _observedRoute;
+  bool _routeActive = true;
+  bool _pollingReady = false;
   bool _statusChecking = false;
   bool _trafficChecking = false;
   int? _lastRxBytes;
@@ -64,16 +71,61 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _showUsageNoticeIfNeeded();
       await _loadDeveloperMode();
       await _refresh();
+      _pollingReady = true;
       _startTrafficUpdates();
     });
   }
 
   @override
   void dispose() {
-    _trafficTimer?.cancel();
+    _stopPolling();
+    rootRouteObserver.unsubscribe(this);
     _proxyStatus.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is! PageRoute<dynamic>) return;
+    if (route != _observedRoute) {
+      rootRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      rootRouteObserver.subscribe(this, route);
+    }
+  }
+
+  void _stopPolling() {
+    _trafficTimer?.cancel();
+    _trafficTimer = null;
+    _statusTimer?.cancel();
+    _statusTimer = null;
+  }
+
+  @override
+  void didPush() {
+    _routeActive = true;
+  }
+
+  @override
+  void didPop() {
+    _routeActive = false;
+    _stopPolling();
+  }
+
+  @override
+  void didPushNext() {
+    _routeActive = false;
+    _stopPolling();
+  }
+
+  @override
+  void didPopNext() {
+    _routeActive = true;
+    if (_pollingReady) unawaited(_refresh());
+    _startTrafficUpdates();
   }
 
   @override
@@ -82,14 +134,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_refresh());
       _startTrafficUpdates();
     } else {
-      _trafficTimer?.cancel();
-      _trafficTimer = null;
+      _stopPolling();
     }
   }
 
+  bool get _canPoll =>
+      mounted &&
+      _pollingReady &&
+      _routeActive &&
+      (WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
+
   void _startTrafficUpdates() {
-    final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+    if (!_canPoll) return;
+    _statusTimer ??= Timer.periodic(const Duration(seconds: 3), (_) {
+      if (_canPoll) unawaited(_pollStatus());
+    });
+    if (_selectedHomeTab != 0 || _status != ProxyStatus.running) {
+      _trafficTimer?.cancel();
+      _trafficTimer = null;
       return;
     }
     if (_trafficTimer?.isActive ?? false) return;
@@ -98,9 +161,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _lastTrafficSample = null;
     unawaited(_updateTrafficSpeed());
     _trafficTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _updateTrafficSpeed(),
-    );
+        const Duration(seconds: 1), (_) => _updateTrafficSpeed());
   }
 
   Future<void> _pollStatus() async {
@@ -110,10 +171,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       final status =
           await _service.getProxyStatus().timeout(const Duration(seconds: 5));
-      if (!mounted || _toggling || generation != _transitionGeneration) return;
+      if (!_canPoll || _toggling || generation != _transitionGeneration) return;
       final previous = _status;
       setState(() => _status = status);
-      if (status == ProxyStatus.running) {
+      _startTrafficUpdates();
+      if (status == ProxyStatus.running &&
+          (_selectedHomeTab == 0 || _selectedHomeTab == 3)) {
         unawaited(_loadProxyMode());
       } else if (previous != status) {
         _proxyModeGeneration++;
@@ -127,11 +190,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _updateTrafficSpeed() async {
-    if (_trafficChecking) return;
+    if (!_canPoll ||
+        _selectedHomeTab != 0 ||
+        _status != ProxyStatus.running ||
+        _trafficChecking) {
+      return;
+    }
     _trafficChecking = true;
     try {
-      unawaited(_pollStatus());
       final stats = await _service.getTrafficStats();
+      if (!_canPoll || _selectedHomeTab != 0) return;
       final now = DateTime.now();
       final rx = stats['rxBytes'] ?? 0;
       final tx = stats['txBytes'] ?? 0;
@@ -332,9 +400,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         }
         _debugLoggingEnabled = debugLoggingEnabled;
       });
-      if (status == ProxyStatus.running) {
+      if (status == ProxyStatus.running &&
+          _routeActive &&
+          (_selectedHomeTab == 0 || _selectedHomeTab == 3) &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed)) {
         unawaited(_loadProxyMode());
-      } else if (!_toggling) {
+      } else if (!_toggling && status != ProxyStatus.running) {
         _proxyModeGeneration++;
         setState(() => _proxyMode = null);
       }
@@ -343,6 +416,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _showError(error);
     } finally {
       _refreshInProgress = false;
+      _startTrafficUpdates();
     }
   }
 
@@ -530,7 +604,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }) {
     final colors = Theme.of(context).colorScheme;
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       leading: Container(
         width: 36,
         height: 36,
@@ -591,24 +664,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       var bypassLan = current.bypassLan;
       var ipv6 = current.ipv6;
       var saving = false;
-      await showDialog<void>(
+      await showSettingsSheet<void>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => PopScope(
             canPop: !saving,
             child: DialogTypography(
-                child: AlertDialog(
+                child: SettingsSheetContent(
               title: Text('代理模式',
                   style: Theme.of(dialogContext)
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontSize: 18)),
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
               content: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   SegmentedButton<String>(
@@ -763,20 +830,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     final buildSuffix =
         packageInfo.buildNumber.isEmpty ? '' : '+${packageInfo.buildNumber}';
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       builder: (dialogContext) => DialogTypography(
-          child: AlertDialog(
+          child: SettingsSheetContent(
         title: Text('关于',
             style: Theme.of(dialogContext)
                 .textTheme
                 .titleMedium
                 ?.copyWith(fontSize: 18)),
-        scrollable: true,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,36 +948,36 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _loadProxyMode();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _status = ProxyStatus.stopped);
-      _showError(error);
+      // An operation error does not mean the independent Root core has stopped.
+      try {
+        final actual =
+            await _service.getProxyStatus().timeout(const Duration(seconds: 5));
+        if (mounted) setState(() => _status = actual);
+      } catch (_) {
+        // Keep the transitional state until the next authoritative sample.
+      }
+      if (mounted) _showError(error);
     } finally {
       _toggling = false;
+      if (mounted) _startTrafficUpdates();
     }
   }
 
   Future<void> _showDebugLogSettings() async {
     var enabled = _debugLoggingEnabled;
 
-    final action = await showDialog<String>(
+    final action = await showSettingsSheet<String>(
       context: context,
       builder: (dialogContext) => ValueListenableBuilder<ProxyStatus>(
         valueListenable: _proxyStatus,
         builder: (_, status, child) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: Text('调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontSize: 18)),
-            scrollable: true,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SizedBox(
               width: 400,
               child: Column(
@@ -1002,23 +1064,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _confirmClearDebugLogs() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsSheet<bool>(
           context: context,
           builder: (dialogContext) => DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: Text('清除调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontSize: 18)),
-            scrollable: true,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: const Text(
               '将清空 App 启动日志、mihomo 日志和最近一次启动错误。'
               '此操作不会删除配置文件。',
@@ -1067,19 +1121,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final log = await _service.getDebugLog(name);
       if (!mounted) return;
 
-      await showDialog<void>(
+      await showSettingsSheet<void>(
         context: context,
         builder: (dialogContext) => DialogTypography(
-            child: AlertDialog(
+            child: SettingsSheetContent(
           title: Text(name,
               style: Theme.of(dialogContext)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontSize: 18)),
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ConstrainedBox(
@@ -1143,7 +1193,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     void handleDestination(int index) {
       if (index == _selectedHomeTab) return;
       setState(() => _selectedHomeTab = index);
+      _startTrafficUpdates();
       if (index == 0) _refresh();
+      if (index == 3) unawaited(_loadProxyMode());
     }
 
     return Scaffold(
@@ -1187,14 +1239,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               onRootSettings: _showRootSettings,
               sharingAvailable: _status == ProxyStatus.running,
               onNetworkSharing: () async {
-                await showDialog<void>(
+                await showSettingsSheet<void>(
                   context: context,
                   builder: (_) =>
                       NetworkSharingDialog(proxyStatus: _proxyStatus),
                 );
               },
               onCoreUpdate: () async {
-                await showDialog<void>(
+                await showSettingsSheet<void>(
                   context: context,
                   builder: (_) => CoreUpdateDialog(proxyStatus: _proxyStatus),
                 );

@@ -1,3 +1,4 @@
+import 'package:mclash/settings_sheet.dart';
 import 'package:mclash/pulse_dashboard.dart';
 import 'dart:async';
 
@@ -209,7 +210,7 @@ void main() {
     await tester.tapAt(const Offset(5, 5));
     await tester.binding.handlePopRoute();
     await tester.pump();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(SettingsSheetContent), findsOneWidget);
     expect(service.updates, 1);
     service.updateGate!.complete();
     await tester.pumpAndSettle();
@@ -373,10 +374,11 @@ void main() {
         expect(find.text('更新内核'), findsOneWidget);
         await tester.tap(find.text('常规设置'));
         await tester.pumpAndSettle();
-        final sheet = find.byType(AlertDialog);
+        final sheet = find.byType(SettingsSheetContent);
         expect(sheet, findsOneWidget);
-        expect(find.byType(BottomSheet), findsNothing);
-        expect(tester.getCenter(sheet).dy, closeTo(height / 2, 1));
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(tester.getBottomRight(find.byType(BottomSheet)).dy,
+            closeTo(height, 1));
         expect(
             find.descendant(of: sheet, matching: find.byType(SwitchListTile)),
             findsNWidgets(3));
@@ -393,10 +395,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('更新内核'));
         await tester.pumpAndSettle();
-        expect(find.byType(BottomSheet), findsNothing);
-        expect(find.byType(AlertDialog), findsOneWidget);
-        expect(tester.getCenter(find.byType(AlertDialog)).dy,
-            closeTo(height / 2, 1));
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.byType(SettingsSheetContent), findsOneWidget);
+        expect(tester.getBottomRight(find.byType(BottomSheet)).dy,
+            closeTo(height, 1));
         expect(find.text('检测版本'), findsOneWidget);
         for (final button in [
           find.widgetWithText(OutlinedButton, '检测版本'),

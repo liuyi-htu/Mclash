@@ -1,3 +1,5 @@
+import '../shared/settings_sheet.dart';
+import '../shared/page_visibility.dart';
 import '../shared/dialog_typography.dart';
 import '../shared/app_appearance.dart';
 import '../shared/pulse_dashboard.dart';
@@ -26,19 +28,35 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage>
+    with WidgetsBindingObserver, RouteAware {
   final _service = NativeProxyService.instance;
 
   final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
   ProxyStatus get _status => _proxyStatus.value;
-  set _status(ProxyStatus value) => _proxyStatus.value = value;
+  set _status(ProxyStatus value) {
+    if (value != ProxyStatus.running) {
+      _lastRxBytes = null;
+      _lastTxBytes = null;
+      _lastTrafficSample = null;
+      _downloadBytesPerSecond = 0;
+      _uploadBytesPerSecond = 0;
+    }
+    _proxyStatus.value = value;
+  }
+
   bool _refreshInProgress = false;
   ConfigInfo _config = const ConfigInfo(exists: false);
   bool _debugLoggingEnabled = false;
   bool _developerModeEnabled = false;
+  bool _hideFromRecents = false;
+  bool _recentsLoaded = false;
+  bool _savingRecents = false;
   int _aboutTitleTapCount = 0;
   DateTime? _lastAboutTitleTap;
   Timer? _trafficTimer;
+  PageRoute<dynamic>? _observedRoute;
+  bool _routeActive = true;
   bool _statusChecking = false;
   bool _trafficChecking = false;
   int? _lastRxBytes;
@@ -59,6 +77,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _showUsageNoticeIfNeeded();
       await _loadDeveloperMode();
+      await _loadRecentsVisibility();
       await _refresh();
       _startTrafficUpdates();
     });
@@ -67,9 +86,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _trafficTimer?.cancel();
+    vpnRouteObserver.unsubscribe(this);
     _proxyStatus.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _observedRoute) {
+      vpnRouteObserver.unsubscribe(this);
+      _observedRoute = route;
+      vpnRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPushNext() {
+    _routeActive = false;
+    _trafficTimer?.cancel();
+    _trafficTimer = null;
+  }
+
+  @override
+  void didPopNext() {
+    _routeActive = true;
+    unawaited(_refresh());
+    _startTrafficUpdates();
+  }
+
+  bool get _canPoll {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return mounted &&
+        _routeActive &&
+        (state == null || state == AppLifecycleState.resumed);
   }
 
   @override
@@ -84,10 +136,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _startTrafficUpdates() {
-    final lifecycleState = WidgetsBinding.instance.lifecycleState;
-    if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
-      return;
-    }
+    if (!_canPoll) return;
     if (_trafficTimer?.isActive ?? false) return;
     _lastRxBytes = null;
     _lastTxBytes = null;
@@ -100,13 +149,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _pollStatus() async {
-    if (_statusChecking || _toggling || !mounted) return;
+    if (_statusChecking || _toggling || !_canPoll || _refreshInProgress) return;
     _statusChecking = true;
     final generation = _transitionGeneration;
     try {
       final status =
           await _service.getProxyStatus().timeout(const Duration(seconds: 5));
-      if (!mounted || _toggling || generation != _transitionGeneration) return;
+      if (!_canPoll || _toggling || generation != _transitionGeneration) return;
       final previous = _status;
       setState(() => _status = status);
       if (status == ProxyStatus.running && previous != status) {
@@ -120,11 +169,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _updateTrafficSpeed() async {
-    if (_trafficChecking) return;
+    if (_trafficChecking || !_canPoll) return;
     _trafficChecking = true;
     try {
       unawaited(_pollStatus());
+      if (_selectedHomeTab != 0 || _status != ProxyStatus.running) return;
+      final generation = _transitionGeneration;
       final stats = await _service.getTrafficStats();
+      if (!_canPoll ||
+          _selectedHomeTab != 0 ||
+          _status != ProxyStatus.running ||
+          generation != _transitionGeneration) {
+        return;
+      }
       final now = DateTime.now();
       final rx = stats['rxBytes'] ?? 0;
       final tx = stats['txBytes'] ?? 0;
@@ -174,6 +231,69 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {
       // Developer options remain hidden if the native preference is unavailable.
     }
+  }
+
+  Future<void> _loadRecentsVisibility() async {
+    try {
+      final hidden = await _service.getHideFromRecents();
+      if (!mounted) return;
+      setState(() {
+        _hideFromRecents = hidden;
+        _recentsLoaded = true;
+      });
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<bool> _setHideFromRecents(bool hidden) async {
+    if (!_recentsLoaded || _savingRecents) return false;
+    setState(() => _savingRecents = true);
+    try {
+      await _service.setHideFromRecents(hidden);
+      if (mounted) setState(() => _hideFromRecents = hidden);
+      return true;
+    } catch (error) {
+      if (mounted) _showError(error);
+      return false;
+    } finally {
+      if (mounted) setState(() => _savingRecents = false);
+    }
+  }
+
+  Future<void> _showRecentsSettings() async {
+    var hidden = _hideFromRecents;
+    var saving = false;
+    await showSettingsSheet<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => DialogTypography(
+          child: SettingsSheetContent(
+            title: const Text('隐藏多任务卡片'),
+            content: SizedBox(
+              width: 400,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('启用隐藏'),
+                value: hidden,
+                onChanged: saving
+                    ? null
+                    : (value) async {
+                        setDialogState(() => saving = true);
+                        final saved = await _setHideFromRecents(value);
+                        if (!dialogContext.mounted) return;
+                        setDialogState(() {
+                          if (saved) hidden = value;
+                          saving = false;
+                        });
+                      },
+                key: const ValueKey('hide-from-recents'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showUsageNoticeIfNeeded() async {
@@ -486,7 +606,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }) {
     final colors = Theme.of(context).colorScheme;
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       leading: Container(
         width: 36,
         height: 36,
@@ -524,22 +643,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       var bypassLan = current.bypassLan;
       String? validationMessage;
 
-      final save = await showDialog<bool>(
+      final save = await showSettingsSheet<bool>(
             context: context,
             builder: (dialogContext) => StatefulBuilder(
               builder: (dialogContext, setDialogState) => DialogTypography(
-                  child: AlertDialog(
+                  child: SettingsSheetContent(
                 title: Text('VPN 参数',
                     style: Theme.of(dialogContext)
                         .textTheme
                         .titleMedium
                         ?.copyWith(fontSize: 18)),
-                insetPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
                 content: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -687,20 +800,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     final buildSuffix =
         packageInfo.buildNumber.isEmpty ? '' : '+${packageInfo.buildNumber}';
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       builder: (dialogContext) => DialogTypography(
-          child: AlertDialog(
+          child: SettingsSheetContent(
         title: Text('关于',
             style: Theme.of(dialogContext)
                 .textTheme
                 .titleMedium
                 ?.copyWith(fontSize: 18)),
-        scrollable: true,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -825,8 +933,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _loadProxyMode();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _status = ProxyStatus.stopped);
-      _showError(error);
+      try {
+        final actualStatus = await _service.getProxyStatus();
+        if (!mounted) return;
+        setState(() => _status = actualStatus);
+      } catch (_) {
+        // Keep the last transition until native state can be read again.
+      }
+      if (mounted) _showError(error);
     } finally {
       _toggling = false;
       _transitionGeneration++;
@@ -836,26 +950,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _showDebugLogSettings() async {
     var enabled = _debugLoggingEnabled;
 
-    final action = await showDialog<String>(
+    final action = await showSettingsSheet<String>(
       context: context,
       builder: (dialogContext) => ValueListenableBuilder<ProxyStatus>(
         valueListenable: _proxyStatus,
         builder: (_, status, child) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: Text('调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontSize: 18)),
-            scrollable: true,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SizedBox(
               width: 400,
               child: Column(
@@ -941,23 +1047,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _confirmClearDebugLogs() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsSheet<bool>(
           context: context,
           builder: (dialogContext) => DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: Text('清除调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontSize: 18)),
-            scrollable: true,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: const Text(
               '将清空 App 启动日志、mihomo 日志和最近一次启动错误。'
               '此操作不会删除配置文件。',
@@ -1006,19 +1104,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       final log = await _service.getDebugLog(name);
       if (!mounted) return;
 
-      await showDialog<void>(
+      await showSettingsSheet<void>(
         context: context,
         builder: (dialogContext) => DialogTypography(
-            child: AlertDialog(
+            child: SettingsSheetContent(
           title: Text(name,
               style: Theme.of(dialogContext)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontSize: 18)),
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ConstrainedBox(
@@ -1082,7 +1176,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     void handleDestination(int index) {
       if (index == _selectedHomeTab) return;
       setState(() => _selectedHomeTab = index);
-      if (index == 0) _refresh();
+      _lastRxBytes = null;
+      _lastTxBytes = null;
+      _lastTrafficSample = null;
+      if (index == 0) {
+        _refresh();
+        unawaited(_updateTrafficSpeed());
+      }
     }
 
     return Scaffold(
@@ -1119,6 +1219,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             ConfigPage(proxyRunning: _status != ProxyStatus.stopped),
             _SettingsPage(
+              hideFromRecents: _hideFromRecents,
+              onRecentsSettings: _recentsLoaded && !_savingRecents
+                  ? _showRecentsSettings
+                  : null,
               developerModeEnabled: _developerModeEnabled,
               onVpnSettings: _showVpnTunnelSettings,
               onAppSelector: _openAppSelector,
@@ -1145,6 +1249,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
 class _SettingsPage extends StatelessWidget {
   const _SettingsPage({
+    required this.hideFromRecents,
+    required this.onRecentsSettings,
     required this.developerModeEnabled,
     required this.onVpnSettings,
     required this.onAppSelector,
@@ -1153,6 +1259,8 @@ class _SettingsPage extends StatelessWidget {
     required this.onAbout,
   });
 
+  final bool hideFromRecents;
+  final VoidCallback? onRecentsSettings;
   final bool developerModeEnabled;
   final Future<void> Function() onVpnSettings;
   final Future<void> Function() onAppSelector;
@@ -1189,6 +1297,11 @@ class _SettingsPage extends StatelessWidget {
         const PulseSectionLabel('外观与应用'),
         PulseSettingsGroup(children: [
           const AppearanceTile(),
+          SettingsCard(
+              icon: Icons.hide_source_rounded,
+              title: '隐藏多任务卡片',
+              subtitle: hideFromRecents ? '已开启' : '已关闭',
+              onTap: onRecentsSettings),
           SettingsCard(
               icon: Icons.info_outline_rounded,
               title: '关于 Mclash',

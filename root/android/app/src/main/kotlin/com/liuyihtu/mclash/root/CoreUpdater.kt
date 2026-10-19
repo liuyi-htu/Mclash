@@ -128,8 +128,7 @@ internal object CoreUpdater {
     }
 
     private fun requireProxyRunning() {
-        check(ProxyTProxyService.running && !ProxyTProxyService.starting &&
-            !ProxyTProxyService.restoring && MihomoProcess.isRunning()) { "请先开启代理再检测或更新内核" }
+        check(!ProxyTProxyService.starting && MihomoProcess.probeRunning()) { "请先开启代理再检测或更新内核" }
     }
 
     private fun <T> request(url: String, block: (HttpURLConnection) -> T): T {

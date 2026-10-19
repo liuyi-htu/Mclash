@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'pulse_icons.dart';
+import 'glass_bottom_bar.dart';
+export 'glass_bottom_bar.dart';
+import 'glass_style.dart';
 
 const _navigationRailMinWidth = 720.0;
 
@@ -128,7 +131,14 @@ class PulseDashboard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: colors.primaryContainer,
+                    color: colors.surfaceContainerLow,
+                    border: Border.all(color: colors.outlineVariant),
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFF828282).withValues(alpha: .2),
+                          blurRadius: 14,
+                          offset: const Offset(0, 3))
+                    ],
                     borderRadius: BorderRadius.circular(20)),
                 child: Row(children: [
                   Expanded(
@@ -156,8 +166,11 @@ class PulseDashboard extends StatelessWidget {
                     toggled: running,
                     child: Material(
                         key: const ValueKey('service-toggle'),
+                        elevation: running && !busy ? 3 : 0,
+                        shadowColor:
+                            const Color(0xFF828282).withValues(alpha: .2),
                         color: running && !busy
-                            ? colors.primary
+                            ? pulseGlassFill(context)
                             : colors.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(16),
                         child: IconButton(
@@ -177,7 +190,7 @@ class PulseDashboard extends StatelessWidget {
                                         strokeWidth: 2, color: colors.primary))
                                 : PulseIcon(Icons.power_settings_new,
                                     color: running
-                                        ? colors.onPrimary
+                                        ? colors.primary
                                         : colors.onSurfaceVariant))),
                   ),
                 ]),
@@ -199,14 +212,13 @@ class PulseDashboard extends StatelessWidget {
                         value: download,
                         total: downloadTotal == null
                             ? null
-                            : '↓ 本次 $downloadTotal')),
+                            : '本次 $downloadTotal')),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _SpeedCard(
                         label: '上传速度',
                         value: upload,
-                        total:
-                            uploadTotal == null ? null : '↑ 本次 $uploadTotal')),
+                        total: uploadTotal == null ? null : '本次 $uploadTotal')),
               ]),
               const SizedBox(height: 12),
             ]));
@@ -240,8 +252,11 @@ class PulseModeControl extends StatelessWidget {
                         child: Opacity(
                             opacity: onChanged == null ? .4 : 1,
                             child: Material(
+                                elevation: mode == item.$1 ? 3 : 0,
+                                shadowColor: const Color(0xFF828282)
+                                    .withValues(alpha: .2),
                                 color: mode == item.$1
-                                    ? colors.primaryContainer
+                                    ? pulseGlassFill(context)
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(11),
                                 child: InkWell(
@@ -254,19 +269,15 @@ class PulseModeControl extends StatelessWidget {
                                             const BoxConstraints(minHeight: 44),
                                         child: Center(
                                             child: Padding(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 4),
+                                                padding: const EdgeInsets.symmetric(
+                                                    vertical: 4),
                                                 child: Text(item.$2,
                                                     style: TextStyle(
                                                         fontSize: 13,
                                                         height: 1.45,
-                                                        fontWeight: mode == item.$1
-                                                            ? FontWeight.w600
-                                                            : FontWeight.w400,
-                                                        color: mode == item.$1
-                                                            ? colors.primary
-                                                            : colors.onSurfaceVariant)))))))))),
+                                                        fontWeight:
+                                                            mode == item.$1 ? FontWeight.w600 : FontWeight.w400,
+                                                        color: mode == item.$1 ? colors.primary : colors.onSurfaceVariant)))))))))),
               ],
             ])));
   }
@@ -323,75 +334,6 @@ class _Speed extends StatelessWidget {
           overflow: TextOverflow.ellipsis),
       const SizedBox(height: 4),
     ]);
-  }
-}
-
-class PulseBottomBar extends StatelessWidget {
-  const PulseBottomBar(
-      {super.key, required this.index, required this.onSelected});
-  final int index;
-  final ValueChanged<int> onSelected;
-  static const icons = [
-    Icons.home_outlined,
-    Icons.hub_outlined,
-    Icons.inventory_2_outlined,
-    Icons.settings_outlined
-  ];
-  static const labels = ['首页', '代理', '配置', '设置'];
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-        decoration: BoxDecoration(
-            color: colors.surfaceContainerLow,
-            border: Border(top: BorderSide(color: colors.outlineVariant))),
-        child: SafeArea(
-            top: false,
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(6, 7, 6, 9),
-                child: Row(children: [
-                  for (var i = 0; i < labels.length; i++)
-                    Expanded(
-                        child: Semantics(
-                            selected: index == i,
-                            button: true,
-                            child: InkWell(
-                                onTap: () => onSelected(i),
-                                child: Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 5),
-                                    child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                              width: 48,
-                                              height: 28,
-                                              alignment: Alignment.center,
-                                              decoration: BoxDecoration(
-                                                  color: index == i
-                                                      ? colors.primaryContainer
-                                                      : Colors.transparent,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          15)),
-                                              child: PulseIcon(icons[i],
-                                                  color: index == i
-                                                      ? colors.primary
-                                                      : colors
-                                                          .onSurfaceVariant)),
-                                          const SizedBox(height: 3),
-                                          Text(labels[i],
-                                              style: TextStyle(
-                                                  fontSize: 11,
-                                                  height: 1.45,
-                                                  color: index == i
-                                                      ? colors.primary
-                                                      : colors.onSurfaceVariant,
-                                                  fontWeight: index == i
-                                                      ? FontWeight.w600
-                                                      : FontWeight.w400)),
-                                        ])))))
-                ]))));
   }
 }
 

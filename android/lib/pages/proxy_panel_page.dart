@@ -1,3 +1,4 @@
+import '../shared/glass_style.dart';
 import '../shared/dialog_typography.dart';
 import '../shared/pulse_dashboard.dart';
 import '../shared/app_appearance.dart';
@@ -917,9 +918,8 @@ class _ProxyGroupButton extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     var tapOrigin = MediaQuery.sizeOf(context).center(Offset.zero);
 
-    return Material(
-      color: pulsePanelCardColor(context),
-      shape: pulsePanelCardShape(context),
+    return GlassSurface(
+      proxy: true,
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTapDown: (details) => tapOrigin = details.globalPosition,
@@ -1023,54 +1023,56 @@ class _NodeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final background =
-        pulsePanelCardColor(context, selected: selected, unselectedTint: .30);
     final foreground = selected ? colors.primary : colors.onSurface;
 
-    return Material(
-      color: background,
-      shape: pulsePanelCardShape(context, selected: selected),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  name,
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-              Row(
+    return Semantics(
+        selected: selected,
+        button: true,
+        child: GlassSurface(
+          proxy: true,
+          selected: selected,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _DelayText(delay: delay, selected: selected),
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        height: 1.45,
+                      ),
+                    ),
                   ),
-                  Icon(
-                    selected
-                        ? Icons.check_circle_rounded
-                        : Icons.flash_on_rounded,
-                    size: 19,
-                    color: selected ? colors.primary : colors.onSurfaceVariant,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DelayText(delay: delay, selected: selected),
+                      ),
+                      Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.flash_on_rounded,
+                        size: 19,
+                        color:
+                            selected ? colors.primary : colors.onSurfaceVariant,
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
 

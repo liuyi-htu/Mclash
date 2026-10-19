@@ -56,7 +56,8 @@ internal object MihomoProcess {
 
     @Synchronized
     fun start(context: Context, source: File, rules: String, cancelled: () -> Boolean) {
-        check(!isRunning()) { "Root 代理已在运行" }
+        initialize(context)
+        check(!daemonAlive(home!!)) { "Root 代理已在运行" }
         val directory = prepare(context)
         val core = binary(context)
         val config = File(directory, "runtime.yaml").apply { writeText(previewConfig(context, source)) }
@@ -77,81 +78,11 @@ internal object MihomoProcess {
         File(directory, "hotspot-monitor.sh").writeText(RootHotspotMonitor.script(AppPreferences(context).rootBypassLan, ipv6, tun))
         File(directory, "install.sh").apply { writeText(rules) }
         File(directory, "cleanup.sh").apply { writeText(TProxyRules.cleanup()) }
+        File(directory, "sharing-watch.sh").writeText(RootSupervisor.sharingWatcher())
+        File(directory, "log-writer.sh").writeText(RootSupervisor.logWriter())
+        File(directory, "protocol").writeText(RootSupervisor.PROTOCOL)
         val script = File(directory, "supervisor.sh").apply {
-            writeText("""
-                #!/system/bin/sh
-                set -eu
-                umask 077
-                cd ${RootShell.quote(directory.absolutePath)}
-                [ "${'$'}(id -u)" = 0 ] || { echo '未获得 Root 权限'; exit 1; }
-                echo ${'$'}${'$'} > ./supervisor.pid
-                awk '{print ${'$'}22}' /proc/${'$'}${'$'}/stat > ./supervisor.stamp
-                # Never inherit the application's freezer group.
-                if grep -q '/uid_$appUid/' /proc/${'$'}${'$'}/cgroup; then
-                    echo ${'$'}${'$'} > /sys/fs/cgroup/cgroup.procs
-                fi
-                ${if (tun) "! ip link show dev mclash0 >/dev/null 2>&1 || { echo 'mclash0 接口已占用'; exit 1; }" else ""}
-                core_pid=''
-                # Cache rollback before launch; uninstall may remove this directory.
-                cleanup_rules=${'$'}(cat ./cleanup.sh)
-                cleanup() {
-                    trap - EXIT HUP INT TERM
-                    while ! /system/bin/sh -c "${'$'}cleanup_rules"; do
-                        { echo cleanup_failed > ./ready; } 2>/dev/null || true
-                        sleep 2
-                    done
-                    if [ -n "${'$'}core_pid" ]; then
-                        kill "${'$'}core_pid" 2>/dev/null || true
-                        n=0
-                        while kill -0 "${'$'}core_pid" 2>/dev/null && [ "${'$'}n" -lt 30 ]; do
-                            # An exited child remains a zombie until wait reaps it.
-                            # kill -0 alone otherwise forces the entire grace period.
-                            IFS=' ' read -r child_pid child_name child_state child_rest < /proc/"${'$'}core_pid"/stat 2>/dev/null || break
-                            [ "${'$'}child_state" != Z ] || break
-                            sleep 0.1; n=${'$'}((n + 1))
-                        done
-                        kill -9 "${'$'}core_pid" 2>/dev/null || true
-                        wait "${'$'}core_pid" 2>/dev/null || true
-                    fi
-                    chown -R $appUid:$appUid ${RootShell.quote(directory.absolutePath)} 2>/dev/null || true
-                    { echo stopped > ./ready; } 2>/dev/null || true
-                }
-                trap cleanup EXIT
-                trap 'exit 1' HUP INT TERM
-                owner_alive() {
-                    [ ! -f ./stop ] && [ -f ./runtime.yaml ]
-                }
-                ${RootShell.quote(core.absolutePath)} -d ${RootShell.quote(directory.absolutePath)} -f ${RootShell.quote(config.absolutePath)} >> ${RootShell.quote(log.absolutePath)} 2>&1 &
-                core_pid=${'$'}!
-                listener_ready() {
-                    ${if (tun) "ip link show dev mclash0 >/dev/null 2>&1" else "awk '${'$'}2 ~ /:45E2${'$'}/ && ${'$'}4 == \"0A\" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6"} &&
-                    awk '${'$'}2 ~ /:2382${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6
-                }
-                core_alive() {
-                    kill -0 "${'$'}core_pid" 2>/dev/null || return 1
-                    IFS=' ' read -r child_pid child_name child_state child_rest < /proc/"${'$'}core_pid"/stat 2>/dev/null || return 1
-                    [ "${'$'}child_state" != Z ]
-                }
-                n=0
-                while ! listener_ready; do
-                    [ "${'$'}((n % 20))" -ne 0 ] || /system/bin/sh ./log-maintenance.sh || true
-                    owner_alive && core_alive || { echo '启动期间进程退出或被取消'; exit 1; }
-                    [ "${'$'}n" -lt 900 ] || { echo '等待内核监听超时'; exit 1; }
-                    sleep 0.1; n=${'$'}((n + 1))
-                done
-                echo ready > ./ports-ready
-                ${if (ipv6 && !tun) ipv6ListenerCheck() else ""}
-                ${if (tun) "echo 0 > /proc/sys/net/ipv4/conf/mclash0/rp_filter" else ""}
-                /system/bin/sh ./install.sh >> ./supervisor.log 2>&1 || { cat ./supervisor.log; exit 1; }
-                timeout 15 /system/bin/sh ./hotspot-monitor.sh
-                echo ready > ./ready
-                echo 'TPROXY_READY'
-                while owner_alive && core_alive; do
-                    timeout 15 /system/bin/sh ./hotspot-monitor.sh
-                    sleep 2
-                done
-                echo 'Root supervisor stopped; removing routing rules'
-            """.trimIndent() + "\n")
+            writeText(RootSupervisor.script(directory, core, appUid, tun, ipv6))
         }
         lastOutput = ""
         RootShell.run("nohup setsid /system/bin/sh ${RootShell.quote(script.absolutePath)} >> ${RootShell.quote(File(directory, "supervisor.log").absolutePath)} 2>&1 < /dev/null &")
@@ -162,7 +93,10 @@ internal object MihomoProcess {
                 val stamp = File(directory, "supervisor.stamp").readText().trim()
                 if (stamp.isNotEmpty()) check(daemonAlive(directory)) { diagnostics(directory) }
                 check(ready.readText().trim() != "stopped") { diagnostics(directory) }
-                if (ready.readText().trim() == "ready") return
+                if (ready.readText().trim() == "ready") {
+                    lastHealth = true; lastHealthAt = System.nanoTime()
+                    return
+                }
                 Thread.sleep(200)
             }
             error("Root 代理启动超时：\n${diagnostics(directory)}")
@@ -175,7 +109,7 @@ internal object MihomoProcess {
     /** Apply through the supervisor so refresh, stop and rule updates cannot race. */
     @Synchronized
     fun setNetworkSharing(context: Context, enabled: Boolean, interfaces: Set<String>): Map<String, Any> {
-        check(ProxyTProxyService.running && !ProxyTProxyService.starting && isRunning()) {
+        check(!ProxyTProxyService.starting && verifiedRunning(context)) {
             "请先开启代理再设置网络共享"
         }
         require(interfaces.all { it != "lo" && it.matches(Regex("[a-zA-Z0-9_.-]{1,15}")) }) {
@@ -197,15 +131,17 @@ internal object MihomoProcess {
             temporary.writeText(value)
             check(temporary.renameTo(policy)) { "无法保存网络共享设置" }
         }
+        val usesSignals = File(directory, "protocol").takeIf(File::isFile)?.readText()?.trim() == RootSupervisor.PROTOCOL
         write(content)
         try {
+            if (usesSignals) signal(directory, "USR1")
             awaitSharingApplied(directory)
             check(isRunning()) { "代理已停止" }
             settings.saveNetworkSharing(enabled, interfaces)
         } catch (error: Throwable) {
             write(previous)
             runCatching { settings.saveNetworkSharing(oldEnabled, oldInterfaces) }
-            runCatching { awaitSharingApplied(directory) }
+            runCatching { if (usesSignals) signal(directory, "USR1"); awaitSharingApplied(directory) }
             throw error
         }
         return mapOf(
@@ -235,7 +171,8 @@ internal object MihomoProcess {
 
     @Synchronized
     fun networkSharing(context: Context): Map<String, Any> {
-        val active = ProxyTProxyService.running && !ProxyTProxyService.starting && isRunning()
+        initialize(context)
+        val active = !ProxyTProxyService.starting && isRunning()
         val policy = if (active) File(context.filesDir, "mihomo/sharing.policy").takeIf { it.isFile }?.readLines().orEmpty() else emptyList()
         val settings = AppPreferences(context)
         val enabled = if (active) policy.firstOrNull() == "1" else settings.networkSharingEnabled
@@ -262,46 +199,102 @@ internal object MihomoProcess {
         done
     """.trimIndent()
 
-    internal fun identityCheck(directory: File, pid: Int, stamp: String): String = """
-        [ "${'$'}(awk '{print ${'$'}22}' /proc/$pid/stat 2>/dev/null)" = ${RootShell.quote(stamp)} ] &&
-        tr '\000' '\n' < /proc/$pid/cmdline | grep -F -x ${RootShell.quote(File(directory, "supervisor.sh").absolutePath)} >/dev/null
-    """.trimIndent()
+    internal fun identityCheck(directory: File, pid: Int, stamp: String): String =
+        RootProcessIdentity.supervisor(directory, pid, stamp)
 
-    private fun daemonAlive(directory: File): Boolean = runCatching {
+    private fun signal(directory: File, signal: String) {
+        require(signal in setOf("TERM", "USR1"))
         val pid = File(directory, "supervisor.pid").readText().trim().toInt()
         val stamp = File(directory, "supervisor.stamp").readText().trim()
-        check(pid > 1 && stamp.matches(Regex("[0-9]+")))
-        RootShell.run(identityCheck(directory, pid, stamp), 5)
-        true
+        check(pid > 1 && stamp.matches(Regex("[0-9]+"))) { "Root 进程身份无效" }
+        RootShell.run(RootProcessIdentity.functions() + "\nif " + RootProcessIdentity.supervisorCheck(directory, pid, stamp) +
+            "; then " + (if (signal == "TERM")
+                "printf 'stopping\\n' > ${RootShell.quote(File(directory, "ready.control.tmp").absolutePath)}; " +
+                "chown ${android.os.Process.myUid()}:${android.os.Process.myUid()} ${RootShell.quote(File(directory, "ready.control.tmp").absolutePath)}; " +
+                "mv -f ${RootShell.quote(File(directory, "ready.control.tmp").absolutePath)} ${RootShell.quote(File(directory, "ready").absolutePath)}; " else "") +
+            "kill -$signal $pid; else echo 'Root 进程身份已变化'; exit 1; fi", 5)
+    }
+
+    fun initialize(context: Context) { home = File(context.filesDir, "mihomo") }
+    fun hasCleanupFailure(): Boolean = home?.let {
+        File(it, "ready").takeIf(File::isFile)?.readText()?.trim() == "cleanup_failed"
+    } ?: false
+
+    fun verifiedRunning(context: Context): Boolean {
+        initialize(context)
+        return daemonAlive(home!!)
+    }
+
+    fun requireStopped(context: Context) {
+        initialize(context)
+        check(!ProxyTProxyService.starting && !ProxyTProxyService.tileStopPending && !verifiedRunning(context) && !hasCleanupFailure()) {
+            "请先停止代理并完成规则清理，再修改配置或设置"
+        }
+    }
+
+    @Volatile private var lastOwnerAlive: Boolean? = null
+    private fun daemonAlive(directory: File): Boolean {
+        val identity = runCatching {
+            File(directory, "supervisor.pid").readText().trim().toInt() to
+                File(directory, "supervisor.stamp").readText().trim()
+        }.getOrNull()
+        if (identity == null || identity.first <= 1 || !identity.second.matches(Regex("[0-9]+"))) {
+            lastOwnerAlive = false
+            return false
+        }
+        // A root authorization/command failure must reject mutations, not masquerade as a stopped daemon.
+        val result = RootShell.run(RootProcessIdentity.functions() + "\nif " +
+            RootProcessIdentity.supervisorCheck(directory, identity.first, identity.second) +
+            "; then printf alive; else printf absent; fi", 5).trim() == "alive"
+        lastOwnerAlive = result
+        return result
+    }
+
+    @Volatile private var lastHealthAt = 0L
+    @Volatile private var lastHealth = false
+    /** Read-only UI hint. Root identity is always revalidated before mutations. */
+    fun isRunning(): Boolean = runCatching {
+        val directory = home ?: return false
+        lastOwnerAlive != false && lastHealth && File(directory, "ready").takeIf(File::isFile)?.readText()?.trim() in setOf("ready", "stopping", "cleanup_failed")
     }.getOrDefault(false)
 
-    fun isRunning(): Boolean = home?.let(::daemonAlive) == true
+    fun status(starting: Boolean, stopping: Boolean): String {
+        val marker = home?.let { File(it, "ready").takeIf(File::isFile)?.readText()?.trim() }
+        return rootProxyStatus(marker, starting, stopping, probeRunning(), lastOwnerAlive)
+    }
+
+    /** Called on a native worker, never the Android main thread. */
+    fun probeRunning(): Boolean = runCatching {
+        val directory = home ?: return false
+        // attach() already verified ownership once on resume. Do not let open
+        // ports of an orphan core undo that result or spawn su on UI refreshes.
+        if (lastOwnerAlive == false) {
+            lastHealth = false; lastHealthAt = 0; return false
+        }
+        if (File(directory, "ready").takeIf(File::isFile)?.readText()?.trim() !in setOf("ready", "stopping", "cleanup_failed")) {
+            lastHealth = false; lastHealthAt = 0; return false
+        }
+        val now = System.nanoTime()
+        if (now - lastHealthAt > 2_000_000_000L) {
+            lastHealth = canConnect(RootRuntimeConfig.CONTROLLER_PORT) && canConnect(RootRuntimeConfig.MIXED_PORT)
+            lastHealthAt = now
+        }
+        lastHealth
+    }.getOrDefault(false)
 
     @Synchronized
     fun attach(context: Context): Boolean {
-        val directory = File(context.filesDir, "mihomo")
-        home = directory
-        val active = File(directory, "ready").takeIf { it.isFile }?.readText()?.trim() == "ready" &&
-            daemonAlive(directory) && canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)
-        if (active) {
-            File(directory, "log-maintenance.sh").writeText(DebugLogLimits.maintenanceScript())
-            val settings = AppPreferences(context)
-            val policy = File(directory, "sharing.policy")
-            val monitor = File(directory, "hotspot-monitor.sh")
-            val existing = monitor.takeIf { it.isFile }?.readText().orEmpty()
-            val legacy = !policy.isFile || !existing.contains("./sharing.policy")
-            if (legacy) {
-                // Upgrade a live supervisor from automatic hotspot interception.
-                policy.writeText(HotspotRules.sharingPolicy(settings.networkSharingEnabled, settings.sharedInterfaces))
-            }
-            val expected = RootHotspotMonitor.script(settings.rootBypassLan, settings.rootIpv6, settings.rootProxyMode == "tun")
-            if (existing != expected) {
-                // Refresh fixes even when the app reconnects to an existing supervisor.
-                val temporary = File(directory, "hotspot-monitor.sh.tmp")
-                temporary.writeText(expected)
-                check(temporary.renameTo(monitor)) { "无法更新网络共享监控" }
-            }
-            if (legacy) awaitSharingApplied(directory)
+        initialize(context)
+        val directory = home!!
+        // Always verify ownership, including transitional markers from a prior app process.
+        val ownerAlive = daemonAlive(directory)
+        val marker = File(directory, "ready").takeIf { it.isFile }?.readText()?.trim()
+        val active = ownerAlive && marker in setOf("ready", "cleanup_failed") &&
+            canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)
+        lastHealth = active
+        lastHealthAt = System.nanoTime()
+        if (active && File(directory, "protocol").takeIf(File::isFile)?.readText()?.trim() != RootSupervisor.PROTOCOL) {
+            StartupLog.append(context, "已连接旧版 Root 守护进程；下次手动停止并启动后启用低功耗 Supervisor")
         }
         return active
     }
@@ -310,48 +303,49 @@ internal object MihomoProcess {
     fun stop(): Boolean {
         val directory = home ?: return false
         if (!daemonAlive(directory)) return false
-        File(directory, "stop").writeText("stop")
-        val deadline = System.currentTimeMillis() + 30_000
+        // Older installed supervisors only watch the stop file. Never rewrite a
+        // running supervisor's script or mistake it for the new signal protocol.
+        if (File(directory, "protocol").takeIf(File::isFile)?.readText()?.trim() == RootSupervisor.PROTOCOL) {
+            signal(directory, "TERM")
+        } else {
+            File(directory, "stop").writeText("stop")
+        }
+        val deadline = System.currentTimeMillis() + 90_000
         while (System.currentTimeMillis() < deadline) {
-            if (File(directory, "ready").readText().trim() == "stopped" && !daemonAlive(directory)) return true
-            Thread.sleep(200)
+            when (File(directory, "ready").readText().trim()) {
+                "cleanup_failed" -> error("Root 规则清理失败，请重试停止或恢复")
+                "stopped" -> if (!daemonAlive(directory)) { lastHealth = false; lastHealthAt = 0; return true }
+            }
+            Thread.sleep(100)
         }
         error("Root 清理尚未完成，请检查启动日志")
     }
 
     fun recover(context: Context): String {
-        check(!isRunning()) { "请先停止代理" }
+        initialize(context)
+        check(!daemonAlive(home!!)) { "请先停止代理" }
         val directory = prepare(context)
-        File(directory, "stop").writeText("stop")
-        val oldPid = File(directory, "supervisor.pid").takeIf { it.isFile }
-            ?.readText()?.trim()?.toIntOrNull()
-        if (oldPid != null && oldPid > 1) {
-            val scriptPath = RootShell.quote(File(directory, "supervisor.sh").absolutePath)
-            RootShell.run("""
-                set -eu
-                n=0
-                while [ -r /proc/$oldPid/cmdline ] && tr '\000' '\n' < /proc/$oldPid/cmdline | grep -F -x $scriptPath >/dev/null; do
-                    [ "${'$'}n" -lt 25 ] || { echo '旧 Root 服务尚未退出'; exit 1; }
-                    sleep 1; n=${'$'}((n + 1))
-                done
-            """.trimIndent())
-        }
-        val cleanup = RootShell.run(TProxyRules.cleanup())
-        // A package update or a process-group kill can kill the supervisor before
-        // its trap runs. Only terminate cores using this app's exact data directory.
+        // Keep orphan identification separate from stale state files; never signal
+        // a reused supervisor PID. Cleanup remains scoped to private rules/chains.
+        RootShell.run(RootSupervisor.orphanHelper(directory, "sharing"), 10)
+        val cleanup = RootShell.run("timeout 45 /system/bin/sh -c " + RootShell.quote(TProxyRules.cleanup()), 50)
         RootShell.run(orphanCleanup(directory))
-        File(directory, "ready").writeText("stopped")
+        RootShell.run(RootSupervisor.orphanHelper(directory, "logger"), 10)
+        RootShell.run("rmdir " + RootShell.quote(File(directory, "daemon.lock").absolutePath) + " 2>/dev/null || true")
+        val marker = File(directory, "ready.tmp").apply { writeText("stopped") }
+        check(marker.renameTo(File(directory, "ready")))
+        lastHealth = false; lastHealthAt = 0
         return cleanup
     }
 
-    internal fun orphanCleanup(directory: File): String = """
+    internal fun orphanCleanup(directory: File): String = RootProcessIdentity.functions() + """
         set -eu
         for entry in /proc/[0-9]*/cmdline; do
             [ -r "${'$'}entry" ] || continue
             # Shell builtins avoid spawning tr/grep for every Android process.
             IFS= read -r name < "${'$'}{entry%/cmdline}/comm" 2>/dev/null || continue
             [ "${'$'}name" = libmihomo.so ] || continue
-            args=${'$'}(tr '\000' '\n' < "${'$'}entry" 2>/dev/null) || continue
+            args=${'$'}(timeout -s KILL 1 tr '\000' '\n' < "${'$'}entry" 2>/dev/null) || continue
             printf '%s\n' "${'$'}args" | grep -F -x ${RootShell.quote(directory.absolutePath)} >/dev/null || continue
             executable=${'$'}(printf '%s\n' "${'$'}args" | sed -n '1p')
             case "${'$'}executable" in
@@ -359,16 +353,23 @@ internal object MihomoProcess {
                 *) printf '%s\n' "${'$'}executable" | grep -E '^/data/app/.*/lib/[^/]+/libmihomo\.so${'$'}' >/dev/null || continue ;;
             esac
             pid=${'$'}{entry#/proc/}; pid=${'$'}{pid%/cmdline}
+            stamp=${'$'}(proc_stamp "${'$'}pid") || continue
+            owned_core() {
+                same_process "${'$'}pid" "${'$'}stamp" &&
+                timeout -s KILL 1 tr '\000' '\n' < "${'$'}entry" | grep -F -x ${RootShell.quote(directory.absolutePath)} >/dev/null &&
+                [ "${'$'}(timeout -s KILL 1 tr '\000' '\n' < "${'$'}entry" | sed -n '1p')" = "${'$'}executable" ]
+            }
+            owned_core || continue
             kill "${'$'}pid" 2>/dev/null || true
             n=0
-            while kill -0 "${'$'}pid" 2>/dev/null && [ "${'$'}n" -lt 3 ]; do
+            while owned_core && [ "${'$'}n" -lt 3 ]; do
                 sleep 1; n=${'$'}((n + 1))
             done
             # Confirm identity again before SIGKILL; never target a reused PID.
-            if [ -r "${'$'}entry" ] && tr '\000' '\n' < "${'$'}entry" | grep -F -x ${RootShell.quote(directory.absolutePath)} >/dev/null; then
+            if owned_core; then
                 kill -9 "${'$'}pid" 2>/dev/null || true
                 n=0
-                while [ -r "${'$'}entry" ] && tr '\000' '\n' < "${'$'}entry" | grep -F -x ${RootShell.quote(directory.absolutePath)} >/dev/null; do
+                while owned_core; do
                     [ "${'$'}n" -lt 3 ] || { echo '残留内核未能停止'; exit 1; }
                     sleep 1; n=${'$'}((n + 1))
                 done

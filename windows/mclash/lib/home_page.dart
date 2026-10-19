@@ -1,3 +1,4 @@
+import 'settings_sheet.dart';
 import 'dialog_typography.dart';
 import 'core_update_panel.dart';
 import 'app_appearance.dart';
@@ -491,7 +492,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showGeneralSettings() async {
     if (!_canEditSettings) return;
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) => AnimatedBuilder(
@@ -500,14 +501,13 @@ class _HomePageState extends State<HomePage> {
         builder: (_, child) => PopScope(
           canPop: !_settingsBusy.value,
           child: DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: const Text('常规设置'),
             content: SizedBox(
               width: 440,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.power_settings_new_rounded),
                     title: const Text('开机自启'),
                     value: _serviceAutoStartEnabled,
@@ -523,7 +523,6 @@ class _HomePageState extends State<HomePage> {
                             }),
                   ),
                   SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.language_rounded),
                     title: const Text('启用 IPv6'),
                     subtitle: const Text('允许代理内核使用 IPv6 网络'),
@@ -538,7 +537,6 @@ class _HomePageState extends State<HomePage> {
                             }),
                   ),
                   SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4),
                     secondary: const Icon(Icons.lan_outlined),
                     title: const Text('绕过局域网'),
                     subtitle: const Text('局域网和私有地址不经过代理'),
@@ -568,13 +566,13 @@ class _HomePageState extends State<HomePage> {
       (CoreType.mihomo, NetworkMode.tun) => _RunModeChoice.mihomoTun,
       (CoreType.mihomo, NetworkMode.proxy) => _RunModeChoice.mihomoProxy,
     };
-    final selected = await showDialog<_RunModeChoice>(
+    final selected = await showSettingsSheet<_RunModeChoice>(
       context: context,
       builder: (dialogContext) => AnimatedBuilder(
         animation:
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
         builder: (_, child) => DialogTypography(
-            child: AlertDialog(
+            child: SettingsSheetContent(
           title: const Text('选择运行模式'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -613,7 +611,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showCoreUpdate() async {
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       builder: (dialogContext) => AnimatedBuilder(
         animation: Listenable.merge([_statusNotifier, _coreBusy]),
@@ -702,10 +700,10 @@ class _HomePageState extends State<HomePage> {
     final logTitle = _debugLoggingEnabled ? '最近的 update.log' : '调试日志';
     final details = '错误：$error\n\n$logTitle：\n$recentLog';
 
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       builder: (dialogContext) => DialogTypography(
-          child: AlertDialog(
+          child: SettingsSheetContent(
         title: Text('$name 内核更新失败',
             style: Theme.of(dialogContext)
                 .textTheme
@@ -743,20 +741,15 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final buildSuffix =
         packageInfo.buildNumber.isEmpty ? '' : '+${packageInfo.buildNumber}';
-    await showDialog<void>(
+    await showSettingsSheet<void>(
       context: context,
       builder: (dialogContext) => DialogTypography(
-          child: AlertDialog(
+          child: SettingsSheetContent(
         title: Text('关于',
             style: Theme.of(dialogContext)
                 .textTheme
                 .titleMedium
                 ?.copyWith(fontSize: 18)),
-        scrollable: true,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -868,13 +861,13 @@ class _HomePageState extends State<HomePage> {
   void _showOperationWaitDialog(String title, int seconds) {
     _operationDialogOpen = true;
     unawaited(
-      showDialog<void>(
+      showSettingsSheet<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => PopScope(
           canPop: false,
           child: DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             content: Row(
               children: [
                 const CircularProgressIndicator(),
@@ -918,27 +911,19 @@ class _HomePageState extends State<HomePage> {
     }
     if (!mounted) return;
 
-    final action = await showDialog<String>(
+    final action = await showSettingsSheet<String>(
       context: context,
       builder: (dialogContext) => AnimatedBuilder(
         animation:
             Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
         builder: (_, child) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => DialogTypography(
-              child: AlertDialog(
+              child: SettingsSheetContent(
             title: Text('调试日志',
                 style: Theme.of(dialogContext)
                     .textTheme
                     .titleMedium
                     ?.copyWith(fontSize: 18)),
-            scrollable: true,
-            insetPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: SizedBox(
               width: 400,
               child: Column(
@@ -1008,26 +993,18 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _confirmClearDebugLogs() async {
     if (!_canEditSettings) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSettingsSheet<bool>(
           context: context,
           builder: (dialogContext) => AnimatedBuilder(
             animation:
                 Listenable.merge([_statusNotifier, _coreBusy, _settingsBusy]),
             builder: (_, child) => DialogTypography(
-                child: AlertDialog(
+                child: SettingsSheetContent(
               title: Text('清除调试日志',
                   style: Theme.of(dialogContext)
                       .textTheme
                       .titleMedium
                       ?.copyWith(fontSize: 18)),
-              scrollable: true,
-              insetPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-              actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
               content: const Text(
                 '将清空服务日志、mihomo 日志和内核更新日志。'
                 '此操作不会删除配置文件。',
@@ -1065,19 +1042,15 @@ class _HomePageState extends State<HomePage> {
       final log = await _service.getDebugLogContent(file.id);
       if (!mounted) return;
 
-      await showDialog<void>(
+      await showSettingsSheet<void>(
         context: context,
         builder: (dialogContext) => DialogTypography(
-            child: AlertDialog(
+            child: SettingsSheetContent(
           title: Text(file.displayName,
               style: Theme.of(dialogContext)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontSize: 18)),
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: SizedBox(
             width: double.maxFinite,
             child: ConstrainedBox(

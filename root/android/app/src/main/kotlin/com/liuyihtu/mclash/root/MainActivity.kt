@@ -1,6 +1,7 @@
 package com.liuyihtu.mclash.root
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.res.Configuration
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -54,6 +55,22 @@ class MainActivity : FlutterActivity() {
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::preferences.isInitialized) {
+            Thread({ runCatching { MihomoProcess.attach(this) } }, "root-resume-probe").start()
+            runCatching { restoreRecentTaskVisibility() }
+                .onFailure { StartupLog.append(this, "恢复最近任务显示失败：${it.message}") }
+        }
+    }
+
+    private fun restoreRecentTaskVisibility() {
+        // Clear task flags left by versions with the removed hiding preference.
+        getSystemService(ActivityManager::class.java).appTasks.forEach {
+            it.setExcludeFromRecents(false)
+        }
+    }
+
     override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
         super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
         windowChannel?.invokeMethod("windowChanged", null)
@@ -61,7 +78,7 @@ class MainActivity : FlutterActivity() {
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
-            if (call.method in MUTATING_METHODS) requireProxyStopped()
+            if (call.method in MUTATING_METHODS) require(!ProxyTProxyService.starting && !ProxyTProxyService.running && !MihomoProcess.hasCleanupFailure()) { "请先停止代理再修改配置或设置" }
             when (call.method) {
                 "getAppDataDirectory" -> result.success(filesDir.absolutePath)
                 "getUsageNoticeAccepted" -> result.success(
@@ -148,22 +165,19 @@ class MainActivity : FlutterActivity() {
                     ProxyTProxyService.stop(this)
                     runAsync(result, "root-stop-waiter") {
                         val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
-                        while ((ProxyTProxyService.running || ProxyTProxyService.starting) && System.currentTimeMillis() < deadline) Thread.sleep(100)
-                        check(!ProxyTProxyService.running && !ProxyTProxyService.starting) { "Root 规则清理未完成，请查看日志" }
+                        while ((ProxyTProxyService.running || ProxyTProxyService.starting || ProxyTProxyService.tileStopPending) && System.currentTimeMillis() < deadline) {
+                            ProxyTProxyService.lastError?.let { error(it) }; Thread.sleep(100)
+                        }
+                        ProxyTProxyService.lastError?.let { error(it) }
+                        check(!ProxyTProxyService.running && !ProxyTProxyService.starting && !MihomoProcess.hasCleanupFailure()) { "Root 规则清理未完成，请查看日志" }
                         null
                     }
                 }
                 "restart" -> restartProxy(result)
-                "isRunning" -> result.success(
-                    ProxyTProxyService.running && MihomoProcess.isRunning()
-                )
-                "getProxyStatus" -> result.success(
-                    when {
-                        ProxyTProxyService.starting || ProxyTProxyService.restoring -> "starting"
-                        ProxyTProxyService.running && MihomoProcess.isRunning() -> "running"
-                        else -> "stopped"
-                    }
-                )
+                "isRunning" -> runAsync(result, "root-status") { MihomoProcess.probeRunning() }
+                "getProxyStatus" -> runAsync(result, "root-status") {
+                    MihomoProcess.status(ProxyTProxyService.starting, ProxyTProxyService.tileStopPending)
+                }
                 "getTrafficStats" -> runAsync(result, "root-traffic") {
                     if (!ProxyTProxyService.running) RootTrafficStats.decode(emptyMap())
                     else RootTrafficStats.read()
@@ -201,7 +215,7 @@ class MainActivity : FlutterActivity() {
         var previous: String? = null
         try {
             RuntimeEdits.edit({
-                check(ProxyTProxyService.running && !ProxyTProxyService.starting && !ProxyTProxyService.restoring) { "请先开启代理再更新内核" }
+                check(!ProxyTProxyService.starting && MihomoProcess.verifiedRunning(this) && MihomoProcess.probeRunning()) { "请先开启代理再更新内核" }
                 resume = true
                 previous = CoreUpdater.selectionName(this)
             }) {
@@ -233,7 +247,7 @@ class MainActivity : FlutterActivity() {
         if (ProxyTProxyService.running || ProxyTProxyService.starting || MihomoProcess.isRunning()) {
             ProxyTProxyService.stop(this)
             val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
-            while ((ProxyTProxyService.running || ProxyTProxyService.starting || MihomoProcess.isRunning()) &&
+            while ((ProxyTProxyService.running || ProxyTProxyService.starting || ProxyTProxyService.tileStopPending) &&
                 System.currentTimeMillis() < deadline) Thread.sleep(100)
         }
         requireProxyStopped()
@@ -268,7 +282,6 @@ class MainActivity : FlutterActivity() {
     )
 
     private fun importConfigs(result: MethodChannel.Result) {
-        requireProxyStopped()
         check(pendingConfigResult == null) { "文件选择器已打开" }
         pendingConfigResult = result
 
@@ -299,7 +312,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun addSubscription(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
         runAsync(result, "mclash-add-subscription") {
@@ -309,7 +321,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun updateSubscription(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
@@ -320,7 +331,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun editSubscriptionAirport(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         runAsync(result, "mclash-edit-airport") {
             configStore.editSubscriptionAirport(id, call.argument<String>("oldUrl"), call.argument<String>("name"),
@@ -330,7 +340,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun refreshSubscription(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         runAsync(result, "mclash-refresh-subscription") {
             configStore.refreshSubscription(id, call.argument<String>("url"))
@@ -344,11 +353,9 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun saveConfigContent(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         val content = call.argument<String>("content") ?: error("配置内容不能为空")
         runAsync(result, "mclash-save-config-content") {
-            requireProxyStopped()
             configStore.saveContent(id, content)
             configStore.listMaps()
         }
@@ -360,41 +367,33 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun selectConfig(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
-        configStore.select(id)
-        result.success(configInfo())
+        runAsync(result, "mclash-selectConfig") { configStore.select(id); configInfo() }
     }
 
     private fun renameConfig(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         val name = call.argument<String>("name") ?: error("配置名称不能为空")
-        configStore.rename(id, name)
-        result.success(configStore.listMaps())
+        runAsync(result, "mclash-renameConfig") { configStore.rename(id, name); configStore.listMaps() }
     }
 
     private fun deleteConfig(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
-        configStore.delete(id)
-        result.success(configStore.listMaps())
+        runAsync(result, "mclash-deleteConfig") { configStore.delete(id); configStore.listMaps() }
     }
 
     private fun saveRootSettings(call: MethodCall, result: MethodChannel.Result) {
-        requireProxyStopped()
-        call.argument<String>("tunStack")?.let { preferences.rootTunStack = it }
-        call.argument<String>("proxyMode")?.let { preferences.rootProxyMode = it }
-        call.argument<Boolean>("bypassLan")?.let { preferences.rootBypassLan = it }
-        call.argument<Boolean>("ipv6")?.let { preferences.rootIpv6 = it }
-        result.success(rootSettings())
+        runAsync(result, "mclash-save-root-settings") {
+            call.argument<String>("tunStack")?.let { preferences.rootTunStack = it }
+            call.argument<String>("proxyMode")?.let { preferences.rootProxyMode = it }
+            call.argument<Boolean>("bypassLan")?.let { preferences.rootBypassLan = it }
+            call.argument<Boolean>("ipv6")?.let { preferences.rootIpv6 = it }
+            rootSettings()
+        }
     }
 
     private fun requireProxyStopped() {
-        require(!ProxyTProxyService.running && !ProxyTProxyService.starting &&
-            !ProxyTProxyService.restoring && !MihomoProcess.isRunning()) {
-            "请先停止代理再修改配置或设置"
-        }
+        MihomoProcess.requireStopped(this)
     }
 
     private fun runAsync(
@@ -450,11 +449,11 @@ class MainActivity : FlutterActivity() {
             val deadline = System.currentTimeMillis() + STOP_TIMEOUT_MS
             while (
                 System.currentTimeMillis() < deadline &&
-                (ProxyTProxyService.running || ProxyTProxyService.starting)
+                (ProxyTProxyService.running || ProxyTProxyService.starting || ProxyTProxyService.tileStopPending)
             ) {
                 Thread.sleep(100)
             }
-            if (ProxyTProxyService.running || ProxyTProxyService.starting) {
+            if (ProxyTProxyService.running || ProxyTProxyService.starting || ProxyTProxyService.tileStopPending || MihomoProcess.hasCleanupFailure() || ProxyTProxyService.lastError != null) {
                 runOnUiThread {
                     result.error("restart_timeout", "代理停止超时，无法应用新配置", null)
                 }
@@ -595,9 +594,11 @@ class MainActivity : FlutterActivity() {
         ) { "未知分应用模式" }
 
         val packages = call.argument<List<String>>("packageNames")?.toSet() ?: emptySet()
-        preferences.appProxyMode = mode
-        preferences.selectedPackages = packages
-        result.success(null)
+        runAsync(result, "mclash-save-app-filter") {
+            preferences.appProxyMode = mode
+            preferences.selectedPackages = packages
+            null
+        }
     }
 
     private fun getInstalledApps(): List<Map<String, Any>> {
@@ -695,6 +696,7 @@ class MainActivity : FlutterActivity() {
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
         )
         private val CONFIG_WRITE_WORKERS = setOf(
+            "mclash-selectConfig", "mclash-renameConfig", "mclash-deleteConfig", "mclash-save-root-settings", "mclash-save-app-filter",
             "mclash-import-configs", "mclash-add-subscription", "mclash-update-subscription",
             "mclash-refresh-subscription", "mclash-edit-airport", "mclash-save-config-content",
         )
@@ -704,6 +706,6 @@ class MainActivity : FlutterActivity() {
         private const val REQUEST_DEVICE_REGISTRATION_EXPORT = 7004
         private const val USAGE_NOTICE_VERSION = 1
         private const val START_TIMEOUT_MS = 200_000L
-        private const val STOP_TIMEOUT_MS = 30_000L
+        private const val STOP_TIMEOUT_MS = 100_000L
     }
 }

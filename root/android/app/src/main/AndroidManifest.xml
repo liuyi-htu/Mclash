@@ -62,11 +62,12 @@
 
         <service
             android:name=".ProxyTProxyService"
+            android:stopWithTask="false"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Root TProxy local traffic routing powered by mihomo" />
+                android:value="Temporary Root proxy start/stop operation; independent mihomo supervisor" />
         </service>
 
         <meta-data

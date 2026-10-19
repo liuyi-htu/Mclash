@@ -1,4 +1,5 @@
 import 'dialog_typography.dart';
+import 'glass_style.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/services.dart';
@@ -14,7 +15,7 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
   final tint = custom
       ? Color.lerp(accent, dark ? const Color(0xFF161A20) : Colors.white, .85)!
       : (dark ? const Color(0xFF283A52) : const Color(0xFFDFEBFB));
-  final background = dark ? const Color(0xFF161A20) : const Color(0xFFF3F6FA);
+  final background = dark ? const Color(0xFF161A20) : Colors.white;
   final colors =
       (dark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
     primary: accent,
@@ -75,9 +76,12 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
     cardTheme: CardThemeData(
         color: colors.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        elevation: 3,
+        shadowColor: const Color(0xFF828282).withValues(alpha: .2),
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+        shape: RoundedRectangleBorder(
+            side: BorderSide(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(20))),
     dividerTheme:
         DividerThemeData(color: colors.outlineVariant, thickness: 1, space: 1),
     iconTheme: IconThemeData(size: 20, color: colors.onSurfaceVariant),
@@ -89,7 +93,12 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
             borderSide: BorderSide.none)),
     navigationRailTheme: NavigationRailThemeData(
         backgroundColor: colors.surfaceContainerLow,
-        indicatorColor: colors.primaryContainer,
+        indicatorColor:
+            const Color(0xFFBEBEBE).withValues(alpha: dark ? .16 : .12),
+        indicatorShape: RoundedRectangleBorder(
+            side: BorderSide(
+                color: const Color(0xFFA0A0A0).withValues(alpha: .16)),
+            borderRadius: BorderRadius.circular(15)),
         selectedLabelTextStyle: TextStyle(
             color: colors.primary, fontSize: 11, fontWeight: FontWeight.w600),
         unselectedLabelTextStyle:
@@ -100,7 +109,7 @@ ThemeData buildPulseTheme(Brightness brightness, {Color? seedColor}) {
 Color pulsePanelCardColor(BuildContext context,
     {bool selected = false, double unselectedTint = .65}) {
   final colors = Theme.of(context).colorScheme;
-  if (selected) return colors.primaryContainer;
+  if (selected) return pulseGlassFill(context);
   return Theme.of(context).brightness == Brightness.dark
       ? colors.surfaceContainerLow
       : Color.lerp(
@@ -128,6 +137,8 @@ class AppearanceController extends ChangeNotifier {
   double fontScale = 1;
   double get effectiveFontScale => fontScale * fontSizeBaseline;
   ThemeMode themeMode = ThemeMode.system;
+  bool floatingBottomBar = false;
+  bool savingFloatingBottomBar = false;
   bool _disposed = false;
   @override
   void dispose() {
@@ -158,6 +169,9 @@ class AppearanceController extends ChangeNotifier {
       final savedColor = data['color'];
       final savedScale = data['fontScale'];
       final savedMode = data['themeMode'];
+      floatingBottomBar = data['floatingBottomBar'] is bool
+          ? data['floatingBottomBar'] as bool
+          : false;
       themeMode = ThemeMode.values.firstWhere(
         (mode) => mode.name == savedMode,
         orElse: () => ThemeMode.system,
@@ -180,11 +194,32 @@ class AppearanceController extends ChangeNotifier {
     }
   }
 
-  void preview({Color? color, double? fontScale, ThemeMode? themeMode}) {
+  void preview(
+      {Color? color,
+      double? fontScale,
+      ThemeMode? themeMode,
+      bool? floatingBottomBar}) {
+    if (floatingBottomBar != null) this.floatingBottomBar = floatingBottomBar;
     if (themeMode != null) this.themeMode = themeMode;
     if (color != null) this.color = color;
     if (fontScale != null) this.fontScale = fontScale.clamp(.7, 1.3);
     notifyListeners();
+  }
+
+  Future<void> setFloatingBottomBar(bool value) async {
+    if (savingFloatingBottomBar || value == floatingBottomBar) return;
+    final previous = floatingBottomBar;
+    savingFloatingBottomBar = true;
+    preview(floatingBottomBar: value);
+    try {
+      await save();
+    } catch (_) {
+      floatingBottomBar = previous;
+      rethrow;
+    } finally {
+      savingFloatingBottomBar = false;
+      if (!_disposed) notifyListeners();
+    }
   }
 
   Future<void> save() {
@@ -192,7 +227,8 @@ class AppearanceController extends ChangeNotifier {
       'color': color.toARGB32(),
       'fontScale': fontScale,
       'fontScaleVersion': 2,
-      'themeMode': themeMode.name
+      'themeMode': themeMode.name,
+      'floatingBottomBar': floatingBottomBar
     });
     final next = _writes.then((_) async {
       final file = await _fileProvider();
@@ -310,6 +346,24 @@ class _AppearanceSheet extends StatelessWidget {
             ),
         ]),
         const SizedBox(height: 16),
+        SwitchListTile.adaptive(
+          key: const ValueKey('floating-bottom-bar'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('悬浮底栏'),
+          value: controller.floatingBottomBar,
+          onChanged: controller.savingFloatingBottomBar
+              ? null
+              : (value) async {
+                  try {
+                    await controller.setFloatingBottomBar(value);
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('主题设置保存失败，请重试')));
+                    }
+                  }
+                },
+        ),
         Text('主题颜色', style: Theme.of(context).textTheme.bodyMedium),
         const SizedBox(height: 12),
         Wrap(spacing: 12, runSpacing: 12, children: [
@@ -367,13 +421,26 @@ class _AppearanceSheet extends StatelessWidget {
         Text('左右拖动，调整所有页面和按钮的字号', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 12),
         TextButton(
-            onPressed: () {
-              controller.preview(
-                  color: AppearanceController.defaultColor,
-                  fontScale: 1,
-                  themeMode: ThemeMode.system);
-              save();
-            },
+            onPressed: controller.savingFloatingBottomBar
+                ? null
+                : () async {
+                    controller.preview(
+                        color: AppearanceController.defaultColor,
+                        fontScale: 1,
+                        themeMode: ThemeMode.system);
+                    if (!controller.floatingBottomBar) {
+                      await save();
+                    } else {
+                      try {
+                        await controller.setFloatingBottomBar(false);
+                      } catch (_) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('主题设置保存失败，请重试')));
+                        }
+                      }
+                    }
+                  },
             child: const Text('恢复默认')),
       ]),
     ));

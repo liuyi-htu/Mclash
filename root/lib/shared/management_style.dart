@@ -46,7 +46,6 @@ class ManagementCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Card(
       margin: EdgeInsets.only(bottom: compact ? 6 : 8),
-      elevation: 0,
       color: Theme.of(context).cardTheme.color ?? colors.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(

@@ -15,6 +15,10 @@ class MclashTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         updateTileState()
+        Thread({
+            runCatching { MihomoProcess.attach(this) }
+            android.os.Handler(android.os.Looper.getMainLooper()).post { updateTileState() }
+        }, "root-tile-probe").start()
     }
 
     override fun onClick() {
@@ -40,6 +44,7 @@ class MclashTileService : TileService() {
     }
 
     private fun updateTileState() {
+        ProxyTProxyService.restore(this)
         val tile = qsTile ?: return
         val store = ConfigStore(this)
         val profile = store.activeProfile()

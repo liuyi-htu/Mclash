@@ -1,4 +1,5 @@
 import 'shared/pulse_icons.dart';
+import 'shared/page_visibility.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'shared/app_appearance.dart';
@@ -39,6 +40,7 @@ class _MclashAppState extends State<MclashApp> {
             controller: _appearance,
             child: MaterialApp(
               title: 'Mclash Root',
+              navigatorObservers: [rootRouteObserver],
               locale: const Locale('zh', 'CN'),
               supportedLocales: const [Locale('zh', 'CN')],
               localizationsDelegates: GlobalMaterialLocalizations.delegates,
