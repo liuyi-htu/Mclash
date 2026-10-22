@@ -49,7 +49,7 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
     final colors = Theme.of(context).colorScheme;
     final floating =
         AppearanceScope.maybeOf(context)?.floatingBottomBar ?? false;
-    final height = math.max(floating ? 46.0 : 44.0,
+    final height = math.max(floating ? 54.0 : 44.0,
         26 + MediaQuery.textScalerOf(context).scale(11) * 1.45);
     final duration =
         _dragPosition != null || MediaQuery.disableAnimationsOf(context)
@@ -62,12 +62,11 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
             EdgeInsets.only(top: floating ? 8 : 0, bottom: floating ? 16 : 0),
         child: LayoutBuilder(builder: (context, constraints) {
           final width = floating
-              ? math.min(310.0,
-                  constraints.maxWidth - (constraints.maxWidth < 360 ? 48 : 64))
+              ? math.min(440.0, constraints.maxWidth - 32)
               : constraints.maxWidth;
           Widget bar = Padding(
             padding: EdgeInsets.symmetric(
-                horizontal: floating ? 14 : 6, vertical: floating ? 14 : 10),
+                horizontal: 6, vertical: floating ? 6 : 10),
             child: LayoutBuilder(builder: (context, inner) {
               final cellWidth = inner.maxWidth / 4;
               final position = _dragPosition ?? widget.index.toDouble();
@@ -105,7 +104,10 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
                                       key: const ValueKey('bottom-glass-scale'),
                                       tween: Tween(
                                           begin: 0,
-                                          end: _dragPosition != null ? 1 : 0),
+                                          end:
+                                              !floating && _dragPosition != null
+                                                  ? 1
+                                                  : 0),
                                       duration: MediaQuery.disableAnimationsOf(context)
                                           ? Duration.zero
                                           : const Duration(milliseconds: 160),
@@ -122,11 +124,7 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
                                                   scaleX: 1 + .22 * progress,
                                                   scaleY: 1 + .6 * progress,
                                                   child: child)),
-                                      child: GlassSurface(
-                                          lifted: _dragPosition != null,
-                                          selected: true,
-                                          radius: floating ? 18 : 15,
-                                          child: const SizedBox.expand()))),
+                                      child: GlassSurface(lifted: _dragPosition != null, selected: true, radius: floating ? height / 2 : 15, child: const SizedBox.expand()))),
                             ),
                             Row(children: [
                               for (var i = 0; i < 4; i++)
@@ -160,7 +158,8 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
                                     child: InkWell(
                                       key: ValueKey('bottom-destination-$i'),
                                       focusNode: _nodes[i],
-                                      borderRadius: BorderRadius.circular(15),
+                                      borderRadius: BorderRadius.circular(
+                                          floating ? height / 2 : 15),
                                       onTap: () {
                                         _nodes[i].requestFocus();
                                         widget.onSelected(i);
@@ -207,7 +206,7 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
                       child: GlassSurface(
                           key: const ValueKey('floating-bottom-surface'),
                           blur: true,
-                          radius: 24,
+                          radius: (height + 12) / 2,
                           child: const SizedBox.shrink())),
                   Material(type: MaterialType.transparency, child: bar),
                 ])

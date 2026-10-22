@@ -102,7 +102,7 @@ void main() {
   });
 
   testWidgets(
-      'drag enlarges the glass itself and restores it on release or cancel',
+      'drag keeps floating selection inset and restores docked enlargement',
       (tester) async {
     final controller = AppearanceController();
     addTearDown(controller.dispose);
@@ -147,8 +147,10 @@ void main() {
         await gesture.moveBy(const Offset(25, 0));
         await gesture.moveBy(const Offset(10, 0));
         await tester.pumpAndSettle();
-        expect(glassBounds().width, closeTo(normal.width * 1.22, .01));
-        expect(glassBounds().height, closeTo(normal.height * 1.6, .01));
+        expect(glassBounds().width,
+            closeTo(normal.width * (floating ? 1 : 1.22), .01));
+        expect(glassBounds().height,
+            closeTo(normal.height * (floating ? 1 : 1.6), .01));
         // Keep the lower edge visible while allowing glass and shadow to
         // extend above the docked frame without an ancestor clipping them.
         if (floating) {
@@ -213,6 +215,22 @@ void main() {
                     find.byKey(const ValueKey('bottom-destination-3')))
                 .dy,
             lessThanOrEqualTo(816));
+        if (floating) {
+          final frameFinder =
+              find.byKey(const ValueKey('floating-bottom-surface'));
+          final frame = tester.getRect(frameFinder);
+          final outer = tester.widget<GlassSurface>(frameFinder);
+          final selectionFinder = find.descendant(
+              of: find.byKey(const ValueKey('bottom-glass-indicator')),
+              matching: find.byType(GlassSurface));
+          final selection = tester.widget<GlassSurface>(selectionFinder);
+          final bounds = tester.getRect(selectionFinder);
+          expect(frame.width, width - 32);
+          expect(outer.radius, closeTo(frame.height / 2, .001));
+          expect(selection.radius, closeTo(bounds.height / 2, .001));
+          expect(bounds.top - frame.top, closeTo(6, .001));
+          expect(frame.bottom - bounds.bottom, closeTo(6, .001));
+        }
         expect(tester.takeException(), isNull);
       }
     }
