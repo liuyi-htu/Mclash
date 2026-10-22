@@ -14,13 +14,16 @@ class GlassSurface extends StatelessWidget {
       this.proxy = false,
       this.blur = false,
       this.lifted = false,
-      this.radius = 20});
+      this.radius = 20,
+      this.borderRadius});
   final Widget child;
   final bool selected, proxy, blur, lifted;
   final double radius;
+  final BorderRadius? borderRadius;
 
   @override
   Widget build(BuildContext context) {
+    final rounding = borderRadius ?? BorderRadius.circular(radius);
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fill =
@@ -40,7 +43,7 @@ class GlassSurface extends StatelessWidget {
                   ],
                 )
               : null,
-          borderRadius: BorderRadius.circular(radius),
+          borderRadius: rounding,
           border: Border.all(
               width: proxy ? 1.5 : 1,
               color: selected && proxy
@@ -62,7 +65,7 @@ class GlassSurface extends StatelessWidget {
           : const Duration(milliseconds: 160),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: rounding,
         boxShadow: [
           BoxShadow(
             color: (dark ? Colors.black : const Color(0xFF828282))
@@ -73,8 +76,7 @@ class GlassSurface extends StatelessWidget {
           )
         ],
       ),
-      child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius), child: material),
+      child: ClipRRect(borderRadius: rounding, child: material),
     );
   }
 }

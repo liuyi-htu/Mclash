@@ -102,7 +102,7 @@ void main() {
   });
 
   testWidgets(
-      'drag keeps floating selection inset and restores docked enlargement',
+      'drag enlarges floating selection into an unclipped oval and restores it',
       (tester) async {
     final controller = AppearanceController();
     addTearDown(controller.dispose);
@@ -147,16 +147,15 @@ void main() {
         await gesture.moveBy(const Offset(25, 0));
         await gesture.moveBy(const Offset(10, 0));
         await tester.pumpAndSettle();
-        expect(glassBounds().width,
-            closeTo(normal.width * (floating ? 1 : 1.22), .01));
-        expect(glassBounds().height,
-            closeTo(normal.height * (floating ? 1 : 1.6), .01));
+        expect(glassBounds().width, closeTo(normal.width * 1.22, .01));
+        expect(glassBounds().height, closeTo(normal.height * 1.6, .01));
         // Keep the lower edge visible while allowing glass and shadow to
         // extend above the docked frame without an ancestor clipping them.
+        expect(glassBounds().top, lessThan(frame.top));
         if (floating) {
-          expect(glassBounds().top, greaterThan(frame.top));
-        } else {
-          expect(glassBounds().top, lessThan(frame.top));
+          final rounding = tester.widget<GlassSurface>(surface).borderRadius!;
+          expect(rounding.topLeft.x, closeTo(normal.width / 2, .01));
+          expect(rounding.topLeft.y, closeTo(normal.height / 2, .01));
         }
         expect(glassBounds().bottom, lessThanOrEqualTo(frame.bottom));
         expect(find.ancestor(of: surface, matching: find.byType(ClipRRect)),
@@ -174,6 +173,7 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(glassBounds().size, normal.size);
+        expect(tester.widget<GlassSurface>(surface).borderRadius, isNull);
         expect(tester.takeException(), isNull);
       }
     }
