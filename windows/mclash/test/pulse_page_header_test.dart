@@ -4,42 +4,73 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pulse_dashboard.dart';
 
 void main() {
-  testWidgets(
-      'four page titles share height and vertical position at all text sizes',
+  testWidgets('compact headers hide only the title and retain controls',
       (tester) async {
-    for (final scale in [1.0, 1.8]) {
-      double? top, height;
-      for (final title in ['Mclash', '配置与订阅', '设置', '代理面板']) {
-        await tester.pumpWidget(MaterialApp(
-            home: MediaQuery(
-          data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-          child: Builder(
-              builder: (context) => Scaffold(
-                    appBar: pulseAppBar(context,
-                        title: title,
-                        badge: 'ROOT',
-                        actions: title == '代理面板'
-                            ? [
-                                IconButton(
-                                    onPressed: () {},
-                                    icon: const Icon(Icons.speed))
-                              ]
-                            : []),
-                    body: const SizedBox(key: ValueKey('page-body')),
-                  )),
-        )));
-        await tester.pumpAndSettle();
-        final currentTop = tester.getTopLeft(find.text(title)).dy;
-        final currentHeight =
-            tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy;
-        top ??= currentTop;
-        height ??= currentHeight;
-        expect(currentTop, closeTo(top, .1));
-        expect(currentHeight, closeTo(height, .1));
-        expect(tester.takeException(), isNull);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    for (final size in [
+      const Size(390, 850),
+      const Size(600, 390),
+      const Size(900, 420),
+      const Size(800, 1200)
+    ]) {
+      tester.view.physicalSize = size;
+      for (final scale in [1.0, 1.8]) {
+        for (final title in ['Mclash', '配置与订阅', '设置', '代理面板']) {
+          var taps = 0;
+          final withActions = title == '代理面板';
+          await tester.pumpWidget(MaterialApp(
+              home: MediaQuery(
+            data: MediaQueryData(
+                size: size,
+                padding: const EdgeInsets.only(top: 24),
+                textScaler: TextScaler.linear(scale)),
+            child: Builder(
+                builder: (context) => Scaffold(
+                      appBar: pulseAppBar(context,
+                          title: title,
+                          badge: 'ROOT',
+                          actions: withActions
+                              ? [
+                                  IconButton(
+                                      tooltip: '全部测速',
+                                      onPressed: () => taps++,
+                                      icon: const Icon(Icons.speed))
+                                ]
+                              : [],
+                          bottom: withActions
+                              ? const PreferredSize(
+                                  preferredSize: Size.fromHeight(30),
+                                  child:
+                                      SizedBox(height: 30, child: Text('测速进度')))
+                              : null),
+                      body: const SizedBox.expand(key: ValueKey('page-body')),
+                    )),
+          )));
+          await tester.pumpAndSettle();
+          expect(find.byKey(const ValueKey('pulse-page-title')), findsNothing);
+          if (title == 'Mclash') {
+            expect(find.text('ROOT'), findsOneWidget);
+          }
+          if (!withActions && title != 'Mclash') {
+            expect(
+                tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
+                24);
+          }
+          if (withActions) {
+            expect(find.text('测速进度'), findsOneWidget);
+            await tester.tap(find.byTooltip('全部测速'));
+            expect(taps, 1);
+            expect(
+                tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
+                24 + 48 + 30);
+          }
+          expect(tester.takeException(), isNull);
+        }
       }
     }
   });
+
   testWidgets('home power button reflects running stopped and pending states',
       (tester) async {
     var calls = 0;
@@ -137,8 +168,8 @@ void main() {
         final page = tester.getRect(find.byKey(const ValueKey('page-body')));
         expect(page.left, greaterThanOrEqualTo(rail.right));
         expect(page.right, 900 - insets.right);
-        expect(tester.getTopLeft(find.text(title).last).dx,
-            greaterThan(rail.right));
+        expect(find.byKey(const ValueKey('pulse-page-title')), findsNothing);
+        expect(page.top, insets.top);
         for (var i = 0; i < PulseBottomBar.labels.length; i++) {
           await tester.tap(find.descendant(
               of: find.byType(NavigationRail),

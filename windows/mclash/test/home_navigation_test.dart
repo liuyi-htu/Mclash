@@ -349,26 +349,22 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(PulseBottomBar), findsNothing);
         expect(find.byType(NavigationRail), findsOneWidget);
-        void expectHeaderAligned(String title) {
-          final firstIcon = find.descendant(
-              of: find.byType(NavigationRail),
-              matching: find.byIcon(PulseBottomBar.icons.first));
-          expect(tester.getCenter(find.text(title).last).dy,
-              closeTo(tester.getCenter(firstIcon).dy, 1));
+        void expectHeaderHidden() {
+          expect(find.byKey(const ValueKey('pulse-page-title')), findsNothing);
         }
 
-        expectHeaderAligned('Mclash');
+        expectHeaderHidden();
         expect(find.byIcon(Icons.power_settings_new), findsOneWidget);
         expect(find.text('0 B/s'), findsNWidgets(2));
         await tester.tap(find.text('配置'));
         await tester.pumpAndSettle();
-        expectHeaderAligned('配置与订阅');
+        expectHeaderHidden();
         expect(find.text('配置中心'), findsNothing);
         expect(find.byTooltip('添加配置'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('设置'));
         await tester.pumpAndSettle();
-        expectHeaderAligned('设置');
+        expectHeaderHidden();
         expect(find.text('常规设置'), findsOneWidget);
         expect(find.text('系统代理'), findsOneWidget);
         expect(find.text('更新内核'), findsOneWidget);
@@ -431,7 +427,7 @@ void main() {
         await tester.tap(find.text('代理'));
         await tester.pumpAndSettle();
         expect(find.byType(ProxyPanelPage), findsOneWidget);
-        expectHeaderAligned('代理面板');
+        expectHeaderHidden();
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();
