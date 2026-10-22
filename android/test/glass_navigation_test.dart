@@ -101,8 +101,7 @@ void main() {
     expect(index, 0);
   });
 
-  testWidgets(
-      'drag enlarges floating selection into an unclipped oval and restores it',
+  testWidgets('drag lifts a rounded glass lens and restores it',
       (tester) async {
     final controller = AppearanceController();
     addTearDown(controller.dispose);
@@ -128,6 +127,17 @@ void main() {
             box.localToGlobal(box.size.bottomRight(Offset.zero)));
       }
 
+      BoxDecoration shadowDecoration() => tester
+          .widget<AnimatedContainer>(find.descendant(
+              of: surface, matching: find.byType(AnimatedContainer)))
+          .decoration! as BoxDecoration;
+      Color fillColor() => (tester
+              .widget<Ink>(
+                  find.descendant(of: surface, matching: find.byType(Ink)))
+              .decoration! as BoxDecoration)
+          .color!;
+      final restingShadow = shadowDecoration().boxShadow!.single;
+      final restingFill = fillColor();
       final normal = glassBounds();
       final frame = tester.getRect(find.byKey(ValueKey(
           floating ? 'floating-bottom-surface' : 'docked-bottom-surface')));
@@ -146,18 +156,48 @@ void main() {
         final gesture = await tester.startGesture(origin);
         await gesture.moveBy(const Offset(25, 0));
         await gesture.moveBy(const Offset(10, 0));
+        if (floating) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 60));
+          final progress = tester.widget<GlassSurface>(surface).dragProgress!;
+          expect(progress, inExclusiveRange(0, 1));
+          final shadow = shadowDecoration().boxShadow!.single;
+          expect(shadow.blurRadius, greaterThan(restingShadow.blurRadius));
+          expect(shadow.blurRadius, lessThan(14));
+          expect(fillColor().a, lessThan(restingFill.a));
+        }
         await tester.pumpAndSettle();
+        if (floating) {
+          final shadow = shadowDecoration().boxShadow!.single;
+          expect(shadow.blurRadius, 14);
+          expect(shadow.spreadRadius, 0);
+          expect(shadow.color.a, lessThan(restingShadow.color.a));
+          expect(shadow.offset.dy, lessThan(restingShadow.offset.dy));
+          expect(fillColor().a, closeTo(restingFill.a * .35, .001));
+          expect(
+              find.descendant(
+                  of: surface,
+                  matching: find.byKey(const ValueKey('glass-lens-lighting'))),
+              findsOneWidget);
+        }
         expect(glassBounds().width, closeTo(normal.width * 1.22, .01));
         expect(glassBounds().height, closeTo(normal.height * 1.6, .01));
-        // Keep the lower edge visible while allowing glass and shadow to
-        // extend above the docked frame without an ancestor clipping them.
+        // Floating glass grows equally around the moving selection centre;
+        // docked glass retains its raised position above the frame.
         expect(glassBounds().top, lessThan(frame.top));
         if (floating) {
           final rounding = tester.widget<GlassSurface>(surface).borderRadius!;
-          expect(rounding.topLeft.x, closeTo(normal.width / 2, .01));
-          expect(rounding.topLeft.y, closeTo(normal.height / 2, .01));
+          expect(rounding.topLeft.x, closeTo(normal.height * .44, .01));
+          expect(rounding.topLeft.y, closeTo(normal.height * .44, .01));
+          final centre = tester
+              .getCenter(find.byKey(const ValueKey('bottom-glass-indicator')));
+          expect(glassBounds().center.dx, closeTo(centre.dx, .01));
+          expect(glassBounds().center.dy, closeTo(centre.dy, .01));
+          expect(glassBounds().bottom, greaterThan(frame.bottom));
+          expect(shadowDecoration().boxShadow!.single.offset, Offset.zero);
+        } else {
+          expect(glassBounds().bottom, lessThanOrEqualTo(frame.bottom));
         }
-        expect(glassBounds().bottom, lessThanOrEqualTo(frame.bottom));
         expect(find.ancestor(of: surface, matching: find.byType(ClipRRect)),
             findsNothing);
 
@@ -171,7 +211,15 @@ void main() {
         } else {
           await gesture.up();
         }
+        if (floating) {
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 60));
+          expect(tester.widget<GlassSurface>(surface).dragProgress!,
+              inExclusiveRange(0, 1));
+        }
         await tester.pumpAndSettle();
+        expect(fillColor(), restingFill);
+        expect(shadowDecoration().boxShadow!.single, restingShadow);
         expect(glassBounds().size, normal.size);
         expect(tester.widget<GlassSurface>(surface).borderRadius, isNull);
         expect(tester.takeException(), isNull);

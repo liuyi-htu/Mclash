@@ -110,24 +110,26 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
                                           : const Duration(milliseconds: 160),
                                       curve: Curves.easeOutCubic,
                                       builder: (_, progress, child) => Transform.translate(
-                                          offset: Offset(
-                                              0,
-                                              -math.max(0, height * .6 / 2 - (floating ? 6 : 10)) *
-                                                  progress),
+                                          offset: floating
+                                              ? Offset.zero
+                                              : Offset(
+                                                  0,
+                                                  -math.max(0, height * .6 / 2 - 10) *
+                                                      progress),
                                           child: Transform.scale(
-                                              alignment: Alignment(
-                                                  position / 1.5 - 1, 0),
+                                              alignment: floating
+                                                  ? Alignment.center
+                                                  : Alignment(
+                                                      position / 1.5 - 1, 0),
                                               scaleX: 1 + .22 * progress,
                                               scaleY: 1 + .6 * progress,
-                                              child: child)),
-                                      child: GlassSurface(
-                                          lifted: _dragPosition != null,
-                                          selected: true,
-                                          radius: floating ? height / 2 : 15,
-                                          borderRadius: floating && _dragPosition != null
-                                              ? BorderRadius.all(Radius.elliptical(cellWidth / 2, height / 2))
-                                              : null,
-                                          child: const SizedBox.expand()))),
+                                              child: GlassSurface(
+                                                  lifted: _dragPosition != null,
+                                                  selected: true,
+                                                  radius: floating ? height / 2 : 15,
+                                                  dragProgress: floating ? progress : null,
+                                                  borderRadius: floating && progress > 0 ? BorderRadius.lerp(BorderRadius.circular(height / 2), BorderRadius.circular(height * .44), progress) : null,
+                                                  child: const SizedBox.expand()))))),
                             ),
                             Row(children: [
                               for (var i = 0; i < 4; i++)
