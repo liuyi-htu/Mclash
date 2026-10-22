@@ -20,74 +20,93 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
     {String badge = '',
     String title = 'Mclash',
     List<Widget> actions = const [],
-    PreferredSizeWidget? bottom}) {
+    PreferredSizeWidget? bottom,
+    bool? hideTitle}) {
   final colors = Theme.of(context).colorScheme;
-  final titleHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
+  final compact =
+      hideTitle ?? MediaQuery.orientationOf(context) == Orientation.landscape;
+  final showBadge = title == 'Mclash' && badge.isNotEmpty;
+  final hasHeader = !compact || showBadge || actions.isNotEmpty;
+  final titleHeight = compact
+      ? (actions.isNotEmpty
+          ? 48.0
+          : (MediaQuery.textScalerOf(context).scale(11) * 1.45 + 8)
+              .clamp(32.0, double.infinity))
+      : MediaQuery.textScalerOf(context).scale(23) * 1.45;
   // Nested pages inherit the rail state even after SafeArea reduces their width.
   final hasRail =
       context.dependOnInheritedWidgetOfExactType<_PulseRailScope>()?.hasRail ??
           MediaQuery.sizeOf(context).width >= _navigationRailMinWidth;
-  final topPadding = hasRail ? (24 - titleHeight / 2).clamp(0.0, 24.0) : 22.0;
+  final topPadding = compact
+      ? 0.0
+      : hasRail
+          ? (24 - titleHeight / 2).clamp(0.0, 24.0)
+          : 22.0;
   return PreferredSize(
     preferredSize: Size.fromHeight(
-        topPadding + titleHeight + 14 + (bottom?.preferredSize.height ?? 0)),
+        (hasHeader ? topPadding + titleHeight + (compact ? 0 : 14) : 0) +
+            (bottom?.preferredSize.height ?? 0)),
     child: SafeArea(
         bottom: false,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Padding(
-              padding: EdgeInsets.fromLTRB(18, topPadding, 18, 14),
-              child: SizedBox(
-                  height: titleHeight,
-                  child: Row(children: [
-                    Expanded(
-                        child: Row(children: [
-                      Flexible(
-                          child: Text(title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontFamily: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.fontFamily,
-                                  fontSize: 23,
-                                  height: 1.45,
-                                  fontWeight: FontWeight.lerp(
-                                      FontWeight.w600, FontWeight.w700, .5),
-                                  letterSpacing: -.5,
-                                  color: colors.onSurface))),
-                      if (title == 'Mclash' && badge.isNotEmpty) ...[
-                        const SizedBox(width: 9),
-                        Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 9, vertical: 4),
-                            decoration: BoxDecoration(
-                                color: colors.primaryContainer,
-                                borderRadius: BorderRadius.circular(10)),
-                            child: Text(badge,
-                                style: TextStyle(
-                                    fontFamily: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.fontFamily,
-                                    fontSize: 11,
-                                    height: 1.45,
-                                    color: colors.primary))),
-                      ],
-                    ])),
-                    if (actions.isNotEmpty)
-                      Theme(
-                          data: Theme.of(context).copyWith(
-                              iconButtonTheme: IconButtonThemeData(
-                                  style: IconButton.styleFrom(
-                                      minimumSize: const Size(40, 32),
-                                      padding: EdgeInsets.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap))),
-                          child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions)),
-                  ]))),
+          if (hasHeader)
+            Padding(
+                padding:
+                    EdgeInsets.fromLTRB(18, topPadding, 18, compact ? 0 : 14),
+                child: SizedBox(
+                    height: titleHeight,
+                    child: Row(children: [
+                      Expanded(
+                          child: Row(children: [
+                        if (!compact)
+                          Flexible(
+                              child: Text(title,
+                                  key: const ValueKey('pulse-page-title'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontFamily: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.fontFamily,
+                                      fontSize: 23,
+                                      height: 1.45,
+                                      fontWeight: FontWeight.lerp(
+                                          FontWeight.w600, FontWeight.w700, .5),
+                                      letterSpacing: -.5,
+                                      color: colors.onSurface))),
+                        if (showBadge) ...[
+                          if (!compact) const SizedBox(width: 9),
+                          Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: colors.primaryContainer,
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: Text(badge,
+                                  style: TextStyle(
+                                      fontFamily: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.fontFamily,
+                                      fontSize: 11,
+                                      height: 1.45,
+                                      color: colors.primary))),
+                        ],
+                      ])),
+                      if (actions.isNotEmpty)
+                        Theme(
+                            data: Theme.of(context).copyWith(
+                                iconButtonTheme: IconButtonThemeData(
+                                    style: IconButton.styleFrom(
+                                        minimumSize: const Size(40, 32),
+                                        padding: EdgeInsets.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap))),
+                            child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: actions)),
+                    ]))),
           if (bottom != null) bottom,
         ])),
   );

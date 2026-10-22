@@ -5,9 +5,9 @@ import 'package:mclash/shared/pulse_dashboard.dart';
 
 void main() {
   testWidgets(
-      'four page titles share height and vertical position at all text sizes',
+      'portrait page titles share height and vertical position at all text sizes',
       (tester) async {
-    for (final size in [const Size(390, 850), const Size(600, 390)]) {
+    for (final size in [const Size(390, 850)]) {
       for (final scale in [1.0, 1.8]) {
         double? top, height;
         for (final title in ['Mclash', '配置与订阅', '设置', '代理面板']) {
@@ -44,6 +44,77 @@ void main() {
       }
     }
   });
+  testWidgets('compact headers hide only the title and retain controls',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    for (final size in [
+      const Size(390, 850),
+      const Size(600, 390),
+      const Size(900, 420),
+      const Size(800, 1200)
+    ]) {
+      tester.view.physicalSize = size;
+      final hidden = size.width > size.height;
+      for (final scale in [1.0, 1.8]) {
+        for (final title in ['Mclash', '配置与订阅', '设置', '代理面板']) {
+          var taps = 0;
+          final withActions = title == '代理面板';
+          await tester.pumpWidget(MaterialApp(
+              home: MediaQuery(
+            data: MediaQueryData(
+                size: size,
+                padding: const EdgeInsets.only(top: 24),
+                textScaler: TextScaler.linear(scale)),
+            child: Builder(
+                builder: (context) => Scaffold(
+                      appBar: pulseAppBar(context,
+                          title: title,
+                          badge: 'ROOT',
+                          actions: withActions
+                              ? [
+                                  IconButton(
+                                      tooltip: '全部测速',
+                                      onPressed: () => taps++,
+                                      icon: const Icon(Icons.speed))
+                                ]
+                              : [],
+                          bottom: withActions
+                              ? const PreferredSize(
+                                  preferredSize: Size.fromHeight(30),
+                                  child:
+                                      SizedBox(height: 30, child: Text('测速进度')))
+                              : null),
+                      body: const SizedBox.expand(key: ValueKey('page-body')),
+                    )),
+          )));
+          await tester.pumpAndSettle();
+          expect(find.byKey(const ValueKey('pulse-page-title')),
+              hidden ? findsNothing : findsOneWidget);
+          if (title == 'Mclash') {
+            expect(find.text('ROOT'), findsOneWidget);
+          }
+          if (hidden && !withActions && title != 'Mclash') {
+            expect(
+                tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
+                24);
+          }
+          if (withActions) {
+            expect(find.text('测速进度'), findsOneWidget);
+            await tester.tap(find.byTooltip('全部测速'));
+            expect(taps, 1);
+            if (hidden) {
+              expect(
+                  tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
+                  24 + 48 + 30);
+            }
+          }
+          expect(tester.takeException(), isNull);
+        }
+      }
+    }
+  });
+
   testWidgets('home power button reflects running stopped and pending states',
       (tester) async {
     var calls = 0;
@@ -149,13 +220,19 @@ void main() {
           final page = tester.getRect(find.byKey(const ValueKey('page-body')));
           expect(page.left, greaterThanOrEqualTo(rail.right));
           expect(page.right, size.width - insets.right);
-          expect(tester.getTopLeft(find.text(title).last).dx,
-              greaterThan(rail.right));
-          final firstIcon = find.descendant(
-              of: find.byType(NavigationRail),
-              matching: find.byIcon(PulseBottomBar.icons.first));
-          expect(tester.getCenter(find.text(title).last).dy,
-              closeTo(tester.getCenter(firstIcon).dy, 1));
+          if (size.width > size.height) {
+            expect(
+                find.byKey(const ValueKey('pulse-page-title')), findsNothing);
+            expect(page.top, insets.top);
+          } else {
+            expect(tester.getTopLeft(find.text(title).last).dx,
+                greaterThan(rail.right));
+            final firstIcon = find.descendant(
+                of: find.byType(NavigationRail),
+                matching: find.byIcon(PulseBottomBar.icons.first));
+            expect(tester.getCenter(find.text(title).last).dy,
+                closeTo(tester.getCenter(firstIcon).dy, 1));
+          }
           for (var i = 0; i < PulseBottomBar.labels.length; i++) {
             await tester.tap(find.descendant(
                 of: find.byType(NavigationRail),

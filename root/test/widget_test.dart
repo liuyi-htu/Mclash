@@ -112,7 +112,7 @@ void main() {
     await tester.pumpWidget(const MclashApp());
     await tester.pump();
 
-    expect(find.text('Mclash'), findsOneWidget);
+    expect(find.text('Mclash'), findsNothing);
     expect(find.text('Root'), findsOneWidget);
     expect(find.text('代理'), findsOneWidget);
     expect(find.text('规则'), findsOneWidget);
