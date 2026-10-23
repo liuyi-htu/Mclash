@@ -157,6 +157,12 @@ Android 和 Windows 添加、修改或更新机场订阅时，先下载 Mihomo/C
 VLESS 支持 TCP、HTTP、WS、H2、gRPC 和基础 XHTTP，支持 TLS、Reality 和 TCP 下的 Vision；
 Trojan 支持 TCP、WS、gRPC。SS 支持 SIP002、旧式 Base64、明文认证及 obfs / WebSocket v2ray-plugin。
 暂不支持的参数、传输或插件会明确报错；SSR、Hysteria 1、TUIC v4 及复杂 XHTTP 扩展仍需使用 YAML 配置导入。
+也可以在“添加节点”中直接粘贴 Mihomo YAML，或点击“选择文件”读取 UTF-8 YAML 文件（最多 8 MiB）。
+支持单行 `{name: 示例, type: direct}`、多行节点、节点列表、包含 `proxies:` 的完整配置和多文档 YAML；
+完整配置只提取节点，不替换当前规则和设置。YAML 导入不限制协议类型，保留所有节点字段，实际可用性取决于当前 Mihomo 内核。
+支持 `&锚点`、`*别名` 和 `<<` 合并；复制引用别名的节点时，需要同时复制对应锚点定义。
+每个节点须含非空 `name`、`type`；同批名称不能重复，与现有节点、分组或内置名称冲突时自动改名，
+同步更新同批节点之间的 `dialer-proxy`。YAML 原有 Host 字段不套用订阅的 Host 覆盖。
 “修改 Host”仅作用于 VMess 的 HTTP / WS 传输，不改服务器地址和 TLS SNI。
 更新订阅只替换机场节点，手动节点的字段保持原样；主动修改 Host、正则和代理链时仍包含手动节点。
 修改 Host、正则或代理链前需要先停止代理。修改保存到对应配置；如果该配置

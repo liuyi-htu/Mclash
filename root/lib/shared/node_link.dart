@@ -1,4 +1,5 @@
 import 'share_link.dart';
+import 'mihomo_node_input.dart';
 import 'proxy_chain.dart';
 import 'dart:convert';
 import 'package:yaml/yaml.dart';
@@ -134,10 +135,15 @@ Map<String, dynamic> parseNodeLink(String link) {
   return parseShareLink(value);
 }
 
+/// Adds a share URI or a batch of native Mihomo YAML nodes atomically.
 String addNodeLink(String content, String link) {
-  final node = parseNodeLink(link);
+  final value = link.trim();
+  final isLink = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(value);
+  final imported = isLink ? [parseNodeLink(value)] : parseMihomoNodes(value);
+  final node = imported.first;
   final hostOverride = readSubscriptionHost(content);
-  if (node['type'] == 'vmess' &&
+  if (isLink &&
+      node['type'] == 'vmess' &&
       hostOverride.isNotEmpty &&
       ['http', 'ws'].contains(node['network'])) {
     final host = hostOverride.trim();
@@ -173,15 +179,27 @@ String addNodeLink(String content, String link) {
     for (final item in nodes) item['name'] as String,
     for (final group in groups) group['name'] as String,
   };
-  final originalName = node['name'] as String;
-  var name = originalName;
-  var suffix = 2;
-  while (usedNames.contains(name)) {
-    name = '$originalName ($suffix)';
-    suffix++;
+  final renamed = <String, String>{};
+  final names = <String>[];
+  for (final incoming in imported) {
+    final originalName = incoming['name'] as String;
+    var name = originalName;
+    var suffix = 2;
+    while (usedNames.contains(name)) {
+      name = '$originalName ($suffix)';
+      suffix++;
+    }
+    usedNames.add(name);
+    renamed[originalName] = name;
+    incoming['name'] = name;
+    names.add(name);
   }
-  node['name'] = name;
-  final editor = YamlEditor(content)..update(['proxies'], [node, ...nodes]);
+  for (final incoming in imported) {
+    final dialer = incoming['dialer-proxy'];
+    if (renamed.containsKey(dialer)) incoming['dialer-proxy'] = renamed[dialer];
+  }
+  final editor = YamlEditor(content)
+    ..update(['proxies'], [...imported, ...nodes]);
   var result = editor.toString();
   final filters = readSubscriptionFilters(content);
   if (filters.isNotEmpty) {
@@ -197,14 +215,14 @@ String addNodeLink(String content, String link) {
           group['proxies'] is List &&
           !readProxyChainGroups(content).containsKey(group['name'])) {
         editor.update(
-            ['proxy-groups', i, 'proxies'], [name, ...group['proxies']]);
+            ['proxy-groups', i, 'proxies'], [...names, ...group['proxies']]);
       }
     }
     result = editor.toString();
   }
 
   return applySavedProxyChains(
-      writeManualNodeNames(result, [name, ...readManualNodeNames(content)]),
+      writeManualNodeNames(result, [...names, ...readManualNodeNames(content)]),
       content);
 }
 

@@ -1,3 +1,4 @@
+import 'node_input_file.dart';
 import 'share_link.dart';
 import 'dialog_typography.dart';
 import 'management_style.dart';
@@ -11,8 +12,10 @@ class AddNodePage extends StatefulWidget {
     required this.onDelete,
     required this.onSave,
     this.onReorder,
+    this.onReadFile = pickNodeInputFile,
   });
 
+  final Future<String?> Function() onReadFile;
   final List<String> nodes;
   final Future<List<String>> Function(List<String> order)? onReorder;
   final Future<List<String>> Function(String name) onDelete;
@@ -80,18 +83,48 @@ class _AddNodePageState extends State<AddNodePage> {
                 enabled: !_saving,
                 minLines: 1,
                 maxLines: 6,
-                decoration: managementFieldDecoration(context, '节点链接').copyWith(
-                    helperText: supportedNodeLinkHint,
-                    helperMaxLines: 3,
-                    errorText: error,
-                    errorMaxLines: 8,
-                    errorStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 12,
-                        height: 1.45,
-                        color: Theme.of(context).colorScheme.error)),
+                decoration: managementFieldDecoration(
+                        context, '节点链接或 Mihomo YAML')
+                    .copyWith(
+                        helperText:
+                            '支持单个节点、节点列表、完整配置及 YAML 锚点。\n$supportedNodeLinkHint',
+                        helperMaxLines: 3,
+                        errorText: error,
+                        errorMaxLines: 8,
+                        errorStyle: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(
+                                fontSize: 12,
+                                height: 1.45,
+                                color: Theme.of(context).colorScheme.error)),
               ),
             ),
             actions: [
+              TextButton(
+                onPressed: _saving
+                    ? null
+                    : () async {
+                        setState(() => _saving = true);
+                        update(() => error = null);
+                        try {
+                          final content = await widget.onReadFile();
+                          if (!context.mounted) return;
+                          if (content != null) {
+                            _controller.text = content;
+                          }
+                        } catch (_) {
+                          if (context.mounted) {
+                            update(() => error =
+                                '无法读取节点文件，请选择 UTF-8 编码的 YAML 文件（最多 8 MiB）');
+                          }
+                        } finally {
+                          if (mounted) setState(() => _saving = false);
+                          if (context.mounted) update(() {});
+                        }
+                      },
+                child: const Text('选择文件'),
+              ),
               TextButton(
                   style: TextButton.styleFrom(
                       minimumSize: const Size(64, 44),

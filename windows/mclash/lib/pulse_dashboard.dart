@@ -9,15 +9,21 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
     PreferredSizeWidget? bottom,
     bool? hideTitle}) {
   final colors = Theme.of(context).colorScheme;
+  final landscape = MediaQuery.orientationOf(context) == Orientation.landscape;
   final compact = hideTitle ?? true;
-  final showBadge = title == 'Mclash' && badge.isNotEmpty;
-  final hasHeader = !compact || showBadge || actions.isNotEmpty;
+  final showTitle = !compact || (landscape && title == '代理面板');
+  final showBadge = title == 'Mclash' && badge.isNotEmpty && !landscape;
+  final hasHeader = showTitle || showBadge || actions.isNotEmpty;
+  final textHeight = MediaQuery.textScalerOf(context).scale(23) * 1.45;
+  final compactHeight = actions.isNotEmpty
+      ? 48.0
+      : (MediaQuery.textScalerOf(context).scale(11) * 1.45 + 8)
+          .clamp(32.0, double.infinity);
   final titleHeight = compact
-      ? (actions.isNotEmpty
-          ? 48.0
-          : (MediaQuery.textScalerOf(context).scale(11) * 1.45 + 8)
-              .clamp(32.0, double.infinity))
-      : MediaQuery.textScalerOf(context).scale(23) * 1.45;
+      ? (showTitle
+          ? textHeight.clamp(compactHeight, double.infinity)
+          : compactHeight)
+      : textHeight;
   // The first rail icon is centered 24px below the safe-area top.
   final topPadding = compact ? 0.0 : (24 - titleHeight / 2).clamp(0.0, 24.0);
   return PreferredSize(
@@ -36,7 +42,7 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
                     child: Row(children: [
                       Expanded(
                           child: Row(children: [
-                        if (!compact)
+                        if (showTitle)
                           Flexible(
                               child: Text(title,
                                   key: const ValueKey('pulse-page-title'),
@@ -54,7 +60,7 @@ PreferredSizeWidget pulseAppBar(BuildContext context,
                                       letterSpacing: -.5,
                                       color: colors.onSurface))),
                         if (showBadge) ...[
-                          if (!compact) const SizedBox(width: 9),
+                          if (showTitle) const SizedBox(width: 9),
                           Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 9, vertical: 4),
