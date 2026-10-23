@@ -427,7 +427,8 @@ void main() {
         await tester.tap(find.text('代理'));
         await tester.pumpAndSettle();
         expect(find.byType(ProxyPanelPage), findsOneWidget);
-        expectHeaderHidden();
+        expect(find.byKey(const ValueKey('pulse-page-title')),
+            width > height ? findsOneWidget : findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox());
         await tester.pumpAndSettle();

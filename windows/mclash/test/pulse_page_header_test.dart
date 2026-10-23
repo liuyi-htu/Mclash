@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mclash/pulse_dashboard.dart';
 
 void main() {
-  testWidgets('compact headers hide only the title and retain controls',
+  testWidgets(
+      'landscape headers hide home badges and restore the proxy panel title',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -48,11 +49,16 @@ void main() {
                     )),
           )));
           await tester.pumpAndSettle();
-          expect(find.byKey(const ValueKey('pulse-page-title')), findsNothing);
+          expect(
+              find.byKey(const ValueKey('pulse-page-title')),
+              size.width > size.height && withActions
+                  ? findsOneWidget
+                  : findsNothing);
           if (title == 'Mclash') {
-            expect(find.text('ROOT'), findsOneWidget);
+            expect(find.text('ROOT'),
+                size.width > size.height ? findsNothing : findsOneWidget);
           }
-          if (!withActions && title != 'Mclash') {
+          if (!withActions && (title != 'Mclash' || size.width > size.height)) {
             expect(
                 tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
                 24);
@@ -63,7 +69,13 @@ void main() {
             expect(taps, 1);
             expect(
                 tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
-                24 + 48 + 30);
+                closeTo(
+                    24 +
+                        (size.width > size.height
+                            ? (23 * scale * 1.45).clamp(48.0, double.infinity)
+                            : 48) +
+                        30,
+                    .01));
           }
           expect(tester.takeException(), isNull);
         }
@@ -168,8 +180,10 @@ void main() {
         final page = tester.getRect(find.byKey(const ValueKey('page-body')));
         expect(page.left, greaterThanOrEqualTo(rail.right));
         expect(page.right, 900 - insets.right);
-        expect(find.byKey(const ValueKey('pulse-page-title')), findsNothing);
-        expect(page.top, insets.top);
+        expect(find.byKey(const ValueKey('pulse-page-title')),
+            title == '代理面板' ? findsOneWidget : findsNothing);
+        expect(
+            page.top, title == '代理面板' ? greaterThan(insets.top) : insets.top);
         for (var i = 0; i < PulseBottomBar.labels.length; i++) {
           await tester.tap(find.descendant(
               of: find.byType(NavigationRail),

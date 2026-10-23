@@ -44,7 +44,8 @@ void main() {
       }
     }
   });
-  testWidgets('compact headers hide only the title and retain controls',
+  testWidgets(
+      'landscape headers hide home badges and restore the proxy panel title',
       (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -90,11 +91,11 @@ void main() {
           )));
           await tester.pumpAndSettle();
           expect(find.byKey(const ValueKey('pulse-page-title')),
-              hidden ? findsNothing : findsOneWidget);
+              hidden && !withActions ? findsNothing : findsOneWidget);
           if (title == 'Mclash') {
-            expect(find.text('ROOT'), findsOneWidget);
+            expect(find.text('ROOT'), hidden ? findsNothing : findsOneWidget);
           }
-          if (hidden && !withActions && title != 'Mclash') {
+          if (hidden && !withActions) {
             expect(
                 tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
                 24);
@@ -106,7 +107,11 @@ void main() {
             if (hidden) {
               expect(
                   tester.getTopLeft(find.byKey(const ValueKey('page-body'))).dy,
-                  24 + 48 + 30);
+                  closeTo(
+                      24 +
+                          (23 * scale * 1.45).clamp(48.0, double.infinity) +
+                          30,
+                      .01));
             }
           }
           expect(tester.takeException(), isNull);
@@ -221,9 +226,10 @@ void main() {
           expect(page.left, greaterThanOrEqualTo(rail.right));
           expect(page.right, size.width - insets.right);
           if (size.width > size.height) {
-            expect(
-                find.byKey(const ValueKey('pulse-page-title')), findsNothing);
-            expect(page.top, insets.top);
+            expect(find.byKey(const ValueKey('pulse-page-title')),
+                title == '代理面板' ? findsOneWidget : findsNothing);
+            expect(page.top,
+                title == '代理面板' ? greaterThan(insets.top) : insets.top);
           } else {
             expect(tester.getTopLeft(find.text(title).last).dx,
                 greaterThan(rail.right));

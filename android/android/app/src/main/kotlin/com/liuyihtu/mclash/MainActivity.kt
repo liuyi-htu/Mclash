@@ -31,6 +31,7 @@ class MainActivity : FlutterActivity() {
     }
     private lateinit var preferences: AppPreferences
     private lateinit var configStore: ConfigStore
+    private var pendingNodeFileResult: MethodChannel.Result? = null
     private var pendingConfigResult: MethodChannel.Result? = null
     private var pendingVpnResult: MethodChannel.Result? = null
     private var pendingTileVpnRequest = false
@@ -136,6 +137,7 @@ class MainActivity : FlutterActivity() {
                     configStore.listMaps()
                 }
                 "getProxyGroupOrder" -> result.success(configStore.proxyGroupOrder())
+                "pickNodeFile" -> pickNodeFile(result)
                 "importConfigs" -> importConfigs(result)
                 "addSubscription" -> addSubscription(call, result)
                 "updateSubscription" -> updateSubscription(call, result)
@@ -223,6 +225,21 @@ class MainActivity : FlutterActivity() {
         "ipv6Enabled" to preferences.vpnIpv6Enabled,
         "bypassLan" to preferences.vpnBypassLan,
     )
+
+    private fun pickNodeFile(result: MethodChannel.Result) {
+        check(pendingNodeFileResult == null) { "文件选择器已打开" }
+        pendingNodeFileResult = result
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
+            startActivityForResult(intent, REQUEST_NODE_FILE)
+        } catch (error: Throwable) {
+            pendingNodeFileResult = null
+            throw error
+        }
+    }
 
     private fun importConfigs(result: MethodChannel.Result) {
         requireProxyStopped()
@@ -690,6 +707,30 @@ class MainActivity : FlutterActivity() {
                     result.error("export_failed", error.message, null)
                 }
             }
+            REQUEST_NODE_FILE -> {
+                val result = pendingNodeFileResult ?: return
+                pendingNodeFileResult = null
+                val uri = data?.data
+                if (resultCode != Activity.RESULT_OK || uri == null) {
+                    result.success(null)
+                    return
+                }
+                runAsync(result, "mclash-read-node-file") {
+                    val bytes = contentResolver.openInputStream(uri)?.use {
+                        val output = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = it.read(buffer)
+                            if (count < 0) break
+                            check(output.size() + count <= 8 * 1024 * 1024) { "节点文件过大（最多 8 MiB）" }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
+                    } ?: error("无法读取节点文件")
+                    check(bytes.size <= 8 * 1024 * 1024) { "节点文件过大（最多 8 MiB）" }
+                    Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString()
+                }
+            }
             REQUEST_CONFIG -> {
                 val result = pendingConfigResult ?: return
                 pendingConfigResult = null
@@ -755,6 +796,7 @@ class MainActivity : FlutterActivity() {
         const val EXTRA_START_FROM_TILE = "start_from_quick_settings_tile"
 
         private const val CHANNEL = "mclash/native"
+        private const val REQUEST_NODE_FILE = 7010
         private const val REQUEST_CONFIG = 7001
         private const val REQUEST_VPN = 7002
         private const val REQUEST_VPN_TILE = 7003
