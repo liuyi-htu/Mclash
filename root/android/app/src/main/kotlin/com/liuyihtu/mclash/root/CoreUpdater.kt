@@ -133,7 +133,7 @@ internal object CoreUpdater {
 
     private fun <T> request(url: String, block: (HttpURLConnection) -> T): T {
         requireProxyRunning()
-        val connection = CoreProxyConnection.open(url, RootRuntimeConfig.MIXED_PORT)
+        val connection = CoreProxyConnection.open(url, MihomoProcess.runningMixedPort())
         try {
             connection.connectTimeout = 10_000
             connection.readTimeout = 30_000

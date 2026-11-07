@@ -11,6 +11,7 @@ void main() {
   String? proxyStatus;
   var rejectLegacyStatus = false;
   var developerModeEnabled = false;
+  Map? savedConnection;
   final nativeCalls = <String>[];
   var registrationReads = 0;
   var registrationExports = 0;
@@ -25,6 +26,7 @@ void main() {
     rejectLegacyStatus = false;
     developerModeEnabled = false;
     nativeCalls.clear();
+    savedConnection = null;
     registrationReads = 0;
     registrationExports = 0;
     savedBypassLan = null;
@@ -41,6 +43,10 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       nativeCalls.add(call.method);
+      if (call.method == 'saveCoreConnectionSettings') {
+        savedConnection = call.arguments as Map;
+        return null;
+      }
       if (call.method == 'isRunning' && rejectLegacyStatus) {
         throw StateError('Status snapshots must not wait for restoration');
       }
@@ -87,7 +93,9 @@ void main() {
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => developerModeEnabled,
-        'getConfigInfo' => <String, Object?>{},
+        'getConfigInfo' => <String, Object?>{
+            'runtimeMode': running ? 'tproxy' : null
+          },
         'getRootSettings' => <String, Object?>{
             'bypassLan': savedBypassLan ?? true,
             'proxyMode': savedRootProxyMode ?? 'tproxy',
@@ -106,6 +114,41 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets(
+      'connection settings live under developer mode and defer runtime changes',
+      (tester) async {
+    running = true;
+    developerModeEnabled = true;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('内核连接设置'), findsNothing);
+    await tester.tap(find.text('开发者模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内核连接设置'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), '0.0.0.0:9191');
+    await tester.enterText(fields.at(1), 'developer-test');
+    await tester.enterText(fields.at(2), '7892');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(savedConnection, {
+      'controller': '0.0.0.0:9191',
+      'secret': 'developer-test',
+      'mixedPort': 7892
+    });
+    expect(find.text('设置已保存，下次启动代理生效'), findsOneWidget);
+    expect(
+        nativeCalls
+            .where((value) => ['start', 'stop', 'restart'].contains(value)),
+        isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('shows current home actions', (tester) async {
@@ -247,7 +290,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('running proxy locks settings while keeping logs readable',
+  testWidgets('running proxy enables saved settings and keeps logs readable',
       (tester) async {
     running = true;
     developerModeEnabled = true;
@@ -258,7 +301,7 @@ void main() {
     for (final title in ['代理模式', '分应用代理', '开发者模式']) {
       final tile =
           find.ancestor(of: find.text(title), matching: find.byType(InkWell));
-      expect(tester.widget<InkWell>(tile).onTap, isNull);
+      expect(tester.widget<InkWell>(tile).onTap, isNotNull);
     }
     final sharing =
         find.ancestor(of: find.text('网络共享'), matching: find.byType(InkWell));
@@ -268,7 +311,7 @@ void main() {
     await tester.tap(find.text('调试日志'));
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
-        isNull);
+        isNotNull);
     expect(
         tester
             .widget<TextButton>(find.ancestor(
@@ -277,7 +320,7 @@ void main() {
                   find.byWidgetPredicate((widget) => widget is TextButton),
             ))
             .onPressed,
-        isNull);
+        isNotNull);
     expect(find.text('Mclash.log'), findsOneWidget);
     tester.state<NavigatorState>(find.byType(Navigator).first).pop();
     await tester.pumpAndSettle();
@@ -289,6 +332,40 @@ void main() {
         find.ancestor(of: find.text('分应用代理'), matching: find.byType(InkWell));
     expect(tester.widget<InkWell>(apps).onTap, isNotNull);
   });
+  testWidgets(
+      'running Root mode changes are saved without restart or relabeling runtime',
+      (tester) async {
+    running = true;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('代理模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('TUN'));
+    await tester.pumpAndSettle();
+    expect(savedRootProxyMode, 'tun');
+    expect(find.text('设置已保存，下次启动代理生效'), findsOneWidget);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'IPv6'));
+    await tester.pumpAndSettle();
+    expect(savedIpv6, true);
+    expect(
+        nativeCalls
+            .where((call) => ['start', 'stop', 'restart'].contains(call)),
+        isEmpty);
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('首页'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('TProxy ·'), findsOneWidget);
+    expect(find.textContaining('TUN ·'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
       'Root settings switch TUN and TProxy and retain parameter controls',
       (tester) async {

@@ -3,6 +3,7 @@ import 'dialog_typography.dart';
 import 'core_update_panel.dart';
 import 'app_appearance.dart';
 import 'pulse_dashboard.dart';
+import 'core_connection_form.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -62,7 +63,7 @@ class _HomePageState extends State<HomePage> {
   bool _coreUpdating = false;
   String? _coreMessage;
   final _settingsBusy = ValueNotifier(false);
-  bool get _canEditSettings => _status == ProxyStatus.stopped && _canOperate;
+  bool get _canEditSettings => _canOperate;
 
   bool get _canOperate =>
       !_changingProxyMode &&
@@ -294,7 +295,13 @@ class _HomePageState extends State<HomePage> {
         _serviceAutoStartEnabled = serviceAutoStartEnabled;
         _ipv6Enabled = ipv6Enabled;
         _bypassLanEnabled = bypassLanEnabled;
-        _networkMode = networkMode;
+        _networkMode = _status == ProxyStatus.running
+            ? (config.runtimeMode == 'tun'
+                ? NetworkMode.tun
+                : config.runtimeMode == 'proxy'
+                    ? NetworkMode.proxy
+                    : networkMode)
+            : networkMode;
         _coreType = coreType;
       });
       if (_status == ProxyStatus.running) await _loadProxyMode();
@@ -322,8 +329,13 @@ class _HomePageState extends State<HomePage> {
       ..connectionTimeout = const Duration(seconds: 3)
       ..findProxy = (_) => 'DIRECT';
     try {
+      final connection = await _service.getRunningCoreConnectionSettings();
       final request =
-          await client.getUrl(Uri.parse('http://127.0.0.1:9090/traffic'));
+          await client.getUrl(connection.endpoint.replace(path: '/traffic'));
+      if (connection.secret.isNotEmpty) {
+        request.headers.set(
+            HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+      }
       final response =
           await request.close().timeout(const Duration(seconds: 3));
       if (response.statusCode != 200) return;
@@ -364,10 +376,15 @@ class _HomePageState extends State<HomePage> {
       ..connectionTimeout = const Duration(seconds: 5)
       ..findProxy = (_) => 'DIRECT';
     try {
+      final connection = await _service.getRunningCoreConnectionSettings();
       final request = await client.openUrl(
         method,
-        Uri.parse('http://127.0.0.1:9090/configs'),
+        connection.endpoint.replace(path: '/configs'),
       );
+      if (connection.secret.isNotEmpty) {
+        request.headers.set(
+            HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+      }
       request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
       if (body != null) {
         request.headers.contentType = ContentType.json;
@@ -439,7 +456,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<bool> _confirmStopped() async {
+  Future<bool> _confirmSettingsEditable() async {
     late final ProxyStatus status;
     try {
       status =
@@ -455,8 +472,10 @@ class _HomePageState extends State<HomePage> {
     }
     if (!mounted) return false;
     setState(() => _status = status);
-    if (status == ProxyStatus.stopped) return true;
-    _showError('请先停止代理再修改设置');
+    if (status == ProxyStatus.stopped || status == ProxyStatus.running) {
+      return true;
+    }
+    _showError('代理正在切换状态，请稍后修改设置');
     return false;
   }
 
@@ -464,8 +483,11 @@ class _HomePageState extends State<HomePage> {
     if (!_canEditSettings) return;
     setState(() => _settingsBusy.value = true);
     try {
-      if (!await _confirmStopped()) return;
+      if (!await _confirmSettingsEditable()) return;
       await action();
+      if (mounted && _status == ProxyStatus.running) {
+        AppNotice.show(context, '设置已保存，下次启动代理生效');
+      }
     } catch (error) {
       if (mounted) _showError(error);
     } finally {
@@ -475,19 +497,56 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _switchRunMode(CoreType core, NetworkMode target) async {
     if (!_canEditSettings) return;
-    if (target == _networkMode && core == _coreType) return;
+    if (target == await _service.getNetworkMode() && core == _coreType) return;
     await _changeSetting(() async {
       await _service.setCoreType(core);
       await _service.setNetworkMode(target);
-      await _service.syncSystemProxy();
+      if (_status == ProxyStatus.stopped) {
+        await _service.syncSystemProxy();
+      }
       if (!mounted) return;
       setState(() {
-        _networkMode = target;
+        if (_status == ProxyStatus.stopped) _networkMode = target;
         _coreType = core;
       });
-      AppNotice.show(
-          context, '已切换到 ${target == NetworkMode.tun ? 'TUN' : '系统代理'}');
+      if (_status == ProxyStatus.stopped) {
+        AppNotice.show(
+            context, '已切换到 ${target == NetworkMode.tun ? 'TUN' : '系统代理'}');
+      }
     });
+  }
+
+  Future<void> _showDeveloperSettings() async {
+    if (!_canEditSettings) return;
+    await showSettingsSheet<void>(
+        context: context,
+        builder: (_) => SettingsSheetContent(
+              title: const Text('开发者设置'),
+              content: ListTile(
+                  leading: const Icon(Icons.settings_ethernet_rounded),
+                  title: const Text('内核连接设置'),
+                  subtitle: const Text('控制接口、密钥与代理端口'),
+                  onTap: _showCoreConnectionSettings),
+            ));
+  }
+
+  Future<void> _showCoreConnectionSettings() async {
+    if (!_canEditSettings) return;
+    try {
+      final current = await _service.getCoreConnectionSettings();
+      if (!mounted) return;
+      final saved = await showSettingsSheet<bool>(
+          context: context,
+          builder: (_) => CoreConnectionForm(
+              initial: current,
+              onSave: (settings) async {
+                if (!_canEditSettings) throw StateError('代理正在启动或停止，请稍后保存设置');
+                await _service.saveCoreConnectionSettings(settings);
+              }));
+      if (saved == true && mounted) AppNotice.show(context, '设置已保存，下次启动代理生效');
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
   }
 
   Future<void> _showGeneralSettings() async {
@@ -545,7 +604,9 @@ class _HomePageState extends State<HomePage> {
                         ? null
                         : (enabled) => _changeSetting(() async {
                               await _service.setBypassLanEnabled(enabled);
-                              await _service.syncSystemProxy();
+                              if (_status == ProxyStatus.stopped) {
+                                await _service.syncSystemProxy();
+                              }
                               if (mounted) {
                                 setState(() => _bypassLanEnabled = enabled);
                               }
@@ -562,7 +623,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showRunModeDialog() async {
     if (!_canEditSettings) return;
-    final current = switch ((_coreType, _networkMode)) {
+    final savedMode = await _service.getNetworkMode();
+    if (!mounted) return;
+    final current = switch ((_coreType, savedMode)) {
       (CoreType.mihomo, NetworkMode.tun) => _RunModeChoice.mihomoTun,
       (CoreType.mihomo, NetworkMode.proxy) => _RunModeChoice.mihomoProxy,
     };
@@ -1176,6 +1239,10 @@ class _HomePageState extends State<HomePage> {
                 ]),
                 const PulseSectionLabel('工具'),
                 PulseSettingsGroup(children: [
+                  SettingsCard(
+                      icon: Icons.developer_mode_rounded,
+                      title: '开发者设置',
+                      onTap: _canEditSettings ? _showDeveloperSettings : null),
                   SettingsCard(
                       icon: Icons.system_update_alt_rounded,
                       title: '更新内核',

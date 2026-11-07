@@ -1,3 +1,4 @@
+import 'core_connection_settings.dart';
 import 'models.dart';
 import 'proxy_platform_service.dart';
 import 'windows_proxy_platform_service.dart';
@@ -15,6 +16,15 @@ class NativeProxyService implements ProxyPlatformService {
   @override
   Future<List<String>> getProxyGroupOrder() => _delegate.getProxyGroupOrder();
 
+  @override
+  Future<CoreConnectionSettings> getCoreConnectionSettings() =>
+      _delegate.getCoreConnectionSettings();
+  @override
+  Future<CoreConnectionSettings> getRunningCoreConnectionSettings() =>
+      _delegate.getRunningCoreConnectionSettings();
+  @override
+  Future<void> saveCoreConnectionSettings(CoreConnectionSettings settings) =>
+      _delegate.saveCoreConnectionSettings(settings);
   @override
   Future<bool> isRunning() => _delegate.isRunning();
   @override
@@ -78,23 +88,40 @@ class NativeProxyService implements ProxyPlatformService {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) =>
       _delegate.addSubscription(
-          name: name, url: url, subscriptionNames: subscriptionNames);
+          name: name,
+          url: url,
+          subscriptionNames: subscriptionNames,
+          subscriptionResolveDomains: subscriptionResolveDomains);
   @override
   Future<List<ConfigProfile>> updateSubscription({
     required String id,
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) =>
       _delegate.updateSubscription(
-          id: id, name: name, url: url, subscriptionNames: subscriptionNames);
+          id: id,
+          name: name,
+          url: url,
+          subscriptionNames: subscriptionNames,
+          subscriptionResolveDomains: subscriptionResolveDomains);
   @override
   Future<List<ConfigProfile>> editSubscriptionAirport(String id,
-          {String? oldUrl, String? name, String? url, List<String>? order}) =>
+          {String? oldUrl,
+          String? name,
+          String? url,
+          List<String>? order,
+          bool? resolveDomains}) =>
       _delegate.editSubscriptionAirport(id,
-          oldUrl: oldUrl, name: name, url: url, order: order);
+          oldUrl: oldUrl,
+          name: name,
+          url: url,
+          order: order,
+          resolveDomains: resolveDomains);
   @override
   Future<List<ConfigProfile>> refreshSubscription(String id, {String? url}) =>
       _delegate.refreshSubscription(id, url: url);

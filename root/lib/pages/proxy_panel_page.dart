@@ -424,16 +424,18 @@ class _ProxyPanelPageState extends State<ProxyPanelPage> {
   }) async {
     if (!widget.proxyRunning) throw StateError('代理已断开');
     final generation = _connectionGeneration;
-    final uri = Uri(
-      scheme: 'http',
-      host: '127.0.0.1',
-      port: 9090,
+    final connection = await _service.getRunningCoreConnectionSettings();
+    final uri = connection.endpoint.replace(
       pathSegments: pathSegments,
       queryParameters: queryParameters,
     );
 
     final request =
         await _client.openUrl(method, uri).timeout(const Duration(seconds: 6));
+    if (connection.secret.isNotEmpty) {
+      request.headers
+          .set(HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+    }
     request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
     if (body != null) {
       request.headers.contentType = ContentType.json;

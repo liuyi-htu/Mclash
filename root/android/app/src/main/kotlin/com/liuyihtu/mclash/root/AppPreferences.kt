@@ -67,6 +67,13 @@ internal class AppPreferences(context: Context) {
         }
     }
 
+    var coreConnectionSettings: CoreConnectionSettings
+        get() = CoreConnectionSettings.fromJson(preferences.getString("core_connection_settings", "{}") ?: "{}")
+        set(value) {
+            value.validate()
+            check(preferences.edit().putString("core_connection_settings", value.toJson()).commit()) { "无法保存内核连接设置" }
+        }
+
     var rootTunStack: String
         get() = preferences.getString("root_tun_stack", "mixed")?.takeIf { it in RootRuntimeConfig.TUN_STACKS } ?: "mixed"
         set(value) {

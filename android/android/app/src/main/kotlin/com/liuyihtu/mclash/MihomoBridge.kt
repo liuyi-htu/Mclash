@@ -10,9 +10,6 @@ import java.util.concurrent.TimeUnit
 /** Runs the official prebuilt mihomo Android executable shipped in jniLibs. */
 internal object MihomoProcess {
     private const val START_TIMEOUT_MS = 90_000L
-    private const val LOCAL_PROXY_PORT = 7890
-    private const val LOCAL_CONTROLLER_HOST = "127.0.0.1"
-    internal const val LOCAL_CONTROLLER_PORT = 9090
     private val BUNDLED_GEODATA = listOf(
         "geosite.dat" to "GeoSite.dat",
         "geoip.dat" to "GeoIP.dat",
@@ -53,7 +50,9 @@ internal object MihomoProcess {
             home = home,
             ipv6Enabled = preferences.vpnIpv6Enabled,
             debugLoggingEnabled = debugLoggingEnabled,
+            connection = preferences.coreConnectionSettings,
         )
+        val connection = CoreConnectionSettings.fromRuntime(runtimeConfig)
 
         val logFile = File(home, "mihomo.log")
         if (debugLoggingEnabled) {
@@ -61,8 +60,8 @@ internal object MihomoProcess {
                 "=== Mclash mihomo start ${System.currentTimeMillis()} ===\n" +
                     "binary=${binary.absolutePath}\n" +
                     "config=${runtimeConfig.absolutePath}\n" +
-                    "proxy=127.0.0.1:$LOCAL_PROXY_PORT\n" +
-                    "controller=$LOCAL_CONTROLLER_HOST:$LOCAL_CONTROLLER_PORT\n",
+                    "proxy=127.0.0.1:${connection.mixedPort}\n" +
+                    "controller=${connection.controller}\n",
             )
         }
 
@@ -111,7 +110,7 @@ internal object MihomoProcess {
             waitForPort(
                 process = next,
                 host = "127.0.0.1",
-                port = LOCAL_PROXY_PORT,
+                port = connection.mixedPort,
                 logFile = logFile,
                 label = "本地代理端口",
                 debugLoggingEnabled = debugLoggingEnabled,
@@ -128,8 +127,8 @@ internal object MihomoProcess {
             )
             waitForPort(
                 process = next,
-                host = LOCAL_CONTROLLER_HOST,
-                port = LOCAL_CONTROLLER_PORT,
+                host = connection.host,
+                port = connection.port,
                 logFile = logFile,
                 label = "外部控制器",
                 debugLoggingEnabled = debugLoggingEnabled,
@@ -139,7 +138,7 @@ internal object MihomoProcess {
             runCatching { stop() }.onFailure(error::addSuppressed)
             throw error
         }
-        return LOCAL_PROXY_PORT
+        return connection.mixedPort
     }
 
     fun previewConfig(context: Context, source: File): String {
@@ -148,7 +147,7 @@ internal object MihomoProcess {
         val preferences = AppPreferences(context)
         return try {
             prepareRuntimeConfig(source, home, preferences.vpnIpv6Enabled,
-                preferences.debugLoggingEnabled, candidate).readText(Charsets.UTF_8)
+                preferences.debugLoggingEnabled, candidate, preferences.coreConnectionSettings).readText(Charsets.UTF_8)
         } finally {
             candidate.delete()
         }
@@ -163,7 +162,7 @@ internal object MihomoProcess {
         var validator: Process? = null
         var validatorCommand: List<String>? = null
         try {
-            prepareRuntimeConfig(source, home, AppPreferences(context).vpnIpv6Enabled, false, candidate)
+            prepareRuntimeConfig(source, home, AppPreferences(context).vpnIpv6Enabled, false, candidate, AppPreferences(context).coreConnectionSettings)
             val binary = File(context.applicationInfo.nativeLibraryDir, "libmihomo.so")
             validatorCommand = listOf(binary.absolutePath, "-t", "-d", home.absolutePath, "-f", candidate.absolutePath)
             validator = ProcessBuilder(validatorCommand)
@@ -196,6 +195,8 @@ internal object MihomoProcess {
         process = null
         processCommand = null
     }
+
+    fun runningConnection(context: Context): CoreConnectionSettings = CoreConnectionSettings.fromRuntime(File(context.filesDir, "mihomo/runtime.yaml"))
 
     fun isRunning(): Boolean = process?.isAlive == true
 
@@ -235,13 +236,15 @@ internal object MihomoProcess {
     }
 
 
-    private fun prepareRuntimeConfig(
+    internal fun prepareRuntimeConfig(
         importedConfig: File,
         home: File,
         ipv6Enabled: Boolean,
         debugLoggingEnabled: Boolean,
         output: File = File(home, "runtime.yaml"),
+        connection: CoreConnectionSettings = CoreConnectionSettings(),
     ): File {
+        connection.validate()
         val controlledKeys = setOf(
             "mixed-port",
             "socks-port",
@@ -277,13 +280,13 @@ internal object MihomoProcess {
                 append(
                     """
                     # Injected by Mclash for Android VpnService.
-                    mixed-port: $LOCAL_PROXY_PORT
+                    mixed-port: ${connection.mixedPort}
                     allow-lan: false
                     ipv6: $ipv6Enabled
                     bind-address: 127.0.0.1
                     log-level: ${if (debugLoggingEnabled) "debug" else "error"}
-                    external-controller: "$LOCAL_CONTROLLER_HOST:$LOCAL_CONTROLLER_PORT"
-                    secret: ""
+                    external-controller: '${connection.controller}'
+                    secret: '${connection.secret.replace("'", "''")}'
                     external-ui: dashboard
                     external-controller-cors:
                       allow-origins:

@@ -9,17 +9,28 @@ import 'package:mclash/pages/config_page.dart';
 void main() {
   const channel = MethodChannel('mclash/native');
   var running = false;
+  var developerModeEnabled = false;
+  Map? savedConnection;
+  final nativeCalls = <String>[];
   var hideFromRecents = false;
   var rejectRecentsSave = false;
   var recentsSaves = 0;
 
   setUp(() {
     running = false;
+    developerModeEnabled = false;
+    savedConnection = null;
+    nativeCalls.clear();
     hideFromRecents = false;
     rejectRecentsSave = false;
     recentsSaves = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      nativeCalls.add(call.method);
+      if (call.method == 'saveCoreConnectionSettings') {
+        savedConnection = call.arguments as Map;
+        return null;
+      }
       if (call.method == 'setHideFromRecents') {
         recentsSaves++;
         if (rejectRecentsSave) {
@@ -30,7 +41,7 @@ void main() {
       }
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
-        'getDeveloperModeEnabled' => false,
+        'getDeveloperModeEnabled' => developerModeEnabled,
         'getConfigInfo' => <String, Object?>{},
         'isRunning' => running,
         'getHideFromRecents' => hideFromRecents,
@@ -44,6 +55,41 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets(
+      'connection settings live under developer mode and defer runtime changes',
+      (tester) async {
+    running = true;
+    developerModeEnabled = true;
+    await tester.pumpWidget(const MclashApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('内核连接设置'), findsNothing);
+    await tester.tap(find.text('开发者模式'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内核连接设置'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), '0.0.0.0:9191');
+    await tester.enterText(fields.at(1), 'developer-test');
+    await tester.enterText(fields.at(2), '7892');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(savedConnection, {
+      'controller': '0.0.0.0:9191',
+      'secret': 'developer-test',
+      'mixedPort': 7892
+    });
+    expect(find.text('设置已保存，下次启动代理生效'), findsOneWidget);
+    expect(
+        nativeCalls
+            .where((value) => ['start', 'stop', 'restart'].contains(value)),
+        isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('shows current home actions', (tester) async {
@@ -147,7 +193,7 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
-        'getDeveloperModeEnabled' => false,
+        'getDeveloperModeEnabled' => developerModeEnabled,
         'getConfigInfo' => <String, Object?>{
             'exists': true,
             'fileName': 'Test',
@@ -188,7 +234,7 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
-        'getDeveloperModeEnabled' => false,
+        'getDeveloperModeEnabled' => developerModeEnabled,
         'getConfigInfo' => <String, Object?>{'exists': true},
         'getConfigs' => <Object>[],
         'getProxyStatus' => nativeStatus,
@@ -220,7 +266,7 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       return switch (call.method) {
         'getUsageNoticeAccepted' => true,
-        'getDeveloperModeEnabled' => false,
+        'getDeveloperModeEnabled' => developerModeEnabled,
         'getConfigInfo' => <String, Object?>{},
         'getProxyStatus' => running ? 'running' : 'stopped',
         'getDebugLoggingEnabled' => false,
@@ -243,6 +289,9 @@ void main() {
     expect(find.text('本次 3.0 MB'), findsOneWidget);
     expect(find.text('本次 4.0 KB'), findsOneWidget);
     running = false;
+    developerModeEnabled = false;
+    savedConnection = null;
+    nativeCalls.clear();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
     expect(find.text('0 B/s'), findsNWidgets(2));

@@ -19,6 +19,7 @@ internal data class ConfigProfile(
     val updatedAt: Long,
     val subscriptionUserInfo: String? = null,
     val subscriptionNames: Map<String, String> = emptyMap(),
+    val subscriptionResolveDomains: Map<String, Boolean> = emptyMap(),
     val subscriptionInfos: Map<String, String> = emptyMap(),
 )
 
@@ -45,10 +46,33 @@ internal class ConfigStore(private val context: Context) {
 
     fun exists(): Boolean = configFile.isFile && configFile.length() > 0
 
+    /** Written only for a new service session, never by saved-profile edits. */
+    fun recordRuntimeProfile() {
+        val profile = activeProfile() ?: return
+        writeAtomically(File(mihomoDirectory, "runtime-profile.json"),
+            JSONObject().put("id", profile.id).put("name", profile.name).toString().toByteArray(Charsets.UTF_8))
+    }
+
+    fun preserveRuntimeProfile() {
+        if (ProxyVpnService.running && !File(mihomoDirectory, "runtime-profile.json").isFile) recordRuntimeProfile()
+    }
+
+    fun displayProfileName(): String? {
+        preserveRuntimeProfile()
+        if (ProxyVpnService.running || ProxyVpnService.starting) {
+            val snapshot = File(mihomoDirectory, "runtime-profile.json")
+            val name = runCatching { JSONObject(snapshot.readText()).getString("name") }.getOrNull()
+            if (name != null) return name
+        }
+        return activeProfile()?.name
+    }
+
+
     fun proxyGroupOrder(): List<String> {
         if (!exists()) return emptyList()
+        val source = if (ProxyVpnService.running || ProxyVpnService.starting) File(mihomoDirectory, "runtime.yaml") else configFile
         return parseProxyGroupOrder(
-            configFile.readText(Charsets.UTF_8).removePrefix("\uFEFF"),
+            source.readText(Charsets.UTF_8).removePrefix("\uFEFF"),
         )
     }
 
@@ -76,6 +100,7 @@ internal class ConfigStore(private val context: Context) {
                 "updatedAt" to profile.updatedAt,
                 "subscriptionUserInfo" to profile.subscriptionUserInfo,
                 "subscriptionNames" to profile.subscriptionNames,
+                "subscriptionResolveDomains" to profile.subscriptionResolveDomains,
                 "subscriptionInfos" to profile.subscriptionInfos,
                 "active" to (profile.id == activeId),
                 "exists" to profileFile(profile.id).isFile,
@@ -126,7 +151,7 @@ internal class ConfigStore(private val context: Context) {
     }
 
     @Synchronized
-    fun addSubscription(name: String, rawUrl: String, subscriptionNames: Map<String, String>? = null): ConfigProfile {
+    fun addSubscription(name: String, rawUrl: String, subscriptionNames: Map<String, String>? = null, subscriptionResolveDomains: Map<String, Boolean>? = null): ConfigProfile {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
 
@@ -134,7 +159,7 @@ internal class ConfigStore(private val context: Context) {
             "只能添加一个机场配置，请在已有配置中添加机场"
         }
 
-        val download = downloadSubscription(rawUrl)
+        val download = downloadSubscription(rawUrl, resolveDomains = subscriptionResolveDomains.orEmpty())
         val bytes = download.bytes
         val profile = ConfigProfile(
             id = UUID.randomUUID().toString(),
@@ -144,6 +169,7 @@ internal class ConfigStore(private val context: Context) {
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
             subscriptionInfos = download.userInfos,
+            subscriptionResolveDomains = subscriptionResolveDomains.orEmpty().filterKeys { it in SubscriptionConfig.links(rawUrl) },
             subscriptionNames = subscriptionNames.orEmpty().filterKeys { it in SubscriptionConfig.links(rawUrl) }.mapValues { it.value.trim() },
         )
         val profiles = readProfiles()
@@ -158,6 +184,7 @@ internal class ConfigStore(private val context: Context) {
         name: String,
         rawUrl: String,
         subscriptionNames: Map<String, String>? = null,
+        subscriptionResolveDomains: Map<String, Boolean>? = null,
     ): ConfigProfile {
         require(name.isNotBlank()) { "订阅名称不能为空" }
         require(rawUrl.isNotBlank()) { "订阅链接不能为空" }
@@ -167,7 +194,8 @@ internal class ConfigStore(private val context: Context) {
         require(index >= 0) { "找不到订阅配置" }
         require(profiles[index].type == TYPE_SUBSCRIPTION) { "本地配置不能修改为订阅" }
 
-        val download = downloadSubscription(rawUrl, profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8))
+        val resolveDomains = subscriptionResolveDomains ?: profiles[index].subscriptionResolveDomains
+        val download = downloadSubscription(rawUrl, profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8), resolveDomains = resolveDomains)
         val bytes = download.bytes
         val updated = profiles[index].copy(
             name = name,
@@ -175,6 +203,7 @@ internal class ConfigStore(private val context: Context) {
             updatedAt = System.currentTimeMillis(),
             subscriptionUserInfo = download.userInfo,
             subscriptionInfos = download.userInfos,
+            subscriptionResolveDomains = resolveDomains.filterKeys { it in SubscriptionConfig.links(rawUrl) },
             subscriptionNames = (subscriptionNames ?: profiles[index].subscriptionNames).filterKeys { it in SubscriptionConfig.links(rawUrl) }.mapValues { it.value.trim() },
         )
         profiles[index] = updated
@@ -187,7 +216,7 @@ internal class ConfigStore(private val context: Context) {
         return updated
     }
 
-    fun editSubscriptionAirport(id: String, oldUrl: String? = null, name: String? = null, url: String? = null, order: List<String>? = null): ConfigProfile {
+    fun editSubscriptionAirport(id: String, oldUrl: String? = null, name: String? = null, url: String? = null, order: List<String>? = null, resolveDomains: Boolean? = null): ConfigProfile {
         val profiles = readProfiles()
         val index = profiles.indexOfFirst { it.id == id }
         require(index >= 0) { "找不到订阅配置" }
@@ -196,6 +225,7 @@ internal class ConfigStore(private val context: Context) {
         val links = SubscriptionConfig.links(profile.url ?: error("订阅链接不存在"))
         val next = links.toMutableList()
         val names = profile.subscriptionNames.toMutableMap()
+        val resolutions = profile.subscriptionResolveDomains.toMutableMap()
         val newUrl = url?.let { SubscriptionConfig.links(it).singleOrNull() ?: error("每个机场只能有一个订阅链接") }
         if (order != null) {
             require(order.size == links.size && order.toSet() == links.toSet()) { "机场排序无效" }
@@ -212,8 +242,12 @@ internal class ConfigStore(private val context: Context) {
                 val airportIndex = next.indexOf(oldUrl)
                 if (newUrl == null) next.removeAt(airportIndex) else next[airportIndex] = newUrl
                 names.remove(oldUrl)
+                resolutions.remove(oldUrl)
             }
-            if (newUrl != null) names[newUrl] = name!!.trim()
+            if (newUrl != null) {
+                names[newUrl] = name!!.trim()
+                resolutions[newUrl] = resolveDomains ?: profile.subscriptionResolveDomains[oldUrl] ?: false
+            }
         }
         require(next.isNotEmpty()) { "删除最后一个机场时请删除配置" }
         val cache = subscriptionCacheFile(id)
@@ -223,10 +257,10 @@ internal class ConfigStore(private val context: Context) {
         } else emptyMap()
         val download = downloadSubscription(
             next.joinToString("\n"), profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8),
-            newUrl, cachedSources, profile.subscriptionInfos, downloadAll = false,
+            newUrl, cachedSources, profile.subscriptionInfos, downloadAll = false, resolveDomains = resolutions,
         )
         val updated = profile.copy(url = next.joinToString("\n"), updatedAt = System.currentTimeMillis(),
-            subscriptionNames = names, subscriptionUserInfo = download.userInfo, subscriptionInfos = download.userInfos)
+            subscriptionNames = names, subscriptionResolveDomains = resolutions, subscriptionUserInfo = download.userInfo, subscriptionInfos = download.userInfos)
         profiles[index] = updated
         writeConfigAndProfiles(id, download.bytes, profiles, download.sources)
         return updated
@@ -246,7 +280,7 @@ internal class ConfigStore(private val context: Context) {
         val download = downloadSubscription(
             profile.url ?: error("订阅链接不存在"),
             profileFile(id).takeIf(File::isFile)?.readText(Charsets.UTF_8),
-            url, cachedSources, profile.subscriptionInfos,
+            url, cachedSources, profile.subscriptionInfos, resolveDomains = profile.subscriptionResolveDomains,
         )
         val updated = profile.copy(updatedAt = System.currentTimeMillis(), subscriptionUserInfo = download.userInfo, subscriptionInfos = download.userInfos)
         profiles[index] = updated
@@ -382,7 +416,7 @@ internal class ConfigStore(private val context: Context) {
 
     private data class SubscriptionDownload(val bytes: ByteArray, val userInfo: String?, val sources: Map<String, String> = emptyMap(), val userInfos: Map<String, String> = emptyMap())
 
-    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null, selectedUrl: String? = null, cachedSources: Map<String, String> = emptyMap(), cachedUserInfos: Map<String, String> = emptyMap(), downloadAll: Boolean = true): SubscriptionDownload {
+    private fun downloadSubscription(rawUrl: String, previousConfig: String? = null, selectedUrl: String? = null, cachedSources: Map<String, String> = emptyMap(), cachedUserInfos: Map<String, String> = emptyMap(), downloadAll: Boolean = true, resolveDomains: Map<String, Boolean> = emptyMap()): SubscriptionDownload {
         val urls = SubscriptionConfig.links(rawUrl)
         require(selectedUrl == null || selectedUrl in urls) { "订阅链接不存在" }
         var totalBytes = 0L
@@ -402,7 +436,10 @@ internal class ConfigStore(private val context: Context) {
             source.copy(bytes = SubscriptionConfig.mergeSources(listOf(source.bytes.toString(Charsets.UTF_8)))
                 .toByteArray(Charsets.UTF_8))
         }
-        val merged = SubscriptionConfig.mergeSources(sources.map { it.bytes.toString(Charsets.UTF_8) })
+        val merged = SubscriptionConfig.mergeSources(sources.mapIndexed { index, source ->
+            val content = source.bytes.toString(Charsets.UTF_8)
+            if (resolveDomains[urls[index]] == true) NodeDomainResolver.resolve(content) else content
+        })
         return SubscriptionDownload(
             buildSubscriptionConfig(merged.toByteArray(Charsets.UTF_8), previousConfig),
             sources.singleOrNull()?.userInfo,
@@ -459,13 +496,12 @@ internal class ConfigStore(private val context: Context) {
     }
 
     private fun writeConfigAndProfiles(id: String, bytes: ByteArray, profiles: List<ConfigProfile>, sources: Map<String, String>? = null) {
-        check(!ProxyVpnService.running && !ProxyVpnService.starting) { "请先停止代理再修改配置" }
         val target = profileFile(id)
         val oldBytes = target.takeIf(File::isFile)?.readBytes()
         val cache = subscriptionCacheFile(id)
         val oldCache = if (sources != null) cache.takeIf(File::isFile)?.readBytes() else null
         val runtime = File(mihomoDirectory, "runtime.yaml")
-        val syncRuntime = preferences.activeConfigId == id
+        val syncRuntime = preferences.activeConfigId == id && !ProxyVpnService.running && !ProxyVpnService.starting
         val oldRuntime = if (syncRuntime) runtime.takeIf(File::isFile)?.readBytes() else null
         writeAtomically(target, bytes)
         try {
@@ -584,6 +620,9 @@ internal class ConfigStore(private val context: Context) {
                 updatedAt = item.optLong("updatedAt", 0L),
                 subscriptionUserInfo = if (item.isNull("subscriptionUserInfo")) null
                     else item.optString("subscriptionUserInfo"),
+                subscriptionResolveDomains = item.optJSONObject("subscriptionResolveDomains")?.let { values ->
+                    values.keys().asSequence().associateWith { values.optBoolean(it, false) }
+                }.orEmpty(),
                 subscriptionNames = item.optJSONObject("subscriptionNames")?.let { names ->
                     names.keys().asSequence().associateWith { names.getString(it) }
                 }.orEmpty(),
@@ -607,6 +646,7 @@ internal class ConfigStore(private val context: Context) {
                     .put("updatedAt", profile.updatedAt)
                     .put("subscriptionUserInfo", profile.subscriptionUserInfo ?: JSONObject.NULL)
                     .put("subscriptionNames", JSONObject(profile.subscriptionNames))
+                    .put("subscriptionResolveDomains", JSONObject(profile.subscriptionResolveDomains))
                     .put("subscriptionInfos", JSONObject(profile.subscriptionInfos)),
             )
         }

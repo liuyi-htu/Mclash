@@ -40,13 +40,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
   bool _searchVisible = false;
   int _searchIndex = -1;
   final _searchController = TextEditingController();
-  bool get _readOnly =>
-      widget.runtimeView ||
-      _observedRunning ||
-      _runtimeContent ||
-      widget.profile.isSubscription ||
-      (widget.proxyStatus != null &&
-          widget.proxyStatus!.value != ProxyStatus.stopped);
+  bool get _readOnly => widget.runtimeView || widget.profile.isSubscription;
   bool _runtimeContent = false;
   bool _observedRunning = false;
   Timer? _stateTimer;
@@ -128,12 +122,12 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       }
       setState(() {
         _observedRunning = running;
-        _runtimeContent = widget.runtimeView || running;
+        _runtimeContent = widget.runtimeView;
       });
-      final rawContent = widget.runtimeView || running
+      final rawContent = widget.runtimeView
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
-      final content = widget.runtimeView || running
+      final content = widget.runtimeView
           ? formatRuntimeConfigForDisplay(rawContent)
           : rawContent;
       if (!mounted) return;
@@ -290,20 +284,13 @@ class _ConfigEditorPageState extends State<ConfigEditorPage> {
       _error = null;
     });
     try {
-      if (widget.proxyStatus != null
-          ? await _service.getProxyStatus() != ProxyStatus.stopped
-          : await _service.isRunning()) {
-        await _applyRunningState(true);
-        return;
-      }
-
       await _service.saveConfigContent(
         id: widget.profile.id,
         content: _controller.text,
       );
       if (!mounted) return;
       setState(() => _dirty = false);
-      AppNotice.show(context, '配置内容已保存');
+      AppNotice.show(context, '配置已保存，下次启动代理生效');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error.toString());

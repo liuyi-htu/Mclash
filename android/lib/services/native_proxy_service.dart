@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import '../core/core_connection_settings.dart';
 
 import '../core/models.dart';
 
@@ -7,6 +8,24 @@ class NativeProxyService {
 
   static final NativeProxyService instance = NativeProxyService._();
   static const MethodChannel _channel = MethodChannel('mclash/native');
+
+  Future<CoreConnectionSettings> getCoreConnectionSettings() async =>
+      CoreConnectionSettings.fromMap(
+          await _channel.invokeMapMethod<Object?, Object?>(
+                  'getCoreConnectionSettings') ??
+              {},
+          defaultPort: 7890);
+  Future<CoreConnectionSettings> getRunningCoreConnectionSettings() async =>
+      CoreConnectionSettings.fromMap(
+          await _channel.invokeMapMethod<Object?, Object?>(
+                  'getRunningCoreConnectionSettings') ??
+              {},
+          defaultPort: 7890);
+  Future<void> saveCoreConnectionSettings(CoreConnectionSettings settings) {
+    settings.validate();
+    return _channel.invokeMethod<void>(
+        'saveCoreConnectionSettings', settings.toMap());
+  }
 
   Future<bool> getUsageNoticeAccepted() async {
     return await _channel.invokeMethod<bool>('getUsageNoticeAccepted') ?? false;
@@ -76,6 +95,7 @@ class NativeProxyService {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) async {
     final result = await _channel.invokeListMethod<Object?>(
           'addSubscription',
@@ -83,7 +103,9 @@ class NativeProxyService {
             'name': name,
             'url': url,
             if (subscriptionNames != null)
-              'subscriptionNames': subscriptionNames
+              'subscriptionNames': subscriptionNames,
+            if (subscriptionResolveDomains != null)
+              'subscriptionResolveDomains': subscriptionResolveDomains
           },
         ) ??
         const [];
@@ -98,6 +120,7 @@ class NativeProxyService {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) async {
     final result = await _channel.invokeListMethod<Object?>(
           'updateSubscription',
@@ -106,7 +129,9 @@ class NativeProxyService {
             'name': name,
             'url': url,
             if (subscriptionNames != null)
-              'subscriptionNames': subscriptionNames
+              'subscriptionNames': subscriptionNames,
+            if (subscriptionResolveDomains != null)
+              'subscriptionResolveDomains': subscriptionResolveDomains
           },
         ) ??
         const [];
@@ -117,7 +142,11 @@ class NativeProxyService {
   }
 
   Future<List<ConfigProfile>> editSubscriptionAirport(String id,
-      {String? oldUrl, String? name, String? url, List<String>? order}) async {
+      {String? oldUrl,
+      String? name,
+      String? url,
+      List<String>? order,
+      bool? resolveDomains}) async {
     final result = await _channel.invokeListMethod<Object?>(
           'editSubscriptionAirport',
           <String, Object>{
@@ -126,6 +155,7 @@ class NativeProxyService {
             if (name != null) 'name': name,
             if (url != null) 'url': url,
             if (order != null) 'order': order,
+            if (resolveDomains != null) 'resolveDomains': resolveDomains,
           },
         ) ??
         const [];

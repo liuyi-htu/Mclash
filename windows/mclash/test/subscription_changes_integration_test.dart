@@ -30,7 +30,9 @@ class _Service implements ProxyPlatformService {
   Future<List<ConfigProfile>> addSubscription(
       {required String name,
       required String url,
-      Map<String, String>? subscriptionNames}) async {
+      Map<String, String>? subscriptionNames,
+      Map<String, bool>? subscriptionResolveDomains}) async {
+    expect(subscriptionResolveDomains, {'https://example.org/new': true});
     addedName = name;
     updated = true;
     return [
@@ -47,7 +49,11 @@ class _Service implements ProxyPlatformService {
 
   @override
   Future<List<ConfigProfile>> editSubscriptionAirport(String id,
-      {String? oldUrl, String? name, String? url, List<String>? order}) async {
+      {String? oldUrl,
+      String? name,
+      String? url,
+      List<String>? order,
+      bool? resolveDomains}) async {
     if (fail) throw StateError('更新失败');
     updated = true;
     return [profile];
@@ -69,6 +75,14 @@ void main() {
     await tester.tap(find.text('添加机场配置'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
+    final toggle = find.byType(SwitchListTile);
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    expect(
+        tester.getTopLeft(toggle).dy,
+        lessThan(
+            tester.getTopLeft(find.widgetWithText(TextField, '机场 1 名称')).dy));
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '新机场');
     await tester.enterText(
         find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/new');

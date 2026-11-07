@@ -18,7 +18,9 @@ void main() {
           serviceProcessRunner: (_, args) async =>
               ProcessResult(1, 0, '{"state":"$state"}', ''));
       await expectLater(service.selectConfig('test.yaml'), throwsStateError);
-      await expectLater(service.importConfigs(), throwsStateError);
+      if (state != 'running') {
+        await expectLater(service.importConfigs(), throwsStateError);
+      }
     }
   });
 

@@ -155,10 +155,10 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
 
   Future<void> _applyRunningState(bool running) async {
     if (_dirty) {
-      // Keep the draft in place; only lock editing until the proxy stops.
+      // Saved drafts are independent of the running session.
       setState(() {
         _observedRunning = running;
-        _readOnly = running || widget.profile.isSubscription;
+        _readOnly = widget.runtimeView || widget.profile.isSubscription;
       });
       return;
     }
@@ -175,20 +175,20 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
       }
       setState(() {
         _observedRunning = running;
-        _runtimeContent = widget.runtimeView || running;
+        _runtimeContent = widget.runtimeView;
         _readOnly = _runtimeContent || widget.profile.isSubscription;
       });
-      final rawContent = widget.runtimeView || running
+      final rawContent = widget.runtimeView
           ? await _service.getRuntimeConfigContent()
           : await _service.getConfigContent(widget.profile.id);
-      final content = widget.runtimeView || running
+      final content = widget.runtimeView
           ? formatRuntimeConfigForDisplay(rawContent)
           : rawContent;
       if (!mounted) return;
       if (_dirty) {
         setState(() {
           _runtimeContent = false;
-          _readOnly = _observedRunning || widget.profile.isSubscription;
+          _readOnly = widget.runtimeView || widget.profile.isSubscription;
         });
         return;
       }
@@ -343,11 +343,6 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
       _error = null;
     });
     try {
-      if (await _service.getProxyStatus() != ProxyStatus.stopped) {
-        await _applyRunningState(true);
-        return;
-      }
-
       try {
         if (loadYaml(_controller.text) is! YamlMap) {
           throw const FormatException('配置必须是 YAML 对象');
@@ -361,7 +356,7 @@ class _ConfigEditorPageState extends State<ConfigEditorPage>
           id: widget.profile.id, content: _controller.text);
       if (!mounted) return;
       setState(() => _dirty = false);
-      showTopSnackBar(context, const SnackBar(content: Text('配置已保存，下次启动时应用')));
+      showTopSnackBar(context, const SnackBar(content: Text('配置已保存，下次启动代理生效')));
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = errorNoticeSummary(errorNoticeDetails(error)));

@@ -131,9 +131,10 @@ void main() {
             ))))));
     expect(find.text('展开'), findsNothing);
     expect(find.byTooltip('更新机场'), findsNWidgets(30));
-    for (final button
-        in tester.widgetList<IconButton>(find.byType(IconButton))) {
-      expect(button.onPressed, isNull);
+    for (final button in tester
+        .widgetList<IconButton>(find.byType(IconButton))
+        .where((button) => button.tooltip == '更新机场')) {
+      expect(button.onPressed, isNotNull);
     }
     expect(tester.takeException(), isNull);
   });

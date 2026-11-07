@@ -1,3 +1,4 @@
+import 'package:mclash/core_connection_settings.dart';
 import 'package:mclash/settings_sheet.dart';
 import 'package:mclash/pulse_dashboard.dart';
 import 'dart:async';
@@ -11,6 +12,16 @@ import 'package:mclash/proxy_platform_service.dart';
 import 'package:mclash/proxy_panel_page.dart';
 
 class _Service implements ProxyPlatformService {
+  CoreConnectionSettings? savedConnection;
+  @override
+  Future<CoreConnectionSettings> getCoreConnectionSettings() async =>
+      const CoreConnectionSettings(mixedPort: 7890);
+  @override
+  Future<void> saveCoreConnectionSettings(
+      CoreConnectionSettings settings) async {
+    savedConnection = settings;
+  }
+
   bool running = false;
   bool failStatus = false;
   ProxyStatus? statusOverride;
@@ -99,7 +110,34 @@ void main() {
           .ancestor(of: find.text(label), matching: find.byType(InkWell))
           .first);
 
-  testWidgets('settings and log writes require confirmed stopped state',
+  testWidgets('connection settings are inside developer settings while running',
+      (tester) async {
+    final service = _Service()..running = true;
+    await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    expect(find.text('内核连接设置'), findsNothing);
+    await tester.tap(find.text('开发者设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内核连接设置'));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), '0.0.0.0:9191');
+    await tester.enterText(fields.at(1), 'developer-test');
+    await tester.enterText(fields.at(2), '7892');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(service.savedConnection!.mixedPort, 7892);
+    expect(service.savedConnection!.controller, '0.0.0.0:9191');
+    expect(service.savedConnection!.secret, 'developer-test');
+    expect(find.text('设置已保存，下次启动代理生效'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('settings and log writes work in stable stopped or running state',
       (tester) async {
     final service = _Service();
     await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
@@ -112,7 +150,8 @@ void main() {
       service.statusOverride = status;
       await tester.pump(const Duration(seconds: 3));
       await tester.pump();
-      final editable = status == ProxyStatus.stopped;
+      final editable =
+          status == ProxyStatus.stopped || status == ProxyStatus.running;
       expect(settingsEntry(tester, '常规设置').onTap != null, editable);
       expect(settingsEntry(tester, '运行模式').onTap != null, editable);
       expect(settingsEntry(tester, '调试日志').onTap, isNotNull);
@@ -141,6 +180,26 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('running settings remain clickable and save for next start',
+      (tester) async {
+    final service = _Service()..running = true;
+    await tester.pumpWidget(MaterialApp(home: HomePage(service: service)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('常规设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('启用 IPv6'));
+    await tester.pumpAndSettle();
+    expect(service.ipv6Changes, 1);
+    expect(find.text('设置已保存，下次启动代理生效'), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('open settings update live and recheck before saving',
       (tester) async {
     final service = _Service();
@@ -153,7 +212,7 @@ void main() {
     await tester.tap(find.text('常规设置'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    service.statusOverride = ProxyStatus.running;
+    service.statusOverride = ProxyStatus.starting;
     // The UI still shows stopped, but the save must probe the service again.
     await tester.tap(find.text('启用 IPv6'));
     await tester.pump();

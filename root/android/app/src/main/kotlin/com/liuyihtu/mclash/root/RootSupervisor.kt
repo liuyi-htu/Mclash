@@ -6,7 +6,7 @@ import java.io.File
 internal object RootSupervisor {
     const val PROTOCOL = "2"
 
-    fun script(directory: File, core: File, appUid: Int, tun: Boolean, ipv6: Boolean): String {
+    fun script(directory: File, core: File, appUid: Int, tun: Boolean, ipv6: Boolean, connection: CoreConnectionSettings = CoreConnectionSettings()): String {
         val home = RootShell.quote(directory.absolutePath)
         return """
             #!/system/bin/sh
@@ -149,8 +149,8 @@ internal object RootSupervisor {
             owner_alive() { return 0; }
             core_alive() { same_process "${'$'}core_pid" "${'$'}core_stamp"; }
             listener_ready() {
-                ${if (tun) "ip link show dev mclash0 >/dev/null 2>&1" else "awk '${'$'}2 ~ /:45E2${'$'}/ && ${'$'}4 == \"0A\" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6"} &&
-                awk '${'$'}2 ~ /:2382${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6
+                ${if (tun) "ip link show dev mclash0 >/dev/null 2>&1" else "awk '${'$'}2 ~ /:${connection.mixedPort.toString(16).uppercase().padStart(4, '0')}${'$'}/ && ${'$'}4 == \"0A\" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6"} &&
+                awk '${'$'}2 ~ /:${connection.port.toString(16).uppercase().padStart(4, '0')}${'$'}/ && ${'$'}4 == "0A" {found=1} END {exit !found}' /proc/net/tcp /proc/net/tcp6
             }
             n=0
             while ! listener_ready; do

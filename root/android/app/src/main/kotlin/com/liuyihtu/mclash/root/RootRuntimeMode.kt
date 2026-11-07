@@ -13,9 +13,11 @@ internal object RootRuntimeMode {
     fun capture(context: Context) {
         // Best effort: an unavailable controller must never prevent stop/recovery.
         runCatching {
-            val connection = URL("http://127.0.0.1:${RootRuntimeConfig.CONTROLLER_PORT}/configs")
+            val settings = MihomoProcess.runningConnection(context)
+            val connection = URL("http://${if (settings.host.contains(':')) "[${settings.host}]" else settings.host}:${settings.port}/configs")
                 .openConnection(Proxy.NO_PROXY) as HttpURLConnection
             try {
+                if (settings.secret.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer ${settings.secret}")
                 connection.connectTimeout = 1000
                 connection.readTimeout = 1000
                 val mode = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })

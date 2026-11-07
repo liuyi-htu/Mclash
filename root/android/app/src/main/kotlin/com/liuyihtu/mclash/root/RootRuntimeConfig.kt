@@ -15,7 +15,8 @@ internal object RootRuntimeConfig {
     const val BYPASS_MARK = 0x40000000
     val TUN_STACKS = setOf("mixed", "system", "gvisor", "mips")
 
-    fun build(source: String, debug: Boolean, mode: String? = null, ipv6: Boolean = false, tun: Boolean = false, tunStack: String = "mixed"): String {
+    fun build(source: String, debug: Boolean, mode: String? = null, ipv6: Boolean = false, tun: Boolean = false, tunStack: String = "mixed", connection: CoreConnectionSettings = CoreConnectionSettings()): String {
+        connection.validate()
         require(tunStack in TUN_STACKS) { "TUN 协议栈无效" }
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {
             codePointLimit = 8 * 1024 * 1024
@@ -46,15 +47,15 @@ internal object RootRuntimeConfig {
         }
         config["dns"] = dns
         val injected = linkedMapOf<String, Any?>(
-            "mixed-port" to MIXED_PORT,
+            "mixed-port" to connection.mixedPort,
             "tproxy-port" to TPROXY_PORT,
             "allow-lan" to false,
             "bind-address" to "127.0.0.1",
             "ipv6" to ipv6,
             "routing-mark" to BYPASS_MARK,
             "log-level" to if (debug) "debug" else "error",
-            "external-controller" to "127.0.0.1:$CONTROLLER_PORT",
-            "secret" to "",
+            "external-controller" to connection.controller,
+            "secret" to connection.secret,
             "external-ui" to "dashboard",
         )
         if (ipv6 && !tun) {

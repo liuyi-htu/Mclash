@@ -1,3 +1,4 @@
+import 'package:mclash/core_connection_settings.dart';
 import 'package:mclash/dns_management.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,19 +90,17 @@ void main() {
     expect(persisted['dns']['ipv6'], false);
     expect(loadYaml(await profile.readAsString())['dns']['ipv6'], true);
   });
-  test('running service rejects edits and exposes actual runtime content',
+  test('running service saves edits without altering actual runtime content',
       () async {
     final service = WindowsProxyPlatformService(
         dataDir: dir.path,
         serviceProcessRunner: (_, args) async =>
             ProcessResult(1, 0, '{"state":"running"}', ''));
-    final before = await profile.readAsString();
     await File('${dir.path}\\config.yaml').writeAsString('mixed-port: 7890\n');
     expect(await service.getRuntimeConfigContent(), 'mixed-port: 7890\n');
-    await expectLater(
-        service.saveConfigContent(id: 'test.yaml', content: 'rules: []'),
-        throwsStateError);
-    expect(await profile.readAsString(), before);
+    await service.saveConfigContent(id: 'test.yaml', content: 'rules: []');
+    expect(await profile.readAsString(), 'rules: []');
+    expect(await service.getRuntimeConfigContent(), 'mixed-port: 7890\n');
   });
   test(
       'stopped runtime view previews the active profile instead of a stale file',
@@ -121,6 +120,28 @@ void main() {
     expect(await File('${dir.path}\\config.yaml').readAsString(),
         contains('5678'));
   });
+  for (final aliases in [false, true]) {
+    test('saved core connection replaces redundant ports, aliases=$aliases',
+        () async {
+      final config = File('${dir.path}\\config.yaml');
+      await config.writeAsString(
+          'port: 8080\nsocks-port: 8080\n${aliases ? "custom: &dns {ipv6: true}\ndns: *dns\n" : ""}');
+      final service = WindowsProxyPlatformService(
+          dataDir: dir.path,
+          serviceProcessRunner: (_, __) async =>
+              ProcessResult(1, 0, '{"state":"stopped"}', ''));
+      expect((await service.getCoreConnectionSettings()).mixedPort, 8080);
+      await service.saveCoreConnectionSettings(const CoreConnectionSettings(
+          controller: '[::]:9191', secret: "test:#' key", mixedPort: 8080));
+      final runtime = loadYaml(await config.readAsString());
+      expect(runtime['mixed-port'], 8080);
+      expect(runtime['external-controller'], '[::]:9191');
+      expect(runtime['secret'], "test:#' key");
+      expect(runtime.containsKey('port'), false);
+      expect(runtime.containsKey('socks-port'), false);
+    });
+  }
+
   test('controller override preserves nested secret and YAML comments',
       () async {
     final config = File('${dir.path}\\config.yaml');
