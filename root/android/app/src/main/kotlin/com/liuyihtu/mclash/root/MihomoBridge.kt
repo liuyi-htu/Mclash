@@ -30,7 +30,7 @@ internal object MihomoProcess {
 
     fun previewConfig(context: Context, source: File): String {
         val settings = AppPreferences(context)
-        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode, settings.rootIpv6, settings.rootProxyMode == "tun", settings.rootTunStack)
+        return RootRuntimeConfig.build(source.readText(), settings.debugLoggingEnabled, settings.coreMode, settings.rootIpv6, settings.rootProxyMode == "tun", settings.rootTunStack, settings.coreConnectionSettings)
     }
 
     fun validateConfig(context: Context, source: File) = validateWithBinary(context, source, binary(context))
@@ -82,7 +82,7 @@ internal object MihomoProcess {
         File(directory, "log-writer.sh").writeText(RootSupervisor.logWriter())
         File(directory, "protocol").writeText(RootSupervisor.PROTOCOL)
         val script = File(directory, "supervisor.sh").apply {
-            writeText(RootSupervisor.script(directory, core, appUid, tun, ipv6))
+            writeText(RootSupervisor.script(directory, core, appUid, tun, ipv6, CoreConnectionSettings.fromRuntime(config)))
         }
         lastOutput = ""
         RootShell.run("nohup setsid /system/bin/sh ${RootShell.quote(script.absolutePath)} >> ${RootShell.quote(File(directory, "supervisor.log").absolutePath)} 2>&1 < /dev/null &")
@@ -276,7 +276,7 @@ internal object MihomoProcess {
         }
         val now = System.nanoTime()
         if (now - lastHealthAt > 2_000_000_000L) {
-            lastHealth = canConnect(RootRuntimeConfig.CONTROLLER_PORT) && canConnect(RootRuntimeConfig.MIXED_PORT)
+            lastHealth = runtimeHealthy(directory)
             lastHealthAt = now
         }
         lastHealth
@@ -290,7 +290,7 @@ internal object MihomoProcess {
         val ownerAlive = daemonAlive(directory)
         val marker = File(directory, "ready").takeIf { it.isFile }?.readText()?.trim()
         val active = ownerAlive && marker in setOf("ready", "cleanup_failed") &&
-            canConnect(RootRuntimeConfig.MIXED_PORT) && canConnect(RootRuntimeConfig.CONTROLLER_PORT)
+            runtimeHealthy(directory)
         lastHealth = active
         lastHealthAt = System.nanoTime()
         if (active && File(directory, "protocol").takeIf(File::isFile)?.readText()?.trim() != RootSupervisor.PROTOCOL) {
@@ -380,8 +380,14 @@ internal object MihomoProcess {
     fun clearDebugLog(context: Context) { File(context.filesDir, "mihomo/mihomo.log").writeText("") }
 
     private fun binary(context: Context): File = CoreUpdater.binary(context)
-    private fun canConnect(port: Int): Boolean = runCatching {
-        Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), 200) }; true
+    private fun runtimeHealthy(directory: File): Boolean {
+        val connection = CoreConnectionSettings.fromRuntime(File(directory, "runtime.yaml"))
+        return canConnect(connection.port, connection.host) && canConnect(connection.mixedPort)
+    }
+    fun runningMixedPort(): Int = CoreConnectionSettings.fromRuntime(File(checkNotNull(home), "runtime.yaml")).mixedPort
+    fun runningConnection(context: Context): CoreConnectionSettings = CoreConnectionSettings.fromRuntime(File(context.filesDir, "mihomo/runtime.yaml"))
+    private fun canConnect(port: Int, host: String = "127.0.0.1"): Boolean = runCatching {
+        Socket().use { it.connect(InetSocketAddress(host, port), 200) }; true
     }.getOrDefault(false)
     private fun diagnostics(directory: File): String = buildString {
         appendLine(lastOutput)

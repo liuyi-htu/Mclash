@@ -48,7 +48,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller!.text, draft);
-    expect(tester.widget<TextField>(field).readOnly, true);
+    expect(tester.widget<TextField>(field).readOnly, false);
     running = false;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();

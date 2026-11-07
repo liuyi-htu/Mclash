@@ -106,6 +106,7 @@ class ProxyTProxyService : Service() {
             val rules = TProxyRules.install(android.os.Process.myUid(), onlySelected, uids,
                 preferences.rootBypassLan, preferences.rootIpv6, preferences.rootProxyMode == "tun")
             check(!cancelled()) { "启动已取消" }
+            store.recordRuntimeProfile()
             MihomoProcess.start(this, store.configFile, rules, cancelled)
             StartupLog.append(this, "${preferences.rootProxyMode.uppercase()} 接管完成；Root Supervisor 独立运行，Android 操作服务退出")
         } catch (error: Throwable) {

@@ -3,6 +3,7 @@ import '../shared/page_visibility.dart';
 import '../shared/dialog_typography.dart';
 import '../shared/app_appearance.dart';
 import '../shared/pulse_dashboard.dart';
+import '../shared/core_connection_form.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -394,7 +395,9 @@ class _HomePageState extends State<HomePage>
       if (!mounted) return;
       setState(() {
         _config = config;
-        _rootProxyMode = (values[3] as RootProxySettings).proxyMode;
+        _rootProxyMode = status == ProxyStatus.running
+            ? config.runtimeMode ?? (values[3] as RootProxySettings).proxyMode
+            : (values[3] as RootProxySettings).proxyMode;
         if (!_toggling && generation == _transitionGeneration) {
           _status = status;
         }
@@ -421,13 +424,11 @@ class _HomePageState extends State<HomePage>
   }
 
   Future<void> _openAppSelector() async {
-    if (_status != ProxyStatus.stopped) {
-      _showError('请先停止代理再修改设置');
-      return;
-    }
     await Navigator.of(
       context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const AppSelectorPage()));
+    ).push<bool>(MaterialPageRoute(
+        builder: (_) =>
+            AppSelectorPage(proxyRunning: _status != ProxyStatus.stopped)));
   }
 
   Future<Map<String, dynamic>> _proxyControllerRequest(
@@ -438,10 +439,15 @@ class _HomePageState extends State<HomePage>
       ..connectionTimeout = const Duration(seconds: 5)
       ..findProxy = (_) => 'DIRECT';
     try {
+      final connection = await _service.getRunningCoreConnectionSettings();
       final request = await client.openUrl(
         method,
-        Uri.parse('http://127.0.0.1:9090/configs'),
+        connection.endpoint.replace(path: '/configs'),
       );
+      if (connection.secret.isNotEmpty) {
+        request.headers.set(
+            HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+      }
       request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
       if (body != null) {
         request.headers.contentType = ContentType.json;
@@ -556,6 +562,13 @@ class _HomePageState extends State<HomePage>
                 subtitle: '生成并导出本设备登记文件',
                 onTap: _openDeviceRegistration,
               ),
+              _settingsTile(
+                context: sheetContext,
+                icon: Icons.settings_ethernet_rounded,
+                title: '内核连接设置',
+                subtitle: '控制接口、密钥与代理端口',
+                onTap: _showCoreConnectionSettings,
+              ),
               const Divider(height: 20),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
@@ -563,7 +576,7 @@ class _HomePageState extends State<HomePage>
                         .textTheme
                         .bodyMedium
                         ?.copyWith(fontSize: 14)),
-                onPressed: _status != ProxyStatus.stopped
+                onPressed: !_settingsEditable
                     ? null
                     : () async {
                         try {
@@ -651,11 +664,30 @@ class _HomePageState extends State<HomePage>
     }
   }
 
-  Future<void> _showRootSettings() async {
-    if (_status != ProxyStatus.stopped) {
-      _showError('请先停止代理再修改代理模式');
-      return;
+  Future<void> _showCoreConnectionSettings() async {
+    if (!_settingsEditable) return;
+    try {
+      final current = await _service.getCoreConnectionSettings();
+      if (!mounted) return;
+      final saved = await showSettingsSheet<bool>(
+          context: context,
+          builder: (_) => CoreConnectionForm(
+              initial: current,
+              onSave: (settings) async {
+                if (!_settingsEditable) throw StateError('代理正在启动或停止，请稍后保存设置');
+                await _service.saveCoreConnectionSettings(settings);
+              }));
+      if (saved == true && mounted) {
+        showTopSnackBar(
+            context, const SnackBar(content: Text('设置已保存，下次启动代理生效')));
+      }
+    } catch (error) {
+      if (mounted) _showError(error);
     }
+  }
+
+  Future<void> _showRootSettings() async {
+    if (!_settingsEditable) return;
     try {
       final current = await _service.getRootSettings();
       if (!mounted) return;
@@ -696,7 +728,8 @@ class _HomePageState extends State<HomePage>
                               final saved = await _service.saveRootSettings(
                                   proxyMode: proxyMode);
                               proxyMode = saved.proxyMode;
-                              if (mounted) {
+                              _settingsSavedNotice();
+                              if (mounted && _status == ProxyStatus.stopped) {
                                 setState(
                                     () => _rootProxyMode = saved.proxyMode);
                               }
@@ -744,6 +777,7 @@ class _HomePageState extends State<HomePage>
                                     final saved = await _service
                                         .saveRootSettings(tunStack: value);
                                     tunStack = saved.tunStack;
+                                    _settingsSavedNotice();
                                   } catch (error) {
                                     tunStack = previous;
                                     if (mounted) _showError(error);
@@ -776,6 +810,7 @@ class _HomePageState extends State<HomePage>
                             });
                             try {
                               await _service.saveRootSettings(bypassLan: value);
+                              _settingsSavedNotice();
                             } catch (error) {
                               bypassLan = previous;
                               if (mounted) _showError(error);
@@ -804,6 +839,7 @@ class _HomePageState extends State<HomePage>
                             });
                             try {
                               await _service.saveRootSettings(ipv6: value);
+                              _settingsSavedNotice();
                             } catch (error) {
                               ipv6 = previous;
                               if (mounted) _showError(error);
@@ -845,7 +881,7 @@ class _HomePageState extends State<HomePage>
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: _status == ProxyStatus.stopped
+              onTap: _settingsEditable
                   ? () => _handleAboutTitleTap(dialogContext)
                   : null,
               child: const Padding(
@@ -963,6 +999,16 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  bool get _settingsEditable =>
+      !_toggling &&
+      (_status == ProxyStatus.stopped || _status == ProxyStatus.running);
+
+  void _settingsSavedNotice() {
+    if (mounted && _status == ProxyStatus.running) {
+      showTopSnackBar(context, const SnackBar(content: Text('设置已保存，下次启动代理生效')));
+    }
+  }
+
   Future<void> _showDebugLogSettings() async {
     var enabled = _debugLoggingEnabled;
 
@@ -988,11 +1034,12 @@ class _HomePageState extends State<HomePage>
                     title: Text('启用调试日志',
                         style: Theme.of(dialogContext).textTheme.bodyMedium),
                     value: enabled,
-                    onChanged: _status != ProxyStatus.stopped
+                    onChanged: !_settingsEditable
                         ? null
                         : (value) async {
                             try {
                               await _service.setDebugLoggingEnabled(value);
+                              _settingsSavedNotice();
                               if (!mounted) return;
                               setState(() => _debugLoggingEnabled = value);
                               setDialogState(() => enabled = value);
@@ -1043,7 +1090,7 @@ class _HomePageState extends State<HomePage>
                         .textTheme
                         .bodyMedium
                         ?.copyWith(fontSize: 14)),
-                onPressed: _status != ProxyStatus.stopped
+                onPressed: !_settingsEditable
                     ? null
                     : () => Navigator.of(dialogContext).pop('clear'),
                 icon: const Icon(Icons.delete_outline, size: 20),
@@ -1102,7 +1149,9 @@ class _HomePageState extends State<HomePage>
         ) ??
         false;
 
-    if (!confirmed || await _service.getProxyStatus() != ProxyStatus.stopped) {
+    if (!confirmed ||
+        !const [ProxyStatus.stopped, ProxyStatus.running]
+            .contains(await _service.getProxyStatus())) {
       return;
     }
 
@@ -1234,7 +1283,7 @@ class _HomePageState extends State<HomePage>
             ),
             ConfigPage(proxyRunning: _status != ProxyStatus.stopped),
             _SettingsPage(
-              locked: _status != ProxyStatus.stopped,
+              locked: !_settingsEditable,
               developerModeEnabled: _developerModeEnabled,
               onRootSettings: _showRootSettings,
               sharingAvailable: _status == ProxyStatus.running,

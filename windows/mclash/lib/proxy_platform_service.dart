@@ -1,6 +1,10 @@
+import 'core_connection_settings.dart';
 import 'models.dart';
 
 abstract interface class ProxyPlatformService {
+  Future<CoreConnectionSettings> getCoreConnectionSettings();
+  Future<CoreConnectionSettings> getRunningCoreConnectionSettings();
+  Future<void> saveCoreConnectionSettings(CoreConnectionSettings settings);
   Future<bool> isRunning();
   Future<ProxyStatus> getProxyStatus();
   Future<String> getDelayResults();
@@ -37,15 +41,21 @@ abstract interface class ProxyPlatformService {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   });
   Future<List<ConfigProfile>> updateSubscription({
     required String id,
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   });
   Future<List<ConfigProfile>> editSubscriptionAirport(String id,
-      {String? oldUrl, String? name, String? url, List<String>? order});
+      {String? oldUrl,
+      String? name,
+      String? url,
+      List<String>? order,
+      bool? resolveDomains});
   Future<List<ConfigProfile>> refreshSubscription(String id, {String? url});
   Future<SubscriptionUrlTestResult> testSubscriptionUrl(String id);
   Future<bool> getDebugLoggingEnabled();

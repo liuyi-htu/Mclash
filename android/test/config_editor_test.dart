@@ -139,7 +139,8 @@ void main() {
       throw StateError('Unexpected config access: ${call.method}');
     });
     await tester.pumpWidget(const MaterialApp(
-        home: ConfigEditorPage(profile: profile, proxyRunning: true)));
+        home: ConfigEditorPage(
+            profile: profile, proxyRunning: true, runtimeView: true)));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
     expect(find.text('保存'), findsNothing);
@@ -148,7 +149,8 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  testWidgets('running editor shows runtime read-only and unlocks when stopped',
+  testWidgets(
+      'running editor edits saved source and stays editable after stopping',
       (tester) async {
     var running = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -163,10 +165,10 @@ void main() {
         home: ConfigEditorPage(profile: profile, proxyRunning: true)));
     await tester.pumpAndSettle();
     var field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.readOnly, isTrue);
-    expect(field.controller!.text, 'mixed-port: 7890\n');
-    expect(find.text('当前运行配置'), findsOneWidget);
-    expect(find.text('保存'), findsNothing);
+    expect(field.readOnly, isFalse);
+    expect(field.controller!.text, 'rules: []\n');
+    expect(find.text('当前运行配置'), findsNothing);
+    expect(find.text('保存'), findsOneWidget);
     running = false;
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();

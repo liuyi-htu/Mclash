@@ -10,7 +10,9 @@ class ProxyEditAccess extends InheritedNotifier<ValueNotifier<ProxyStatus>> {
   static bool allowed(BuildContext context) {
     final access =
         context.dependOnInheritedWidgetOfExactType<ProxyEditAccess>();
-    return access == null || access.notifier?.value == ProxyStatus.stopped;
+    return access == null ||
+        [ProxyStatus.stopped, ProxyStatus.running]
+            .contains(access.notifier?.value);
   }
 
   static Widget wrap(ValueNotifier<ProxyStatus>? status,

@@ -80,6 +80,7 @@ rules: ["MATCH,DIRECT"]
       'name': '机场',
       'url': 'https://example.org/a',
       'subscriptionNames': {'https://example.org/a': '机场甲'},
+      'subscriptionResolveDomains': {'https://example.org/a': false},
     });
     expect(find.text('订阅已添加'), findsOneWidget);
     expect(find.text('新增（2）'), findsOneWidget);
@@ -249,7 +250,7 @@ rules: ["MATCH,DIRECT"]
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('regex editing is disabled while the VPN is running',
+  testWidgets('configuration editing is enabled while the proxy is running',
       (tester) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
@@ -278,7 +279,7 @@ rules: ["MATCH,DIRECT"]
     ]) {
       final tile = tester.widget<ListTile>(
           find.ancestor(of: find.text(name), matching: find.byType(ListTile)));
-      expect(tile.enabled, isFalse);
+      expect(tile.enabled, isTrue);
     }
     expect(tester.takeException(), isNull);
   });
@@ -781,13 +782,19 @@ rules: ["MATCH,DIRECT"]
             .controller!
             .text,
         'https://example.org/b');
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        isFalse);
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    expect(args, isNull); // Switching alone must not update the subscription.
     await tester.tap(find.text('保存并更新'));
     await confirmAirportUpdate(tester);
     expect(args, {
       'id': 'airport',
       'oldUrl': 'https://example.org/b',
       'name': '第二机场',
-      'url': 'https://example.org/b'
+      'url': 'https://example.org/b',
+      'resolveDomains': true,
     });
     expect(find.text('第二机场'), findsOneWidget);
     expect(tester.takeException(), isNull);

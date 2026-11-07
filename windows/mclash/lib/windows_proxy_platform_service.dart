@@ -1,3 +1,5 @@
+import 'core_connection_settings.dart';
+import 'node_domain_resolver.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -84,6 +86,9 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
   String get _logsDir => '$_dataDir\\logs';
   String get _settingsPath => '$_dataDir\\settings.json';
   String get _legacyStatePath => '$_dataDir\\state.json';
+  int _configWrites = 0;
+  bool _startingService = false;
+
   String get _configPath => '$_dataDir\\config.yaml';
   String get _serviceExe =>
       '${File(Platform.resolvedExecutable).parent.path}\\MclashService.exe';
@@ -238,14 +243,69 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
     }
   }
 
+  @override
+  Future<CoreConnectionSettings> getCoreConnectionSettings() async {
+    final state = await _readSettings();
+    if (state['coreConnection'] is Map) {
+      return CoreConnectionSettings.fromMap(state['coreConnection'] as Map);
+    }
+    // Keep the existing profile port as the initial value until explicitly saved.
+    final active = state['activeProfile']?.toString();
+    final source = _profileMatchesCore(active)
+        ? File(_profilePath(active!))
+        : File(_configPath);
+    final document =
+        await source.exists() ? loadYaml(await source.readAsString()) : null;
+    return CoreConnectionSettings(
+        mixedPort: document is Map
+            ? (document['mixed-port'] as num?)?.toInt() ??
+                (document['port'] as num?)?.toInt() ??
+                7890
+            : 7890);
+  }
+
+  @override
+  Future<CoreConnectionSettings> getRunningCoreConnectionSettings() async {
+    final file = File(_configPath);
+    if (!await file.exists()) {
+      return const CoreConnectionSettings(mixedPort: 7890);
+    }
+    final config = loadYaml(await file.readAsString());
+    if (config is! Map) throw const FormatException('运行配置无效');
+    return CoreConnectionSettings(
+        controller:
+            config['external-controller']?.toString() ?? '127.0.0.1:9090',
+        secret: config['secret']?.toString() ?? '',
+        mixedPort: (config['mixed-port'] as num?)?.toInt() ?? 7890);
+  }
+
+  @override
+  Future<void> saveCoreConnectionSettings(
+      CoreConnectionSettings settings) async {
+    settings.validate();
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      await _updateSettings({'coreConnection': settings.toMap()});
+      if (!await _runtimeIsActive()) await _refreshRuntimeConfig();
+    } finally {
+      _configWrites--;
+    }
+  }
+
   Future<bool> _checkControllerHealth() async {
     final client = HttpClient()
       ..connectionTimeout = statusTimeout
       ..findProxy = (_) => 'DIRECT';
     try {
       return await (() async {
+        final connection = await getRunningCoreConnectionSettings();
         final request =
-            await client.getUrl(Uri.parse('http://127.0.0.1:9090/version'));
+            await client.getUrl(connection.endpoint.replace(path: '/version'));
+        if (connection.secret.isNotEmpty) {
+          request.headers.set(
+              HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+        }
         final response = await request.close();
         if (response.statusCode != 200) return false;
         final data = jsonDecode(await utf8.decodeStream(response));
@@ -279,27 +339,45 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   Future<void> _prepareDashboard() async {
     await installBundledDashboard(Directory('$_dataDir\\dashboard'));
-    final config = File(_configPath);
-    if (await config.exists()) {
-      await config.writeAsString(
-        await _runtimeConfigForCurrentMode(await config.readAsString()),
-        flush: true,
-      );
-    }
+    await _refreshRuntimeConfig();
+    // Native service readiness must use the generated configuration, never pending preferences.
+    await _updateSettings({
+      'runtimeController': (await getRunningCoreConnectionSettings()).toMap()
+    });
+  }
+
+  Future<void> _recordRunningProfile() async {
+    final state = await _readSettings();
+    final id = state['activeProfile']?.toString();
+    await _updateSettings({
+      'runningProfileName':
+          _stateMap(state, 'profileNames')[id]?.toString() ?? 'config.yaml',
+      'runningNetworkMode': state['networkMode'] ?? 'proxy',
+      'runningBypassLanEnabled': state['bypassLanEnabled'] != false
+    });
   }
 
   @override
   Future<void> start() async {
-    await _prepareDashboard();
-    final status = await _status();
-    if (status['installed'] != true) await _runService('install');
+    if (_startingService || _configWrites > 0) {
+      throw StateError('配置正在保存或更新，请完成后再启动代理');
+    }
+    _startingService = true;
     try {
-      await _runService('start');
-      await syncSystemProxy();
-    } catch (_) {
-      await _setSystemProxyEnabled(false);
-      await _runService('stop', allowFailure: true);
-      rethrow;
+      await _prepareDashboard();
+      final status = await _status();
+      if (status['installed'] != true) await _runService('install');
+      try {
+        await _runService('start');
+        await syncSystemProxy();
+        await _recordRunningProfile();
+      } catch (_) {
+        await _setSystemProxyEnabled(false);
+        await _runService('stop', allowFailure: true);
+        rethrow;
+      }
+    } finally {
+      _startingService = false;
     }
   }
 
@@ -311,28 +389,45 @@ class WindowsProxyPlatformService implements ProxyPlatformService {
 
   @override
   Future<void> restart() async {
-    await _prepareDashboard();
-    await _setSystemProxyEnabled(false);
-    await _runService('restart');
+    if (_startingService || _configWrites > 0) {
+      throw StateError('配置正在保存或更新，请完成后再启动代理');
+    }
+    _startingService = true;
     try {
-      await syncSystemProxy();
-    } catch (_) {
-      await _runService('stop', allowFailure: true);
-      rethrow;
+      await _prepareDashboard();
+      await _setSystemProxyEnabled(false);
+      await _runService('restart');
+      try {
+        await syncSystemProxy();
+        await _recordRunningProfile();
+      } catch (_) {
+        await _runService('stop', allowFailure: true);
+        rethrow;
+      }
+    } finally {
+      _startingService = false;
     }
   }
 
   @override
   Future<void> syncSystemProxy() async {
-    final shouldEnable =
-        await getNetworkMode() == NetworkMode.proxy && await isRunning();
+    final state = await _readSettings();
+    final running = await isRunning();
+    final mode = running && !_startingService
+        ? state['runningNetworkMode'] ?? state['networkMode']
+        : state['networkMode'];
+    final shouldEnable = running && mode != 'tun';
     await _setSystemProxyEnabled(shouldEnable);
   }
 
   Future<void> _setSystemProxyEnabled(bool enabled) async {
     if (enabled) {
       final port = await _systemProxyPort();
-      final bypassLan = await getBypassLanEnabled();
+      final state = await _readSettings();
+      final bypassLan = await isRunning() && !_startingService
+          ? (state['runningBypassLanEnabled'] ?? state['bypassLanEnabled']) !=
+              false
+          : state['bypassLanEnabled'] != false;
       await _systemProxyManager.enable(
         port: port,
         bypass: (bypassLan ? _privateProxyBypass : _loopbackProxyBypass).join(
@@ -396,30 +491,42 @@ public static class WinInetProxy {
 
   @override
   Future<void> setNetworkMode(NetworkMode mode) async {
-    await _ensureDirectories();
-    final state = await _readSettings();
-    final preferences = _runtimePreferencesFromState(state);
-    final active = state['activeProfile']?.toString();
-    File? source;
-    if (active != null && _profileMatchesCore(active)) {
-      final profile = File(_profilePath(active));
-      if (await profile.exists()) source = profile;
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      if (await _runtimeIsActive()) {
+        await _updateSettings(
+            {'networkMode': mode == NetworkMode.tun ? 'tun' : 'proxy'});
+        return;
+      }
+      await _ensureDirectories();
+      final state = await _readSettings();
+      final preferences = _runtimePreferencesFromState(state);
+      final active = state['activeProfile']?.toString();
+      File? source;
+      if (active != null && _profileMatchesCore(active)) {
+        final profile = File(_profilePath(active));
+        if (await profile.exists()) source = profile;
+      }
+      source ??= await File(_configPath).exists() ? File(_configPath) : null;
+      if (source != null) {
+        await File(_configPath).writeAsString(
+          _runtimeConfig(
+            await source.readAsString(),
+            mode,
+            ipv6Enabled: preferences.ipv6Enabled,
+            bypassLanEnabled: preferences.bypassLanEnabled,
+            connection: preferences.connection,
+          ),
+          flush: true,
+        );
+      }
+      await _updateSettings(<String, dynamic>{
+        'networkMode': mode == NetworkMode.tun ? 'tun' : 'proxy',
+      });
+    } finally {
+      _configWrites--;
     }
-    source ??= await File(_configPath).exists() ? File(_configPath) : null;
-    if (source != null) {
-      await File(_configPath).writeAsString(
-        _runtimeConfig(
-          await source.readAsString(),
-          mode,
-          ipv6Enabled: preferences.ipv6Enabled,
-          bypassLanEnabled: preferences.bypassLanEnabled,
-        ),
-        flush: true,
-      );
-    }
-    await _updateSettings(<String, dynamic>{
-      'networkMode': mode == NetworkMode.tun ? 'tun' : 'proxy',
-    });
   }
 
   @override
@@ -428,8 +535,14 @@ public static class WinInetProxy {
 
   @override
   Future<void> setIpv6Enabled(bool enabled) async {
-    await _updateSettings(<String, dynamic>{'ipv6Enabled': enabled});
-    await _refreshRuntimeConfig();
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      await _updateSettings(<String, dynamic>{'ipv6Enabled': enabled});
+      if (!await _runtimeIsActive()) await _refreshRuntimeConfig();
+    } finally {
+      _configWrites--;
+    }
   }
 
   @override
@@ -438,8 +551,14 @@ public static class WinInetProxy {
 
   @override
   Future<void> setBypassLanEnabled(bool enabled) async {
-    await _updateSettings(<String, dynamic>{'bypassLanEnabled': enabled});
-    await _refreshRuntimeConfig();
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      await _updateSettings(<String, dynamic>{'bypassLanEnabled': enabled});
+      if (!await _runtimeIsActive()) await _refreshRuntimeConfig();
+    } finally {
+      _configWrites--;
+    }
   }
 
   _RuntimePreferences _runtimePreferencesFromState(
@@ -448,6 +567,9 @@ public static class WinInetProxy {
       _RuntimePreferences(
         ipv6Enabled: state['ipv6Enabled'] == true,
         bypassLanEnabled: state['bypassLanEnabled'] != false,
+        connection: state['coreConnection'] is Map
+            ? CoreConnectionSettings.fromMap(state['coreConnection'] as Map)
+            : null,
       );
 
   List<String> _routeExcludes(Object? existing, bool bypassLanEnabled) {
@@ -494,6 +616,7 @@ public static class WinInetProxy {
         mode,
         ipv6Enabled: preferences.ipv6Enabled,
         bypassLanEnabled: preferences.bypassLanEnabled,
+        connection: preferences.connection,
       ),
       flush: true,
     );
@@ -525,11 +648,19 @@ public static class WinInetProxy {
     final exists = await File(_configPath).exists();
     final active = state['activeProfile']?.toString();
     final names = state['profileNames'];
-    final displayName =
+    final savedName =
         names is Map && active != null ? names[active]?.toString() : null;
+    final running = await _runtimeIsActive();
+    final displayName = running
+        ? state['runningProfileName']?.toString() ?? savedName
+        : savedName;
     return ConfigInfo(
       exists: exists,
       fileName: displayName ?? (exists ? 'config.yaml' : null),
+      runtimeMode: (running
+              ? state['runningNetworkMode'] ?? state['networkMode']
+              : state['networkMode'])
+          ?.toString(),
     );
   }
 
@@ -603,6 +734,10 @@ public static class WinInetProxy {
           url: urls[id]?.toString(),
           subscriptionUserInfo:
               _stateMap(state, 'profileSubscriptionInfo')[id]?.toString(),
+          subscriptionResolveDomains: Map<String, bool>.from(
+              _stateMap(state, 'profileSubscriptionResolveDomains')[id]
+                      as Map? ??
+                  const {}),
           subscriptionNames: Map<String, String>.from(
               _stateMap(state, 'profileSubscriptionNames')[id] as Map? ??
                   const {}),
@@ -620,68 +755,74 @@ public static class WinInetProxy {
 
   @override
   Future<List<ConfigProfile>> importConfigs() async {
-    await _requireConfigStopped();
-    await _ensureDirectories();
-    const script = r'''Add-Type -AssemblyName System.Windows.Forms
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      await _ensureDirectories();
+      const script = r'''Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.OpenFileDialog
 $dialog.Filter = 'mihomo YAML (*.yaml;*.yml)|*.yaml;*.yml'
 $dialog.Multiselect = $true
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   $dialog.FileNames | ForEach-Object { [Console]::Out.WriteLine($_) }
 }''';
-    final picked = await Process.run('powershell.exe', <String>[
-      '-NoProfile',
-      '-STA',
-      '-Command',
-      script,
-    ]);
-    if (picked.exitCode != 0) throw StateError(picked.stderr.toString());
-    final paths = const LineSplitter()
-        .convert(picked.stdout.toString())
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-    if (paths.isEmpty) return getConfigs();
-    await _requireConfigStopped();
-    final state = await _readSettings();
-    final names = Map<String, dynamic>.from(
-      state['profileNames'] is Map ? state['profileNames'] as Map : const {},
-    );
-    String? importedProfileId;
-    for (final sourcePath in paths) {
-      final source = File(sourcePath);
-      final lowerPath = source.path.toLowerCase();
-      final extension = lowerPath.endsWith('.yml') ? '.yml' : '.yaml';
-      if (!RegExp(
-        r'\.(yaml|yml)$',
-        caseSensitive: false,
-      ).hasMatch(source.path)) {
-        throw ArgumentError('mihomo 内核只能导入 YAML 配置。');
-      }
-      final content = await source.readAsString();
-      if (loadYaml(content) is! YamlMap) {
-        throw const FormatException('mihomo 配置必须是 YAML 对象。');
-      }
-      var id = source.uri.pathSegments.last.replaceAll(
-        RegExp(r'[^A-Za-z0-9._-]'),
-        '_',
+      final picked = await Process.run('powershell.exe', <String>[
+        '-NoProfile',
+        '-STA',
+        '-Command',
+        script,
+      ]);
+      if (picked.exitCode != 0) throw StateError(picked.stderr.toString());
+      final paths = const LineSplitter()
+          .convert(picked.stdout.toString())
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
+      if (paths.isEmpty) return getConfigs();
+      await _requireConfigEditable();
+      final state = await _readSettings();
+      final names = Map<String, dynamic>.from(
+        state['profileNames'] is Map ? state['profileNames'] as Map : const {},
       );
-      if (!id.toLowerCase().endsWith(extension)) id = '$id$extension';
-      var candidate = id;
-      var suffix = 2;
-      while (await File(_profilePath(candidate)).exists()) {
-        candidate = '${id.substring(0, id.lastIndexOf('.'))}-$suffix$extension';
-        suffix++;
+      String? importedProfileId;
+      for (final sourcePath in paths) {
+        final source = File(sourcePath);
+        final lowerPath = source.path.toLowerCase();
+        final extension = lowerPath.endsWith('.yml') ? '.yml' : '.yaml';
+        if (!RegExp(
+          r'\.(yaml|yml)$',
+          caseSensitive: false,
+        ).hasMatch(source.path)) {
+          throw ArgumentError('mihomo 内核只能导入 YAML 配置。');
+        }
+        final content = await source.readAsString();
+        if (loadYaml(content) is! YamlMap) {
+          throw const FormatException('mihomo 配置必须是 YAML 对象。');
+        }
+        var id = source.uri.pathSegments.last.replaceAll(
+          RegExp(r'[^A-Za-z0-9._-]'),
+          '_',
+        );
+        if (!id.toLowerCase().endsWith(extension)) id = '$id$extension';
+        var candidate = id;
+        var suffix = 2;
+        while (await File(_profilePath(candidate)).exists()) {
+          candidate =
+              '${id.substring(0, id.lastIndexOf('.'))}-$suffix$extension';
+          suffix++;
+        }
+        await source.copy(_profilePath(candidate));
+        names[candidate] = id.substring(0, id.lastIndexOf('.'));
+        importedProfileId = candidate;
       }
-      await source.copy(_profilePath(candidate));
-      names[candidate] = id.substring(0, id.lastIndexOf('.'));
-      importedProfileId = candidate;
+      await _updateSettings(<String, dynamic>{'profileNames': names});
+      if (importedProfileId != null) {
+        await selectConfig(importedProfileId);
+      }
+      return getConfigs();
+    } finally {
+      _configWrites--;
     }
-    await _updateSettings(<String, dynamic>{'profileNames': names});
-    if (importedProfileId != null) {
-      await selectConfig(importedProfileId);
-    }
-    return getConfigs();
   }
 
   String _runtimeConfig(
@@ -689,6 +830,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     NetworkMode mode, {
     bool ipv6Enabled = false,
     bool bypassLanEnabled = true,
+    CoreConnectionSettings? connection,
   }) {
     final withoutGlobal = runtimeProxyChainComments(content);
     final hasFilters = withoutGlobal.split('\n').any((line) =>
@@ -707,8 +849,17 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     try {
       final editor = YamlEditor(secured);
-      editor.update(<Object>['external-controller'], '127.0.0.1:9090');
-      editor.update(<Object>['secret'], '');
+      editor.update(<Object>['external-controller'],
+          connection?.controller ?? '127.0.0.1:9090');
+      editor.update(<Object>['secret'], connection?.secret ?? '');
+      if (connection != null) {
+        editor.update(<Object>['mixed-port'], connection.mixedPort);
+        for (final key in ['port', 'socks-port']) {
+          if (document[key] == connection.mixedPort) {
+            editor.remove(<Object>[key]);
+          }
+        }
+      }
       editor.update(<Object>['external-ui'], '$_dataDir\\dashboard');
       for (final key in ['external-ui-url', 'external-ui-name']) {
         if (document.containsKey(key)) editor.remove(<Object>[key]);
@@ -760,6 +911,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         content: secured,
         ipv6Enabled: ipv6Enabled,
         bypassLanEnabled: bypassLanEnabled,
+        connection: connection,
       );
     }
   }
@@ -770,10 +922,17 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String content,
     required bool ipv6Enabled,
     required bool bypassLanEnabled,
+    CoreConnectionSettings? connection,
   }) {
     final runtime = _plainYamlMap(document);
-    runtime['external-controller'] = '127.0.0.1:9090';
-    runtime['secret'] = '';
+    runtime['external-controller'] = connection?.controller ?? '127.0.0.1:9090';
+    runtime['secret'] = connection?.secret ?? '';
+    if (connection != null) {
+      runtime['mixed-port'] = connection.mixedPort;
+      for (final key in ['port', 'socks-port']) {
+        if (runtime[key] == connection.mixedPort) runtime.remove(key);
+      }
+    }
     runtime['external-ui'] = '$_dataDir\\dashboard';
     runtime.remove('external-ui-url');
     runtime.remove('external-ui-name');
@@ -818,7 +977,6 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   Future<String> _runtimeConfigForCurrentMode(String content) async {
-    await _requireConfigStopped();
     final state = await _readSettings();
     final preferences = _runtimePreferencesFromState(state);
     return _runtimeConfig(
@@ -826,27 +984,65 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       state['networkMode'] == 'tun' ? NetworkMode.tun : NetworkMode.proxy,
       ipv6Enabled: preferences.ipv6Enabled,
       bypassLanEnabled: preferences.bypassLanEnabled,
+      connection: preferences.connection,
     );
   }
 
   @override
   Future<ConfigInfo> selectConfig(String id) async {
-    await _requireConfigStopped();
-    final source = File(_profilePath(id));
-    if (!await source.exists()) {
-      throw StateError('The selected profile no longer exists.');
+    _configWrites++;
+    try {
+      await _requireConfigStopped();
+      final source = File(_profilePath(id));
+      if (!await source.exists()) {
+        throw StateError('The selected profile no longer exists.');
+      }
+      final content = await source.readAsString();
+      await _requireConfigStopped();
+      await File(
+        _configPath,
+      ).writeAsString(await _runtimeConfigForCurrentMode(content));
+      await _updateSettings(<String, dynamic>{
+        'activeProfile': id,
+        'activeMihomoProfile': id,
+        'coreType': 'mihomo',
+      });
+      return getConfigInfo();
+    } finally {
+      _configWrites--;
     }
-    final content = await source.readAsString();
-    await _requireConfigStopped();
-    await File(
-      _configPath,
-    ).writeAsString(await _runtimeConfigForCurrentMode(content));
-    await _updateSettings(<String, dynamic>{
-      'activeProfile': id,
-      'activeMihomoProfile': id,
-      'coreType': 'mihomo',
-    });
-    return getConfigInfo();
+  }
+
+  Future<bool> _runtimeIsActive() async {
+    final state = (await _status())['state'];
+    return state != 'stopped' && state != 'not_installed';
+  }
+
+  Future<void> _requireConfigEditable() async {
+    if (_startingService) throw StateError('代理正在启动，请稍后保存配置');
+    final state = (await _status())['state'];
+    if (state != 'running' && state != 'stopped' && state != 'not_installed') {
+      throw StateError('代理正在启动或停止，请稍后保存配置');
+    }
+    // An upgraded app may attach to a service started by an older version.
+    if (state == 'running') {
+      final settings = await _readSettings();
+      if (!settings.containsKey('runningProfileName') ||
+          !settings.containsKey('runningNetworkMode') ||
+          !settings.containsKey('runningBypassLanEnabled')) {
+        final id = settings['activeProfile']?.toString();
+        await _updateSettings({
+          'runningProfileName': settings['runningProfileName'] ??
+              _stateMap(settings, 'profileNames')[id]?.toString() ??
+              'config.yaml',
+          'runningNetworkMode': settings['runningNetworkMode'] ??
+              settings['networkMode'] ??
+              'proxy',
+          'runningBypassLanEnabled': settings['runningBypassLanEnabled'] ??
+              settings['bypassLanEnabled'] != false,
+        });
+      }
+    }
   }
 
   Future<void> _requireConfigStopped() async {
@@ -884,45 +1080,50 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String id,
     required String content,
   }) async {
-    await _requireConfigStopped();
-    if (content.trim().isEmpty) {
-      throw ArgumentError('Configuration cannot be empty.');
-    }
-    _profilePath(id);
-    final runtime = await _runtimeConfigForCurrentMode(content);
-    final candidate = File(
-      '$_dataDir\\validate-${DateTime.now().microsecondsSinceEpoch}.yaml',
-    );
+    _configWrites++;
     try {
-      await candidate.writeAsString(runtime, flush: true);
-      final executable =
-          '${File(Platform.resolvedExecutable).parent.path}\\mihomo.exe';
-      final arguments = <String>['-t', '-d', _dataDir, '-f', candidate.path];
-      final result =
-          await (_serviceProcessRunner?.call(executable, arguments) ??
-              Process.run(executable, arguments, workingDirectory: _dataDir));
-      if (result.exitCode != 0) {
-        throw FormatException(
-          '运行配置校验失败（行号对应生成的运行配置）：\n${result.stdout}\n${result.stderr}',
-        );
+      await _requireConfigEditable();
+      if (content.trim().isEmpty) {
+        throw ArgumentError('Configuration cannot be empty.');
       }
-      final state = await _readSettings();
-      final profile = File(_profilePath(id));
-      final oldContent = await profile.readAsString();
-      await _requireConfigStopped();
-      await _replaceConfig(profile, content);
+      _profilePath(id);
+      final runtime = await _runtimeConfigForCurrentMode(content);
+      final candidate = File(
+        '$_dataDir\\validate-${DateTime.now().microsecondsSinceEpoch}.yaml',
+      );
       try {
-        if (state['activeProfile'] == id) {
-          await _replaceConfig(File(_configPath), runtime);
+        await candidate.writeAsString(runtime, flush: true);
+        final executable =
+            '${File(Platform.resolvedExecutable).parent.path}\\mihomo.exe';
+        final arguments = <String>['-t', '-d', _dataDir, '-f', candidate.path];
+        final result =
+            await (_serviceProcessRunner?.call(executable, arguments) ??
+                Process.run(executable, arguments, workingDirectory: _dataDir));
+        if (result.exitCode != 0) {
+          throw FormatException(
+            '运行配置校验失败（行号对应生成的运行配置）：\n${result.stdout}\n${result.stderr}',
+          );
         }
-      } catch (_) {
-        await _replaceConfig(profile, oldContent);
-        rethrow;
+        final state = await _readSettings();
+        final profile = File(_profilePath(id));
+        final oldContent = await profile.readAsString();
+        await _requireConfigEditable();
+        await _replaceConfig(profile, content);
+        try {
+          if (state['activeProfile'] == id && !await _runtimeIsActive()) {
+            await _replaceConfig(File(_configPath), runtime);
+          }
+        } catch (_) {
+          await _replaceConfig(profile, oldContent);
+          rethrow;
+        }
+      } finally {
+        if (await candidate.exists()) await candidate.delete();
       }
+      return getConfigs();
     } finally {
-      if (await candidate.exists()) await candidate.delete();
+      _configWrites--;
     }
-    return getConfigs();
   }
 
   Future<void> _replaceConfig(File target, String content) async {
@@ -941,17 +1142,22 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String id,
     required String name,
   }) async {
-    await _requireConfigStopped();
-    if (name.trim().isEmpty) {
-      throw ArgumentError('Profile name cannot be empty.');
+    _configWrites++;
+    try {
+      await _requireConfigEditable();
+      if (name.trim().isEmpty) {
+        throw ArgumentError('Profile name cannot be empty.');
+      }
+      final state = await _readSettings();
+      final names = Map<String, dynamic>.from(
+        state['profileNames'] is Map ? state['profileNames'] as Map : const {},
+      );
+      names[id] = name.trim();
+      await _updateSettings(<String, dynamic>{'profileNames': names});
+      return getConfigs();
+    } finally {
+      _configWrites--;
     }
-    final state = await _readSettings();
-    final names = Map<String, dynamic>.from(
-      state['profileNames'] is Map ? state['profileNames'] as Map : const {},
-    );
-    names[id] = name.trim();
-    await _updateSettings(<String, dynamic>{'profileNames': names});
-    return getConfigs();
   }
 
   @override
@@ -985,6 +1191,8 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       'profileUrls': urls,
       'profileSubscriptionInfo': _stateMap(state, 'profileSubscriptionInfo')
         ..remove(id),
+      'profileSubscriptionResolveDomains':
+          _stateMap(state, 'profileSubscriptionResolveDomains')..remove(id),
       'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
         ..remove(id),
       'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
@@ -1141,6 +1349,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       String? selectedUrl,
       Map<String, String> cachedSources = const {},
       Map<String, String> cachedUserInfos = const {},
+      Map<String, bool> resolveDomains = const {},
       bool downloadAll = true}) async {
     final links = subscriptionLinks(url);
     if (selectedUrl != null && !links.contains(selectedUrl)) {
@@ -1178,10 +1387,16 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       // Cache original nodes before applying local Host or chain overrides.
       sources[link] = mergeSubscriptionSources([sources[link]!]);
     }
+    final effectiveSources = <String>[];
+    for (final link in links) {
+      effectiveSources.add(resolveDomains[link] == true
+          ? await resolveNodeDomains(sources[link]!)
+          : sources[link]!);
+    }
     return _SubscriptionDownload(
       content: buildSubscriptionConfig(
         await rootBundle.loadString('assets/default-config.yaml'),
-        mergeSubscriptionSources(sources.values.toList()),
+        mergeSubscriptionSources(effectiveSources),
         previousConfig: previousConfig,
       ),
       responseTimeMs:
@@ -1270,34 +1485,41 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   Future<void> _saveSubscription(String id, _SubscriptionDownload download,
       Map<String, dynamic> changes) async {
-    final state = await _readSettings();
-    final files = <File, String>{
-      File(_profilePath(id)): download.content,
-      _subscriptionCache(id): jsonEncode(download.sources),
-      if ((changes['activeProfile'] ?? state['activeProfile']) == id)
-        File(_configPath): await _runtimeConfigForCurrentMode(download.content),
-    };
-    final previous = <File, String?>{};
-    for (final file in files.keys) {
-      previous[file] = await file.exists() ? await file.readAsString() : null;
-    }
-    await _requireConfigStopped();
-    await _ensureDirectories();
+    _configWrites++;
     try {
-      for (final entry in files.entries) {
-        await _replaceConfig(entry.key, entry.value);
+      final state = await _readSettings();
+      final files = <File, String>{
+        File(_profilePath(id)): download.content,
+        _subscriptionCache(id): jsonEncode(download.sources),
+        if ((changes['activeProfile'] ?? state['activeProfile']) == id &&
+            !await _runtimeIsActive())
+          File(_configPath):
+              await _runtimeConfigForCurrentMode(download.content),
+      };
+      final previous = <File, String?>{};
+      for (final file in files.keys) {
+        previous[file] = await file.exists() ? await file.readAsString() : null;
       }
-      await _writeSettings({...state, ...changes});
-    } catch (_) {
-      for (final entry in previous.entries) {
-        if (entry.value == null) {
-          if (await entry.key.exists()) await entry.key.delete();
-        } else {
-          await _replaceConfig(entry.key, entry.value!);
+      await _requireConfigEditable();
+      await _ensureDirectories();
+      try {
+        for (final entry in files.entries) {
+          await _replaceConfig(entry.key, entry.value);
         }
+        await _writeSettings({...state, ...changes});
+      } catch (_) {
+        for (final entry in previous.entries) {
+          if (entry.value == null) {
+            if (await entry.key.exists()) await entry.key.delete();
+          } else {
+            await _replaceConfig(entry.key, entry.value!);
+          }
+        }
+        await _writeSettings(state);
+        rethrow;
       }
-      await _writeSettings(state);
-      rethrow;
+    } finally {
+      _configWrites--;
     }
   }
 
@@ -1309,12 +1531,16 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) async {
     if (_addingSubscription) throw StateError('正在添加机场配置，请稍后再试');
     _addingSubscription = true;
     try {
       return await _addSubscription(
-          name: name, url: url, subscriptionNames: subscriptionNames);
+          name: name,
+          url: url,
+          subscriptionNames: subscriptionNames,
+          subscriptionResolveDomains: subscriptionResolveDomains);
     } finally {
       _addingSubscription = false;
     }
@@ -1330,15 +1556,18 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) async {
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     _requireSingleSubscription(await _readSettings());
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
     final cleanUrl = normalizeSubscriptionLinks(url);
-    final download = await _downloadSubscription(cleanUrl);
+    final resolutions = subscriptionResolveDomains ?? const <String, bool>{};
+    final download =
+        await _downloadSubscription(cleanUrl, resolveDomains: resolutions);
     final id = _newSubscriptionId();
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     final state = await _readSettings();
     _requireSingleSubscription(state);
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
@@ -1357,6 +1586,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       'profileNames': names,
       'profileTypes': types,
       'profileUrls': urls,
+      'profileSubscriptionResolveDomains':
+          _stateMap(state, 'profileSubscriptionResolveDomains')
+            ..[id] = {
+              for (final link in subscriptionLinks(cleanUrl))
+                link: resolutions[link] ?? false
+            },
       'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
         ..[id] = {
           for (final link in subscriptionLinks(cleanUrl))
@@ -1377,8 +1612,9 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     required String name,
     required String url,
     Map<String, String>? subscriptionNames,
+    Map<String, bool>? subscriptionResolveDomains,
   }) async {
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     final cleanName = name.trim();
     if (cleanName.isEmpty) throw ArgumentError('请输入订阅名称。');
     final state = await _readSettings();
@@ -1386,9 +1622,14 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       throw StateError('所选配置不是机场订阅。');
     }
     final cleanUrl = normalizeSubscriptionLinks(url);
+    final resolutions = subscriptionResolveDomains ??
+        Map<String, bool>.from(
+            _stateMap(state, 'profileSubscriptionResolveDomains')[id] as Map? ??
+                const {});
     final download = await _downloadSubscription(cleanUrl,
+        resolveDomains: resolutions,
         previousConfig: await _subscriptionContent(id));
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     final names = _stateMap(state, 'profileNames')..[id] = cleanName;
     final urls = _stateMap(state, 'profileUrls')..[id] = cleanUrl;
     final airportNames = subscriptionNames ??
@@ -1398,6 +1639,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     await _saveSubscription(id, download, <String, dynamic>{
       'profileNames': names,
       'profileUrls': urls,
+      'profileSubscriptionResolveDomains':
+          _stateMap(state, 'profileSubscriptionResolveDomains')
+            ..[id] = {
+              for (final link in subscriptionLinks(cleanUrl))
+                link: resolutions[link] ?? false
+            },
       'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
         ..[id] = {
           for (final link in subscriptionLinks(cleanUrl))
@@ -1414,8 +1661,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
   @override
   Future<List<ConfigProfile>> editSubscriptionAirport(String id,
-      {String? oldUrl, String? name, String? url, List<String>? order}) async {
-    await _requireConfigStopped();
+      {String? oldUrl,
+      String? name,
+      String? url,
+      List<String>? order,
+      bool? resolveDomains}) async {
+    await _requireConfigEditable();
     final state = await _readSettings();
     if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
       throw StateError('这不是订阅配置');
@@ -1425,6 +1676,10 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final next = [...links];
     final names = Map<String, String>.from(
         _stateMap(state, 'profileSubscriptionNames')[id] as Map? ?? const {});
+    final resolutions = Map<String, bool>.from(
+        _stateMap(state, 'profileSubscriptionResolveDomains')[id] as Map? ??
+            const {});
+    final oldResolution = resolutions[oldUrl] ?? false;
     final newUrl = url == null ? null : subscriptionLinks(url).single;
     if (order != null) {
       if (order.length != links.length ||
@@ -1456,8 +1711,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           next[index] = newUrl;
         }
         names.remove(oldUrl);
+        resolutions.remove(oldUrl);
       }
-      if (newUrl != null) names[newUrl] = name!.trim();
+      if (newUrl != null) {
+        names[newUrl] = name!.trim();
+        resolutions[newUrl] = resolveDomains ?? oldResolution;
+      }
     }
     if (next.isEmpty) throw StateError('删除最后一个机场时请删除配置');
     final download = await _downloadSubscription(
@@ -1468,8 +1727,12 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       cachedUserInfos: Map<String, String>.from(
           _stateMap(state, 'profileSubscriptionInfos')[id] as Map? ?? const {}),
       downloadAll: false,
+      resolveDomains: resolutions,
     );
     await _saveSubscription(id, download, {
+      'profileSubscriptionResolveDomains':
+          _stateMap(state, 'profileSubscriptionResolveDomains')
+            ..[id] = resolutions,
       'profileUrls': _stateMap(state, 'profileUrls')..[id] = next.join('\n'),
       'profileSubscriptionNames': _stateMap(state, 'profileSubscriptionNames')
         ..[id] = names,
@@ -1484,7 +1747,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   @override
   Future<List<ConfigProfile>> refreshSubscription(String id,
       {String? url}) async {
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     final state = await _readSettings();
     if (_stateMap(state, 'profileTypes')[id] != 'subscription') {
       throw StateError('所选配置不是机场订阅。');
@@ -1492,6 +1755,9 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final storedUrl = _stateMap(state, 'profileUrls')[id]?.toString();
     if (storedUrl == null || storedUrl.isEmpty) throw StateError('订阅链接不存在。');
     final download = await _downloadSubscription(storedUrl,
+        resolveDomains: Map<String, bool>.from(
+            _stateMap(state, 'profileSubscriptionResolveDomains')[id] as Map? ??
+                const {}),
         previousConfig: await _subscriptionContent(id),
         selectedUrl: url,
         cachedSources:
@@ -1499,7 +1765,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         cachedUserInfos: Map<String, String>.from(
             _stateMap(state, 'profileSubscriptionInfos')[id] as Map? ??
                 const {}));
-    await _requireConfigStopped();
+    await _requireConfigEditable();
     await _saveSubscription(id, download, {
       'profileSubscriptionInfos': _stateMap(state, 'profileSubscriptionInfos')
         ..[id] = download.subscriptionInfos,
@@ -1559,8 +1825,10 @@ class _RuntimePreferences {
   const _RuntimePreferences({
     required this.ipv6Enabled,
     required this.bypassLanEnabled,
+    this.connection,
   });
 
   final bool ipv6Enabled;
   final bool bypassLanEnabled;
+  final CoreConnectionSettings? connection;
 }

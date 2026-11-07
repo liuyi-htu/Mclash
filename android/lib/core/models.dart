@@ -23,17 +23,19 @@ class InstalledApp {
 }
 
 class ConfigInfo {
-  const ConfigInfo({required this.exists, this.fileName});
+  const ConfigInfo({required this.exists, this.fileName, this.runtimeMode});
 
   factory ConfigInfo.fromMap(Map<Object?, Object?> map) {
     return ConfigInfo(
       exists: map['exists'] as bool? ?? false,
       fileName: map['fileName'] as String?,
+      runtimeMode: map['runtimeMode'] as String?,
     );
   }
 
   final bool exists;
   final String? fileName;
+  final String? runtimeMode;
 }
 
 class ConfigProfile {
@@ -47,6 +49,7 @@ class ConfigProfile {
     this.url,
     this.subscriptionUserInfo,
     this.subscriptionNames = const {},
+    this.subscriptionResolveDomains = const {},
     this.subscriptionInfos = const {},
   });
 
@@ -57,6 +60,8 @@ class ConfigProfile {
       type: map['type']! as String,
       url: map['url'] as String?,
       subscriptionUserInfo: map['subscriptionUserInfo'] as String?,
+      subscriptionResolveDomains: Map<String, bool>.from(
+          map['subscriptionResolveDomains'] as Map? ?? const {}),
       subscriptionNames: Map<String, String>.from(
           map['subscriptionNames'] as Map? ?? const {}),
       subscriptionInfos: Map<String, String>.from(
@@ -73,6 +78,7 @@ class ConfigProfile {
   final String? url;
   final String? subscriptionUserInfo;
   final Map<String, String> subscriptionNames;
+  final Map<String, bool> subscriptionResolveDomains;
   final Map<String, String> subscriptionInfos;
   final bool active;
   final bool exists;

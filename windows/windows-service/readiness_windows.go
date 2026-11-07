@@ -18,6 +18,10 @@ var (
 func waitForCoreReady(paths appPaths, wanted string) error {
 	client := &http.Client{Timeout: 2 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	defer client.CloseIdleConnections()
+	endpoint, secret, err := controllerRequestFromSettings(readSettings(paths), coreControllerURL)
+	if err != nil {
+		return err
+	}
 	deadline := time.Now().Add(coreReadinessTimeout)
 	var last error
 	for time.Now().Before(deadline) {
@@ -26,7 +30,14 @@ func waitForCoreReady(paths appPaths, wanted string) error {
 			return fmt.Errorf("core service is %s: %s", status.State, status.Message)
 		}
 		if status.MihomoPID > 0 {
-			response, err := client.Get(coreControllerURL)
+			request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+			if err != nil {
+				return err
+			}
+			if secret != "" {
+				request.Header.Set("Authorization", "Bearer "+secret)
+			}
+			response, err := client.Do(request)
 			if err == nil {
 				var version struct {
 					Version string `json:"version"`

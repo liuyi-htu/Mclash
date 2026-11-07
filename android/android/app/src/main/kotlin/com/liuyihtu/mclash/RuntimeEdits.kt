@@ -4,9 +4,9 @@ package com.liuyihtu.mclash
 internal object RuntimeEdits {
     private var activeEdits = 0
 
-    fun <T> edit(requireStopped: () -> Unit, block: () -> T): T {
+    fun <T> edit(checkAdmission: () -> Unit, block: () -> T): T {
         synchronized(this) {
-            requireStopped()
+            checkAdmission()
             activeEdits++
         }
         try {

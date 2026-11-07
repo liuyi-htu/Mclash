@@ -79,7 +79,8 @@ class MainActivity : FlutterActivity() {
 
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         try {
-            if (call.method in MUTATING_METHODS) require(!ProxyTProxyService.starting && !ProxyTProxyService.running && !MihomoProcess.hasCleanupFailure()) { "请先停止代理再修改配置或设置" }
+            if (call.method in SAVED_CONFIG_METHODS) requireConfigEditable()
+            else if (call.method in MUTATING_METHODS) require(!ProxyTProxyService.starting && !ProxyTProxyService.running && !MihomoProcess.hasCleanupFailure()) { "请先停止代理再修改配置或设置" }
             when (call.method) {
                 "getAppDataDirectory" -> result.success(filesDir.absolutePath)
                 "getUsageNoticeAccepted" -> result.success(
@@ -152,6 +153,13 @@ class MainActivity : FlutterActivity() {
                     val interfaces = call.argument<List<String>>("interfaces")?.toSet() ?: emptySet()
                     MihomoProcess.setNetworkSharing(this, enabled, interfaces)
                 }
+                "getCoreConnectionSettings" -> result.success(preferences.coreConnectionSettings.toMap())
+                "getRunningCoreConnectionSettings" -> runAsync(result, "mclash-running-connection") { MihomoProcess.runningConnection(this).toMap() }
+                "saveCoreConnectionSettings" -> runAsync(result, "mclash-save-root-settings") {
+                    val settings = CoreConnectionSettings(call.argument<String>("controller") ?: error("缺少控制接口地址"), call.argument<String>("secret") ?: "", call.argument<Int>("mixedPort") ?: error("缺少代理端口"))
+                    preferences.coreConnectionSettings = settings
+                    null
+                }
                 "getRootSettings" -> result.success(rootSettings())
                 "saveRootSettings" -> saveRootSettings(call, result)
                 "getInstalledApps" -> result.success(getInstalledApps())
@@ -182,7 +190,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "getTrafficStats" -> runAsync(result, "root-traffic") {
                     if (!ProxyTProxyService.running) RootTrafficStats.decode(emptyMap())
-                    else RootTrafficStats.read()
+                    else RootTrafficStats.read(MihomoProcess.runningConnection(this))
                 }
                 "getStartupLog" -> result.success(startupDiagnostics())
                 "getDebugLog" -> result.success(readDebugLog(call))
@@ -272,7 +280,8 @@ class MainActivity : FlutterActivity() {
         val active = configStore.activeProfile()
         return mapOf(
             "exists" to configStore.exists(),
-            "fileName" to active?.name,
+            "fileName" to configStore.displayProfileName(),
+            "runtimeMode" to configStore.displayRuntimeMode(),
         )
     }
 
@@ -332,7 +341,7 @@ class MainActivity : FlutterActivity() {
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
         runAsync(result, "mclash-add-subscription") {
-            configStore.addSubscription(name, url, call.argument<Map<String, String>>("subscriptionNames"))
+            configStore.addSubscription(name, url, call.argument<Map<String, String>>("subscriptionNames"), call.argument<Map<String, Boolean>>("subscriptionResolveDomains"))
             configStore.listMaps()
         }
     }
@@ -342,7 +351,7 @@ class MainActivity : FlutterActivity() {
         val name = call.argument<String>("name") ?: error("订阅名称不能为空")
         val url = call.argument<String>("url") ?: error("订阅链接不能为空")
         runAsync(result, "mclash-update-subscription") {
-            configStore.updateSubscription(id, name, url, call.argument<Map<String, String>>("subscriptionNames"))
+            configStore.updateSubscription(id, name, url, call.argument<Map<String, String>>("subscriptionNames"), call.argument<Map<String, Boolean>>("subscriptionResolveDomains"))
             configStore.listMaps()
         }
     }
@@ -351,7 +360,7 @@ class MainActivity : FlutterActivity() {
         val id = call.argument<String>("id") ?: error("配置 ID 不能为空")
         runAsync(result, "mclash-edit-airport") {
             configStore.editSubscriptionAirport(id, call.argument<String>("oldUrl"), call.argument<String>("name"),
-                call.argument<String>("url"), call.argument<List<String>>("order"))
+                call.argument<String>("url"), call.argument<List<String>>("order"), call.argument<Boolean>("resolveDomains"))
             configStore.listMaps()
         }
     }
@@ -409,6 +418,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun requireConfigEditable() {
+        check(!ProxyTProxyService.starting && !ProxyTProxyService.tileStopPending && !MihomoProcess.hasCleanupFailure()) { "代理正在启动或停止，请稍后保存配置" }
+        configStore.preserveRuntimeProfile()
+    }
+
     private fun requireProxyStopped() {
         MihomoProcess.requireStopped(this)
     }
@@ -421,7 +435,9 @@ class MainActivity : FlutterActivity() {
         Thread({
             try {
                 val value = if (threadName in CONFIG_WRITE_WORKERS) {
-                    RuntimeEdits.edit(::requireProxyStopped, block)
+                    RuntimeEdits.edit({
+                        if (threadName in DEFERRED_CONFIG_WORKERS) requireConfigEditable() else requireProxyStopped()
+                    }, block)
                 } else block()
                 runOnUiThread { result.success(value) }
             } catch (error: Throwable) {
@@ -527,6 +543,7 @@ class MainActivity : FlutterActivity() {
                             trimmed.startsWith("external-ui-url:") ||
                             trimmed.startsWith("secret:")
                     }
+                    .map { if (it.trimStart().startsWith("secret:")) "secret: <redacted>" else it }
                     .takeLast(20)
                     .joinToString("\n")
                     .ifBlank { "未找到运行时监听字段" }
@@ -545,7 +562,7 @@ class MainActivity : FlutterActivity() {
             )
             appendLine("mihomoProcess=${MihomoProcess.isRunning()}")
             appendLine("lastError=${ProxyTProxyService.lastError ?: "(无)"}")
-            appendLine("externalController=127.0.0.1:9090")
+            appendLine("externalController=${MihomoProcess.runningConnection(this@MainActivity).controller}")
 
             appendLine()
             appendLine("----- mihomo 内核 -----")
@@ -730,11 +747,21 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private val SAVED_CONFIG_METHODS = setOf(
+            "saveAppFilter", "saveVpnTunnelSettings", "importConfigs", "addSubscription",
+            "setDebugLoggingEnabled", "clearDebugLogs", "enableDeveloperMode", "disableDeveloperMode", "saveRootSettings", "saveCoreConnectionSettings",
+            "updateSubscription", "editSubscriptionAirport", "refreshSubscription", "saveConfigContent", "renameConfig",
+        )
         private val MUTATING_METHODS = setOf(
             "enableDeveloperMode", "disableDeveloperMode", "saveAppFilter",
             "saveRootSettings", "setDebugLoggingEnabled", "clearDebugLogs",
             "importConfigs", "addSubscription", "updateSubscription", "editSubscriptionAirport", "refreshSubscription",
             "saveConfigContent", "selectConfig", "renameConfig", "deleteConfig",
+        )
+        private val DEFERRED_CONFIG_WORKERS = setOf(
+            "mclash-import-configs", "mclash-add-subscription", "mclash-update-subscription",
+            "mclash-refresh-subscription", "mclash-edit-airport", "mclash-save-config-content",
+            "mclash-renameConfig", "mclash-save-app-filter", "mclash-save-root-settings",
         )
         private val CONFIG_WRITE_WORKERS = setOf(
             "mclash-selectConfig", "mclash-renameConfig", "mclash-deleteConfig", "mclash-save-root-settings", "mclash-save-app-filter",

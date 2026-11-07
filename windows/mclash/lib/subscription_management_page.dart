@@ -81,8 +81,7 @@ class _SubscriptionManagementPageState
   @override
   Widget build(BuildContext context) {
     final links = subscriptionLinks(_profile.url ?? '');
-    final editable =
-        ProxyEditAccess.allowed(context) && !_working && !widget.proxyRunning;
+    final editable = ProxyEditAccess.allowed(context) && !_working;
     final colors = Theme.of(context).colorScheme;
     final cards = ReorderableListView(
       shrinkWrap: widget.embedded,

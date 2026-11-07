@@ -173,7 +173,7 @@ void main() {
               .widget<TextField>(find.byType(TextField))
               .controller!
               .text),
-          loadYaml(configDnsText(active ? runtime : source)));
+          loadYaml(configDnsText(source)));
       await tester.enterText(
           find.byType(TextField), 'enable: false\nnameserver: [8.8.8.8]');
       await tester.tap(find.text('保存'));

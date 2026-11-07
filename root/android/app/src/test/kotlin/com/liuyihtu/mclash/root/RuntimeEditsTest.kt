@@ -10,7 +10,7 @@ class RuntimeEditsTest {
     @Test fun runningProxyRejectsEditsBeforeExecutingThem() {
         var changed = false
         try {
-            RuntimeEdits.edit({ error("运行中") }) { changed = true }
+            RuntimeEdits.edit({ error("启动中") }) { changed = true }
             fail("Edit should be rejected")
         } catch (_: IllegalStateException) { }
         assertFalse(changed)

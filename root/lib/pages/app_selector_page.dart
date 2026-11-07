@@ -6,7 +6,9 @@ import '../services/native_proxy_service.dart';
 import '../shared/top_notice.dart';
 
 class AppSelectorPage extends StatefulWidget {
-  const AppSelectorPage({super.key});
+  const AppSelectorPage({super.key, this.proxyRunning = false});
+
+  final bool proxyRunning;
 
   @override
   State<AppSelectorPage> createState() => _AppSelectorPageState();
@@ -63,6 +65,10 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
       await _service.saveAppFilter(mode: _mode, packageNames: _selected);
       if (!mounted) return;
       Navigator.of(context).pop(true);
+      if (widget.proxyRunning) {
+        showTopSnackBar(
+            context, const SnackBar(content: Text('分应用代理已保存，下次启动代理生效')));
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);

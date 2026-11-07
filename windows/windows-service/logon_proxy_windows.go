@@ -29,7 +29,8 @@ func syncUserProxy(paths appPaths) error {
 	if !queryServiceAutoStart().Enabled {
 		return nil
 	}
-	if readSettings(paths)["networkMode"] == "tun" {
+	settings := runtimeNetworkSettings(readSettings(paths))
+	if settings["networkMode"] == "tun" {
 		return restoreSystemProxy(paths.ProxyBackup)
 	}
 	deadline := time.Now().Add(60 * time.Second)
@@ -53,7 +54,7 @@ func syncUserProxy(paths appPaths) error {
 		return err
 	}
 	bypass := "localhost;127.*"
-	if readSettings(paths)["bypassLanEnabled"] != false {
+	if settings["bypassLanEnabled"] != false {
 		bypass = "<local>;" + bypass + ";10.*;192.168.*;169.254.*"
 		for i := 16; i <= 31; i++ {
 			bypass += fmt.Sprintf(";172.%d.*", i)

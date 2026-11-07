@@ -29,14 +29,14 @@ void main() {
             .widget<ReorderableDragStartListener>(
                 find.byType(ReorderableDragStartListener).first)
             .enabled,
-        false);
+        true);
     tester
         .widget<ReorderableListView>(find.byType(ReorderableListView))
         // Use the same callback as the page for older Flutter compatibility.
         // ignore: deprecated_member_use
         .onReorder!(0, 2);
     await tester.pumpAndSettle();
-    expect(saves, 0);
+    expect(saves, 1);
     status.value = ProxyStatus.stopped;
     await tester.pump();
     expect(
@@ -51,7 +51,7 @@ void main() {
         // ignore: deprecated_member_use
         .onReorder!(0, 2);
     await tester.pumpAndSettle();
-    expect(saves, 1);
+    expect(saves, 2);
   });
 
   testWidgets('group handles reorder locked groups and persist on reopening',

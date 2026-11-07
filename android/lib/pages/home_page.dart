@@ -3,6 +3,7 @@ import '../shared/page_visibility.dart';
 import '../shared/dialog_typography.dart';
 import '../shared/app_appearance.dart';
 import '../shared/pulse_dashboard.dart';
+import '../shared/core_connection_form.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -459,7 +460,9 @@ class _HomePageState extends State<HomePage>
   Future<void> _openAppSelector() async {
     await Navigator.of(
       context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const AppSelectorPage()));
+    ).push<bool>(MaterialPageRoute(
+        builder: (_) =>
+            AppSelectorPage(proxyRunning: _status != ProxyStatus.stopped)));
   }
 
   Future<Map<String, dynamic>> _proxyControllerRequest(
@@ -468,10 +471,15 @@ class _HomePageState extends State<HomePage>
   }) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
     try {
+      final connection = await _service.getRunningCoreConnectionSettings();
       final request = await client.openUrl(
         method,
-        Uri.parse('http://127.0.0.1:9090/configs'),
+        connection.endpoint.replace(path: '/configs'),
       );
+      if (connection.secret.isNotEmpty) {
+        request.headers.set(
+            HttpHeaders.authorizationHeader, 'Bearer ${connection.secret}');
+      }
       request.headers.set(HttpHeaders.acceptHeader, ContentType.json.mimeType);
       if (body != null) {
         request.headers.contentType = ContentType.json;
@@ -532,6 +540,28 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  Future<void> _showCoreConnectionSettings() async {
+    if (!_settingsEditable) return;
+    try {
+      final current = await _service.getCoreConnectionSettings();
+      if (!mounted) return;
+      final saved = await showSettingsSheet<bool>(
+          context: context,
+          builder: (_) => CoreConnectionForm(
+              initial: current,
+              onSave: (settings) async {
+                if (!_settingsEditable) throw StateError('代理正在启动或停止，请稍后保存设置');
+                await _service.saveCoreConnectionSettings(settings);
+              }));
+      if (saved == true && mounted) {
+        showTopSnackBar(
+            context, const SnackBar(content: Text('设置已保存，下次启动代理生效')));
+      }
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
   Future<void> _showDeveloperSettings() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -562,6 +592,12 @@ class _HomePageState extends State<HomePage>
                 subtitle: '生成并导出本设备登记文件',
                 onTap: _openDeviceRegistration,
               ),
+              _settingsTile(
+                  context: sheetContext,
+                  icon: Icons.settings_ethernet_rounded,
+                  title: '内核连接设置',
+                  subtitle: '控制接口、密钥与代理端口',
+                  onTap: _showCoreConnectionSettings),
               const Divider(height: 20),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
@@ -947,6 +983,16 @@ class _HomePageState extends State<HomePage>
     }
   }
 
+  bool get _settingsEditable =>
+      !_toggling &&
+      (_status == ProxyStatus.stopped || _status == ProxyStatus.running);
+
+  void _settingsSavedNotice() {
+    if (mounted && _status == ProxyStatus.running) {
+      showTopSnackBar(context, const SnackBar(content: Text('设置已保存，下次启动代理生效')));
+    }
+  }
+
   Future<void> _showDebugLogSettings() async {
     var enabled = _debugLoggingEnabled;
 
@@ -972,11 +1018,12 @@ class _HomePageState extends State<HomePage>
                     title: Text('启用调试日志',
                         style: Theme.of(dialogContext).textTheme.bodyMedium),
                     value: enabled,
-                    onChanged: _status != ProxyStatus.stopped
+                    onChanged: !_settingsEditable
                         ? null
                         : (value) async {
                             try {
                               await _service.setDebugLoggingEnabled(value);
+                              _settingsSavedNotice();
                               if (!mounted) return;
                               setState(() => _debugLoggingEnabled = value);
                               setDialogState(() => enabled = value);
@@ -1026,7 +1073,7 @@ class _HomePageState extends State<HomePage>
                         .textTheme
                         .bodyMedium
                         ?.copyWith(fontSize: 14)),
-                onPressed: _status != ProxyStatus.stopped
+                onPressed: !_settingsEditable
                     ? null
                     : () => Navigator.of(dialogContext).pop('clear'),
                 icon: const Icon(Icons.delete_outline, size: 20),
@@ -1085,7 +1132,9 @@ class _HomePageState extends State<HomePage>
         ) ??
         false;
 
-    if (!confirmed || await _service.getProxyStatus() != ProxyStatus.stopped) {
+    if (!confirmed ||
+        !const [ProxyStatus.stopped, ProxyStatus.running]
+            .contains(await _service.getProxyStatus())) {
       return;
     }
 

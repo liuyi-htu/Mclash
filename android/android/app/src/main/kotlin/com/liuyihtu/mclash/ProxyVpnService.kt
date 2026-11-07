@@ -135,6 +135,7 @@ class ProxyVpnService : VpnService() {
 
                 // Start official mihomo first, while the process still has an ordinary network route.
                 StartupLog.append(this, "开始启动官方 mihomo")
+                configStore.recordRuntimeProfile()
                 val socksPort = MihomoProcess.start(
                     this, configStore.configFile,
                     cancelled = { stopping },

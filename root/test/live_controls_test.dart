@@ -85,8 +85,12 @@ class _Client extends Fake implements HttpClient {
 }
 
 class _Headers extends Fake implements HttpHeaders {
+  final values = <String, Object>{};
   @override
-  void set(String name, Object value, {bool preserveHeaderCase = false}) {}
+  void set(String name, Object value, {bool preserveHeaderCase = false}) {
+    values[name] = value;
+  }
+
   @override
   set contentType(ContentType? type) {}
 }
@@ -99,11 +103,15 @@ class _Request extends Fake implements HttpClientRequest {
   final Uri url;
   final body = StringBuffer();
   @override
-  final headers = _Headers();
+  final _Headers headers = _Headers();
   @override
   void write(Object? value) => body.write(value);
   @override
   Future<HttpClientResponse> close() async {
+    expect(url.host, '127.0.0.1');
+    expect(url.port, 9191);
+    expect(headers.values[HttpHeaders.authorizationHeader],
+        'Bearer runtime-test-secret');
     if (method == 'GET' &&
         url.path == '/configs' &&
         controller.pendingModeRead != null) {
@@ -166,6 +174,11 @@ void main() {
         rememberedModes.add(call.arguments['mode'] as String);
       }
       return switch (call.method) {
+        'getRunningCoreConnectionSettings' => {
+            'controller': '0.0.0.0:9191',
+            'secret': 'runtime-test-secret',
+            'mixedPort': 7892
+          },
         'getUsageNoticeAccepted' => true,
         'getDeveloperModeEnabled' => false,
         'getConfigInfo' => <String, Object?>{'exists': true},

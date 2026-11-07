@@ -66,7 +66,7 @@ class _ConfigPageState extends State<ConfigPage> {
       var profiles = await _service.getConfigs();
       if (profiles.isNotEmpty &&
           !profiles.any((profile) => profile.active) &&
-          !_locked) {
+          !widget.proxyRunning) {
         await _service.selectConfig(profiles.first.id);
         profiles = await _service.getConfigs();
       }
@@ -95,17 +95,41 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
-  bool get _locked => widget.proxyStatus != null
-      ? widget.proxyStatus!.value != ProxyStatus.stopped
-      : widget.proxyRunning;
+  bool get _locked =>
+      _loading ||
+      (widget.proxyStatus != null &&
+          ![ProxyStatus.stopped, ProxyStatus.running]
+              .contains(widget.proxyStatus!.value));
 
   Widget _watchAccess(Widget Function(BuildContext) builder) =>
       ProxyEditAccess.wrap(widget.proxyStatus, builder);
 
+  bool _ensureEditable() => !_locked;
+
   bool _ensureStopped() {
-    if (!_locked) return true;
-    _showError('请先停止代理再修改配置');
+    if (widget.proxyStatus != null
+        ? widget.proxyStatus!.value == ProxyStatus.stopped
+        : !widget.proxyRunning) {
+      return true;
+    }
+    _showError('请先停止代理再切换或删除配置');
     return false;
+  }
+
+  bool get _runtimeActive => widget.proxyStatus != null
+      ? widget.proxyStatus!.value == ProxyStatus.running
+      : widget.proxyRunning;
+
+  void _savedNotice() {
+    if (!mounted || !_runtimeActive) return;
+    AppNotice.show(context, '配置已保存，下次启动代理生效');
+  }
+
+  Future<List<ConfigProfile>> _saveContent(
+      {required String id, required String content}) async {
+    final profiles = await _service.saveConfigContent(id: id, content: content);
+    _savedNotice();
+    return profiles;
   }
 
   Future<void> _importLocal() async {
@@ -136,7 +160,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _showSubscriptionEditor({ConfigProfile? existing}) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     if (existing == null) {
       final subscriptions =
           _profiles.where((profile) => profile.isSubscription).toList();
@@ -160,6 +184,10 @@ class _ConfigPageState extends State<ConfigPage> {
         TextEditingController(
             text:
                 existing?.subscriptionNameFor(urlControllers[i].text, i) ?? ''),
+    ];
+    final resolveDomains = [
+      for (final controller in urlControllers)
+        existing?.subscriptionResolveDomains[controller.text] ?? false
     ];
     final removedControllers = <TextEditingController>[];
     String enteredUrls() =>
@@ -196,7 +224,7 @@ class _ConfigPageState extends State<ConfigPage> {
                               ],
                               SizedBox(
                                 width: double.maxFinite,
-                                height: urlControllers.length * 148.0,
+                                height: urlControllers.length * 232.0,
                                 child: ReorderableListView(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -212,6 +240,10 @@ class _ConfigPageState extends State<ConfigPage> {
                                           urlControllers.insert(
                                               newIndex,
                                               urlControllers
+                                                  .removeAt(oldIndex));
+                                          resolveDomains.insert(
+                                              newIndex,
+                                              resolveDomains
                                                   .removeAt(oldIndex));
                                           airportNameControllers.insert(
                                               newIndex,
@@ -244,6 +276,25 @@ class _ConfigPageState extends State<ConfigPage> {
                                               child: Column(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
+                                                  SwitchListTile.adaptive(
+                                                    contentPadding:
+                                                        EdgeInsets.zero,
+                                                    title: const Text(
+                                                        '节点域名转 IP',
+                                                        style: TextStyle(
+                                                            fontSize: 14)),
+                                                    subtitle: const Text(
+                                                        '更新时解析，失败保留域名',
+                                                        style: TextStyle(
+                                                            fontSize: 12)),
+                                                    value: resolveDomains[i],
+                                                    onChanged: _locked
+                                                        ? null
+                                                        : (value) =>
+                                                            setDialogState(() =>
+                                                                resolveDomains[
+                                                                    i] = value),
+                                                  ),
                                                   TextField(
                                                     enabled: !_locked,
                                                     controller:
@@ -288,6 +339,8 @@ class _ConfigPageState extends State<ConfigPage> {
                                                 onPressed: _locked
                                                     ? null
                                                     : () => setDialogState(() {
+                                                          resolveDomains
+                                                              .removeAt(i);
                                                           removedControllers
                                                               .add(
                                                                   urlControllers
@@ -311,6 +364,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                   onPressed: _locked
                                       ? null
                                       : () => setDialogState(() {
+                                            resolveDomains.add(false);
                                             urlControllers
                                                 .add(TextEditingController());
                                             airportNameControllers
@@ -395,6 +449,10 @@ class _ConfigPageState extends State<ConfigPage> {
       for (var i = 0; i < urlControllers.length; i++)
         urlControllers[i].text.trim(): airportNameControllers[i].text.trim(),
     };
+    final subscriptionResolveDomains = {
+      for (var i = 0; i < urlControllers.length; i++)
+        urlControllers[i].text.trim(): resolveDomains[i]
+    };
     nameController.dispose();
     for (final controller in [
       ...urlControllers,
@@ -407,19 +465,23 @@ class _ConfigPageState extends State<ConfigPage> {
 
     try {
       setState(() => _working = true);
-      if (!_ensureStopped()) return;
+      if (!_ensureEditable()) return;
       final previousIds = _profiles.map((profile) => profile.id).toSet();
       final before = existing == null
           ? null
           : await _service.getConfigContent(existing.id);
       final profiles = existing == null
           ? await _service.addSubscription(
-              name: name, url: url, subscriptionNames: subscriptionNames)
+              name: name,
+              url: url,
+              subscriptionNames: subscriptionNames,
+              subscriptionResolveDomains: subscriptionResolveDomains)
           : await _service.updateSubscription(
               id: existing.id,
               name: name,
               url: url,
               subscriptionNames: subscriptionNames,
+              subscriptionResolveDomains: subscriptionResolveDomains,
             );
       if (!mounted) return;
       setState(() => _profiles = profiles);
@@ -430,6 +492,7 @@ class _ConfigPageState extends State<ConfigPage> {
       final after = await _service.getConfigContent(updatedId);
       if (!mounted) return;
       setState(() => _working = false);
+      _savedNotice();
       await showSubscriptionChanges(context,
           message: existing == null ? '订阅已添加' : '订阅已修改并更新',
           changes: SubscriptionChanges.compare(before ?? 'proxies: []', after));
@@ -609,7 +672,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _renameProfile(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
 
     final controller = TextEditingController(text: profile.name);
     String? validationMessage;
@@ -672,8 +735,9 @@ class _ConfigPageState extends State<ConfigPage> {
 
     try {
       setState(() => _working = true);
-      if (!_ensureStopped()) return;
+      if (!_ensureEditable()) return;
       final profiles = await _service.renameConfig(id: profile.id, name: name);
+      _savedNotice();
       if (!mounted) return;
       setState(() => _profiles = profiles);
     } catch (error) {
@@ -686,7 +750,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
   Future<void> _manageConfiguration(
       ConfigProfile profile, ConfigManagementMode mode) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
@@ -703,9 +767,8 @@ class _ConfigPageState extends State<ConfigPage> {
                 content: content,
                 mode: mode,
                 onSave: (value) async {
-                  if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                  await _service.saveConfigContent(
-                      id: profile.id, content: value);
+                  if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                  await _saveContent(id: profile.id, content: value);
                 },
               ))));
       if (mounted) await _load();
@@ -722,15 +785,13 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _manageDns(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
         _readingConfig = true;
       });
-      final content = profile.active
-          ? await _service.getRuntimeConfigContent()
-          : await _service.getConfigContent(profile.id);
+      final content = await _service.getConfigContent(profile.id);
       if (!mounted) return;
       setState(() {
         _working = false;
@@ -740,9 +801,9 @@ class _ConfigPageState extends State<ConfigPage> {
         context: context,
         content: content,
         onSave: (text) async {
-          if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
+          if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
           final latest = await _service.getConfigContent(profile.id);
-          await _service.saveConfigContent(
+          await _saveContent(
               id: profile.id, content: updateConfigDns(latest, text));
         },
       );
@@ -760,7 +821,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _manageRuleProviders(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
@@ -776,9 +837,8 @@ class _ConfigPageState extends State<ConfigPage> {
           builder: (_) => _watchAccess((_) => RuleProviderPage(
                 content: content,
                 onSave: (value) async {
-                  if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                  await _service.saveConfigContent(
-                      id: profile.id, content: value);
+                  if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                  await _saveContent(id: profile.id, content: value);
                 },
               ))));
       if (mounted) await _load();
@@ -795,7 +855,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _editSubscriptionHost(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
@@ -813,8 +873,8 @@ class _ConfigPageState extends State<ConfigPage> {
         initialHost: readSubscriptionHost(content),
         onSave: (value) async {
           final latest = await _service.getConfigContent(profile.id);
-          if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-          await _service.saveConfigContent(
+          if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+          await _saveContent(
             id: profile.id,
             content: editSubscriptionHost(latest, value),
           );
@@ -834,7 +894,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _addNode(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
@@ -852,25 +912,22 @@ class _ConfigPageState extends State<ConfigPage> {
               onReorder: (order) async {
                 final latest = await _service.getConfigContent(profile.id);
                 final updated = reorderManualNodes(latest, order);
-                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                await _service.saveConfigContent(
-                    id: profile.id, content: updated);
+                if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                await _saveContent(id: profile.id, content: updated);
                 return savedManualNodeNames(updated);
               },
               onDelete: (name) async {
                 final latest = await _service.getConfigContent(profile.id);
                 final updated = deleteManualNode(latest, name);
-                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                await _service.saveConfigContent(
-                    id: profile.id, content: updated);
+                if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                await _saveContent(id: profile.id, content: updated);
                 return savedManualNodeNames(updated);
               },
               onSave: (link) async {
                 final content = await _service.getConfigContent(profile.id);
                 final updated = addNodeLink(content, link);
-                if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                await _service.saveConfigContent(
-                    id: profile.id, content: updated);
+                if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                await _saveContent(id: profile.id, content: updated);
                 return savedManualNodeNames(updated);
               },
             )),
@@ -889,7 +946,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _editProxyChain(ConfigProfile profile) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     try {
       setState(() {
         _working = true;
@@ -908,9 +965,8 @@ class _ConfigPageState extends State<ConfigPage> {
           builder: (_) => _watchAccess((_) => ProxyChainPage(
                 content: content,
                 onSave: (next) async {
-                  if (!_ensureStopped()) throw StateError('请先停止代理再修改配置');
-                  await _service.saveConfigContent(
-                      id: profile.id, content: next);
+                  if (!_ensureEditable()) throw StateError('配置正在加载，请稍后再试');
+                  await _saveContent(id: profile.id, content: next);
                 },
               ))));
       if (mounted) await _load();
@@ -940,7 +996,7 @@ class _ConfigPageState extends State<ConfigPage> {
       Future<List<ConfigProfile>> Function() operation,
       {String? message,
       String? updatedProfileId}) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     setState(() => _working = true);
     try {
       final before = updatedProfileId == null
@@ -952,6 +1008,7 @@ class _ConfigPageState extends State<ConfigPage> {
       if (updatedProfileId != null && before != null) {
         final after = await _service.getConfigContent(updatedProfileId);
         if (!mounted) return;
+        _savedNotice();
         await showSubscriptionChanges(context,
             message: message ?? '订阅更新成功',
             changes: SubscriptionChanges.compare(before, after));
@@ -966,7 +1023,7 @@ class _ConfigPageState extends State<ConfigPage> {
   }
 
   Future<void> _removeAirport(ConfigProfile profile, String link) async {
-    if (!_ensureStopped()) return;
+    if (!_ensureEditable()) return;
     final links = subscriptionLinks(profile.url ?? '');
     final name = profile.subscriptionNameFor(link, links.indexOf(link));
     final confirmed = await showDialog<bool>(
@@ -997,6 +1054,7 @@ class _ConfigPageState extends State<ConfigPage> {
     final nameController = TextEditingController(
         text: link == null ? '' : profile.subscriptionNameFor(link, index));
     final urlController = TextEditingController(text: link ?? '');
+    var resolveDomains = profile.subscriptionResolveDomains[link] ?? false;
     String? error;
     final route = DialogRoute<String>(
         context: context,
@@ -1025,6 +1083,18 @@ class _ConfigPageState extends State<ConfigPage> {
                                 child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                  SwitchListTile.adaptive(
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('节点域名转 IP',
+                                        style: TextStyle(fontSize: 14)),
+                                    subtitle: const Text('更新时解析，失败保留域名',
+                                        style: TextStyle(fontSize: 12)),
+                                    value: resolveDomains,
+                                    onChanged: _locked
+                                        ? null
+                                        : (value) => setDialogState(
+                                            () => resolveDomains = value),
+                                  ),
                                   TextField(
                                       style: Theme.of(dialogContext)
                                           .textTheme
@@ -1103,10 +1173,13 @@ class _ConfigPageState extends State<ConfigPage> {
     nameController.dispose();
     urlController.dispose();
     if (!mounted) return;
-    if (action == 'save' && _ensureStopped()) {
+    if (action == 'save' && _ensureEditable()) {
       await _applyAirportChange(
           () => _service.editSubscriptionAirport(profile.id,
-              oldUrl: link, name: name, url: url),
+              oldUrl: link,
+              name: name,
+              url: url,
+              resolveDomains: resolveDomains),
           updatedProfileId: profile.id,
           message: link == null ? '机场已添加' : '“$name”已更新');
     }
@@ -1312,7 +1385,7 @@ class _ConfigPageState extends State<ConfigPage> {
         return;
       case 'editContent':
         if (profile.isSubscription) return;
-        if (!_ensureStopped()) return;
+        if (!_ensureEditable()) return;
         await Navigator.of(context).push<void>(
           MaterialPageRoute(
               builder: (_) => _watchAccess((_) => ConfigEditorPage(

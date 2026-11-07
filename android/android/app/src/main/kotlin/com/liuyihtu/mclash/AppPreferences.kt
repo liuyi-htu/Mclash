@@ -28,6 +28,13 @@ internal class AppPreferences(context: Context) {
             ?: emptySet()
         set(value) = preferences.edit().putStringSet(KEY_SELECTED_PACKAGES, value).apply()
 
+    var coreConnectionSettings: CoreConnectionSettings
+        get() = CoreConnectionSettings.fromJson(preferences.getString("core_connection_settings", "{}") ?: "{}")
+        set(value) {
+            value.validate()
+            check(preferences.edit().putString("core_connection_settings", value.toJson()).commit()) { "无法保存内核连接设置" }
+        }
+
     var debugLoggingEnabled: Boolean
         get() = preferences.getBoolean(KEY_DEBUG_LOGGING_ENABLED, false)
         set(value) = preferences.edit().putBoolean(KEY_DEBUG_LOGGING_ENABLED, value).apply()

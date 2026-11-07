@@ -63,6 +63,16 @@ void main() {
       if (count == 0) {
         expect(find.text('添加机场订阅'), findsOneWidget);
         expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
+        final toggle = find.byType(SwitchListTile);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(
+            tester.getTopLeft(toggle).dy,
+            lessThan(tester
+                .getTopLeft(find.widgetWithText(TextField, '机场 1 名称'))
+                .dy));
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
         await tester.tapAt(const Offset(5, 5));
       } else {
         expect(find.text('订阅管理'), findsOneWidget);
@@ -71,6 +81,12 @@ void main() {
         await tester.tap(find.byTooltip('添加机场'));
         await tester.pumpAndSettle();
         expect(find.text('添加机场'), findsOneWidget);
+        final toggle = find.byType(SwitchListTile);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(
+            tester.getTopLeft(toggle).dy,
+            lessThan(
+                tester.getTopLeft(find.widgetWithText(TextField, '机场名称')).dy));
         await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();
         await tester.pageBack();

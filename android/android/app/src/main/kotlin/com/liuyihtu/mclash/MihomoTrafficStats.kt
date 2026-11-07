@@ -14,15 +14,16 @@ internal object MihomoTrafficStats {
         "txBytesPerSecond" to (sample["up"] ?: 0L).coerceAtLeast(0),
     )
 
-    fun read(): Map<String, Long> {
-        val sample = fetch("traffic", true)
-        val totals = if (sample.containsKey("upTotal") && sample.containsKey("downTotal")) emptyMap() else fetch("connections", false)
+    fun read(connection: CoreConnectionSettings = CoreConnectionSettings()): Map<String, Long> {
+        val sample = fetch("traffic", true, connection)
+        val totals = if (sample.containsKey("upTotal") && sample.containsKey("downTotal")) emptyMap() else fetch("connections", false, connection)
         return decode(sample, totals)
     }
 
-    private fun fetch(path: String, firstLine: Boolean): Map<String, Long> {
-        val connection = URL("http://127.0.0.1:${MihomoProcess.LOCAL_CONTROLLER_PORT}/$path").openConnection(Proxy.NO_PROXY) as HttpURLConnection
+    private fun fetch(path: String, firstLine: Boolean, settings: CoreConnectionSettings): Map<String, Long> {
+        val connection = URL("http://${if (settings.host.contains(':')) "[${settings.host}]" else settings.host}:${settings.port}/$path").openConnection(Proxy.NO_PROXY) as HttpURLConnection
         try {
+            if (settings.secret.isNotEmpty()) connection.setRequestProperty("Authorization", "Bearer ${settings.secret}")
             connection.connectTimeout = 1000
             connection.readTimeout = 2500
             val body = connection.inputStream.bufferedReader().use { if (firstLine) it.readLine() else it.readText() }

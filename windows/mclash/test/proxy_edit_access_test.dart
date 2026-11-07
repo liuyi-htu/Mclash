@@ -39,11 +39,7 @@ void main() {
                 find.ancestor(of: update, matching: find.byType(IconButton)))
             .onPressed,
         isNotNull);
-    for (final next in [
-      ProxyStatus.running,
-      ProxyStatus.starting,
-      ProxyStatus.failed
-    ]) {
+    for (final next in [ProxyStatus.starting, ProxyStatus.failed]) {
       status.value = next;
       await tester.pump();
       expect(find.text('订阅管理'), findsOneWidget);
@@ -59,7 +55,7 @@ void main() {
               .onPressed,
           isNull);
     }
-    status.value = ProxyStatus.stopped;
+    status.value = ProxyStatus.running;
     await tester.pump();
     await tester.tap(update);
     await tester.pumpAndSettle();
@@ -89,7 +85,7 @@ void main() {
             .widget<FilledButton>(find.widgetWithText(FilledButton, '保存'))
             .onPressed,
         isNotNull);
-    status.value = ProxyStatus.running;
+    status.value = ProxyStatus.starting;
     await tester.pump();
     expect(
         tester

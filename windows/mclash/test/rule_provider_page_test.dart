@@ -7,7 +7,8 @@ import 'package:mclash/rule_provider_management.dart';
 import 'package:mclash/app_appearance.dart';
 
 void main() {
-  testWidgets('open ruleset dialog locks when Windows proxy starts',
+  testWidgets(
+      'open ruleset dialog locks during Windows startup and unlocks while running',
       (tester) async {
     final status = ValueNotifier(ProxyStatus.stopped);
     addTearDown(status.dispose);
@@ -22,7 +23,7 @@ void main() {
                 }))));
     await tester.tap(find.byTooltip('新增规则集'));
     await tester.pumpAndSettle();
-    status.value = ProxyStatus.running;
+    status.value = ProxyStatus.starting;
     await tester.pumpAndSettle();
     for (final element in find.byType(TextField).evaluate()) {
       expect((element.widget as TextField).enabled, false);
@@ -33,7 +34,7 @@ void main() {
             .onPressed,
         isNull);
     expect(saves, 0);
-    status.value = ProxyStatus.stopped;
+    status.value = ProxyStatus.running;
     await tester.pumpAndSettle();
     expect(
         tester
