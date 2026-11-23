@@ -1,350 +1,43 @@
-# Mclash 源码说明
+# Mclash
 
-- `android/`：通过 Android `VpnService` 运行 mihomo 和 HevSocks5Tunnel，不依赖
-  Root 权限。
-- `root/`：独立的 Android Root 客户端（TUN / TProxy），使用 mihomo，支持本机应用与热点代理。
-- `windows/`：Flutter Windows 客户端，使用 mihomo，通过
-  独立的 Windows 系统服务管理代理内核、系统代理和更新。
+基于 Mihomo 和 Flutter 的代理客户端，支持 Android VPN、Android Root 和 Windows。
 
-## 目录结构
+## 支持平台
 
-```text
-Mclash/
-├── README.md
-├── .github/workflows/             # 仅手动触发的构建与检查
-├── assets/                        # 三端共用资源与默认配置
-├── THIRD_PARTY_NOTICES/            # 第三方许可说明
-├── tools/                         # 图标等共用资源工具
-├── android/
-│   ├── lib/                        # Android 客户端 Flutter 源码
-│   ├── android/                    # Android/Kotlin 源码
-│   ├── test/                       # Flutter 组件测试
-│   ├── build-mclash-android.sh     # Android 构建入口
-│   └── dist/                       # Android 最终产物
-├── root/
-│   ├── lib/                        # Root 客户端 Flutter 源码
-│   ├── android/                    # Root TUN / TProxy、Kotlin 源码
-│   ├── test/                       # Flutter 组件测试
-│   ├── scripts/                    # 运行资源准备与规则测试
-│   ├── build-root-android.sh       # Root 客户端独立构建入口
-│   └── dist/                       # Root 客户端最终产物
-└── windows/
-    ├── mclash/                     # Flutter Windows 客户端
-    ├── windows-service/            # Windows 系统服务
-    ├── installer/                  # Inno Setup 安装配置
-    └── scripts/build-windows.ps1   # Windows 构建入口
-```
-
-`build/`、`.dart_tool/`、`dist/` 等目录为本地构建缓存或产物，不纳入源码同步；
-本机 SDK 路径、签名配置和密钥同样保留在本地。`AGENTS.md` 与
-`LOCAL_CHANGES.md` 是本地协作和改动记录，不上传 GitHub。
-
-Android App 的 `lib/` 目录按职责划分：
-
-- `main.dart`：Flutter 应用入口和全局主题。
-- `pages/`：首页、配置、代理面板及应用选择页。
-- `core/`：数据模型。
-- `services/`：Flutter 与 Android 的 `mclash/native` 原生通道。
-- `shared/`：通用 UI 组件。
-
-普通 Android VPN 版在“设置 → 外观与应用”提供“隐藏多任务卡片”入口，点击后在弹窗内切换开关，默认关闭。
-开启后排除后台最近任务卡片，关闭恢复显示，重开应用沿用保存的选择，代理运行时也可切换。
-应用仍可从桌面图标或通知打开；此选项只控制任务卡片显示，不保证后台免杀。
-从应用内直接进入最近任务时，部分系统桌面仍会临时显示当前任务预览；先回桌面再打开最近任务可检查后台卡片是否已排除。
-Root 版已移除此选项，打开应用时恢复最近任务卡片显示；不再读取旧的隐藏设置。
-
-## 玻璃样式与导航
-
-三端沿用现有页面布局，浅色使用纯白页面和卡片，深色沿用原有背景；玻璃选中层为透明浅灰，文字和图标跟随主题颜色。代理组卡片仅在边角呈现淡主题色渐变，机场订阅卡片保留原有内容和操作。
-
-Android VPN 与 Root 在“设置 → 主题”提供“悬浮底栏”开关，默认关闭；关闭后恢复贴底底栏，重开应用保留选择。底栏支持点击、左右拖动和键盘选择，拖动时选中玻璃层与透明灰色阴影一起放大，松手后恢复并切页，取消手势恢复原选中项。宽屏继续使用左侧导航；Windows 保留左侧导航，不提供悬浮底栏开关。
-
-设置中的参数、日志、关于与内核更新等弹窗统一从底部弹出，长内容可滚动并避让键盘；保存或更新期间保留原有退出限制。
-
-## 模式特有模块
-
-### Android
-
-- `ProxyVpnService.kt`：Android VPN 生命周期和隧道管理。
-- `MihomoBridge.kt`：mihomo 内核进程、端口和资源准备。
-- `ConfigStore.kt`：配置文件及应用设置持久化。
-
-### Android Root
-
-- `ProxyTProxyService.kt`：Root 代理生命周期和热点接口监测。
-- `TunRules.kt`、`TProxyRules.kt`、`Ipv6TProxyRules.kt`：TUN / TProxy 本机接管及 IPv6 规则。
-- `HotspotRules.kt`、`RootHotspotMonitor.kt`：所选共享接口的规则与状态监测。
-- `RootRuntimeConfig.kt`：生成 Root 模式运行配置。
-- `MihomoBridge.kt`：Root shell 守护进程与 mihomo 内核管理。
-
-### Windows
-
-- `windows/mclash/`：桌面界面、配置管理和系统代理控制。
-- `windows/windows-service/`：负责 mihomo 生命周期、自启动和内核更新。
-- `windows/installer/`：生成 Windows 安装程序。
-
-## Android 编译环境
-
-| 组件 | 版本或要求 |
+| 版本 | 运行方式 |
 | --- | --- |
-| Flutter | CI 与本地均使用 3.44.9 |
-| Dart | Flutter 自带 3.12.2；项目要求 `>=3.6.0 <4.0.0` |
-| Java | Temurin 17.0.20+8 |
-| Android SDK Platform | Android 36，与 Flutter 的 `compileSdkVersion` 一致 |
-| Android SDK Build Tools | 34.0.0，与当前 Gradle 实际选用版本一致 |
-| Android NDK | 27.2.12479018 |
-| Gradle | 8.10.2 |
-| Android Gradle Plugin | 8.7.3 |
-| Kotlin Gradle Plugin | 2.1.0 |
-| 目标 CPU | ARM64（`arm64-v8a`） |
-| 最低 Android 版本 | Android 7.0（API 24） |
+| Android VPN | 无需 Root，通过系统 VPN 接管流量 |
+| Android Root | 支持 TUN / TProxy、分应用代理和热点共享 |
+| Windows | 支持系统代理和 TUN，通过独立服务管理内核 |
 
-Android SDK 需安装 Command-line Tools 和 Platform Tools。通过
-`ANDROID_HOME`、`ANDROID_SDK_ROOT` 和客户端的 `android/local.properties`
-配置 SDK；资源准备步骤还需 `sdkmanager`。当前工作区可在仓库根目录运行
-`source ../.toolchains/env.sh` 加载本地工具链和缓存路径；此文件位于仓库外。系统还需要：
+## 下载
 
-```text
-git curl unzip gzip sha256sum file python3 java flutter dart
-```
+前往 [Releases](https://github.com/liuyi-htu/Mclash/releases/latest) 下载对应平台的安装包，提供 SHA-256 校验文件。
 
-设备绑定流量监控构建另需 `openssl`。首次编译需联网下载 Android 组件、
-Gradle、Dart 依赖和运行资源。
+Android VPN 与 Root 版可以同时安装。项目不内置机场订阅，请自行导入 YAML 配置或添加订阅。
 
-## 开发检查
+## 功能
 
-进入 Android 客户端目录：
+- 机场订阅管理、手动节点导入与节点测速。
+- 代理组、规则、DNS、Host 和链式节点设置。
+- 运行中保存配置，下次启动代理时应用。
+- 浅色与深色主题、内核更新和本地离线网页面板。
 
-```bash
-cd android
-flutter pub get
-flutter analyze
-flutter test
-```
+## 构建
 
-## Android 构建
+构建环境、签名配置与本地构建命令见 [构建与开发](docs/BUILD.md)。
 
-准备好 Release 签名配置和下方运行资源后执行：
+GitHub Actions 仅手动触发：在 **Actions → Build Mclash clients → Run workflow** 中选择平台、版本和构建号。全部平台构建成功后发布 Release。
 
-```bash
-cd android
-./build-mclash-android.sh
-```
+## 源码
 
-默认构建 ARM64 Release APK，最终 APK 和 SHA-256 写入
-`android/dist/`，本地文件名为 `Mclash-android-arm64-v8a-release.apk`；
-GitHub 工作流会将其重命名为包含版本和构建号的文件。Android APK 和 Windows 安装包共用仓库中的
-`assets/default-config.yaml`，仅作为用户主动添加订阅时的配置模板。
-Android 和 Windows 首次安装均为空配置、空订阅，项目不内置任何公开机场订阅
-或预设机场订阅链接。用户可自行导入 YAML 配置或添加自己的订阅。
-
-Android 和 Windows 添加、修改或更新机场订阅时，先下载 Mihomo/Clash YAML
-订阅，提取其中的 `proxies` 节点并内置到默认配置生成的订阅配置中。默认 DNS、
-规则和代理分组保持一致，分组由软件按正则筛选后写入明确的 `proxies` 节点列表，不使用 `filter`；
-默认国内正则为 `上海`，国外正则为 `KR`，没有匹配节点时使用 `DIRECT`。
-订阅需要直接包含节点，仅包含远程 `proxy-providers` 的订阅会提示错误。
-下载或解析失败时保留原配置；已有订阅在下次更新后应用此行为。
-长按机场订阅可修改“国内正则表达式”和“国外正则表达式”，对应配置中的
-`🚀 国内`、`🌍 国外` 分组的节点列表。正则保存在配置注释中，更新时继续使用。
-机场订阅不提供手动编辑 YAML 配置的入口；本地 YAML 配置仍可编辑，运行配置只读。
-订阅菜单顶部显示名称、剩余流量和到期时间。添加或更新订阅时保存机场返回的流量信息，
-未提供或无效的流量信息显示“未提供”，到期时间未提供时显示“不限时”；
-已有订阅需手动更新一次以获取这些数据。
-“添加节点”仅列出手动节点，新添加的节点置顶，更新订阅后手动节点仍排在机场节点之前，可直接删除；删除时同步清理分组和代理链引用。
-
-支持逐条粘贴 `vmess://`、`vless://`、`trojan://`、`ss://`、`hysteria2://` / `hy2://`、
-`tuic://`（v5）、`anytls://`、`socks5://` / `socks://` 和 `http://` / `https://` 节点链接。
-VLESS 支持 TCP、HTTP、WS、H2、gRPC 和基础 XHTTP，支持 TLS、Reality 和 TCP 下的 Vision；
-Trojan 支持 TCP、WS、gRPC。SS 支持 SIP002、旧式 Base64、明文认证及 obfs / WebSocket v2ray-plugin。
-暂不支持的参数、传输或插件会明确报错；SSR、Hysteria 1、TUIC v4 及复杂 XHTTP 扩展仍需使用 YAML 配置导入。
-也可以在“添加节点”中直接粘贴 Mihomo YAML，或点击“选择文件”读取 UTF-8 YAML 文件（最多 8 MiB）。
-支持单行 `{name: 示例, type: direct}`、多行节点、节点列表、包含 `proxies:` 的完整配置和多文档 YAML；
-完整配置只提取节点，不替换当前规则和设置。YAML 导入不限制协议类型，保留所有节点字段，实际可用性取决于当前 Mihomo 内核。
-支持 `&锚点`、`*别名` 和 `<<` 合并；复制引用别名的节点时，需要同时复制对应锚点定义。
-每个节点须含非空 `name`、`type`；同批名称不能重复，与现有节点、分组或内置名称冲突时自动改名，
-同步更新同批节点之间的 `dialer-proxy`。YAML 原有 Host 字段不套用订阅的 Host 覆盖。
-“修改 Host”仅作用于 VMess 的 HTTP / WS 传输，不改服务器地址和 TLS SNI。
-更新订阅只替换机场节点，手动节点的字段保持原样；主动修改 Host、正则和代理链时仍包含手动节点。
-修改 Host、正则或代理链前需要先停止代理。修改保存到对应配置；如果该配置
-当前已启用，则同时更新运行配置。更新订阅会保留正则；正则留空时匹配全部节点。
-运行配置始终属于当前启用的配置，添加订阅后需要点击它切换；停止代理时
-“查看当前运行配置”显示当前配置的预览，运行期间显示内核正在使用的文件。
-链式节点可选择多个节点，按列表顺序依次连接，再连接所选作用节点；
-列表支持拖动排序并保留已选节点，支持新增和编辑多条独立链路。设置操作取消或保存后返回原订阅设置菜单。
-
-Windows 构建脚本会将共享模板复制到 Flutter 的 `assets/default-config.yaml`；
-单独运行 Flutter 命令前也需要先复制此文件。
-如需 Debug APK：
-
-```bash
-BUILD_MODE=debug ./build-mclash-android.sh
-```
-
-VPN 的 TCP/UDP 53 流量交给 Mihomo 内部 DNS，IPv4/IPv6 跟随 VPN 开关；
-VPN 参数不再提供 IPv4 DNS 输入框，程序保留 Android 所需的 DNS 接收地址。
-内部 DNS 出口从普通代理组和 GLOBAL 中排除。DoH、DoT 等非 53 端口流量按普通代理规则处理。
-HEV 的 2.17.1 源码及依赖保存在 `android/native/hev-socks5-tunnel`，DNS 接管和 UDP 会话修复直接维护在源码中。
-GitHub 手动构建直接编译此目录，无需下载 HEV 或应用补丁；本地准备 JNI 运行库时也应编译此目录。
-
-以下运行资源路径以 `android/` 客户端目录为起点：
-
-```text
-android/app/src/main/jniLibs/arm64-v8a/libmihomo.so
-android/app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so
-android/app/src/main/assets/geodata/geosite.dat
-android/app/src/main/assets/geodata/geoip.dat
-android/app/src/main/assets/geodata/country.mmdb
-```
-
-缺少运行资源时 APK 可能仍能完成普通 Flutter 编译，但对应的代理模式无法
-正常启动。
-
-## Android Root 客户端
-
-独立的 Android Root 客户端（TUN / TProxy）。基于仓库 Android 客户端的 Flutter 界面和配置管理开发，包名为 `com.liuyihtu.mclash.root`，可以与 `com.liuyihtu.mclash` 同时安装。
-
-### 接管方式
-
-TProxy：本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由回送到 lo → PREROUTING TPROXY → Mihomo。
-
-TUN：本机应用 → iptables OUTPUT 打标 → IPv4/IPv6 策略路由 → mclash0 → Mihomo TUN。
-
-- 支持本机 IPv4 TCP、UDP，以及可选的 IPv6 TCP、UDP，保留订阅、节点选择、规则/全局/直连及分应用代理。
-- 需要用户授予 `su` 权限；设备内核和 iptables 必须支持 MARK、owner、REDIRECT、REJECT 和策略路由；TProxy 模式还需要 TPROXY，TUN 模式需要 TUN 设备支持。
-- 不建立 VpnService，不加载 HEV。设置中的“网络共享”按钮位于“代理模式”下方，仅在代理运行时可用。首次使用默认关闭共享，之后保存开关状态并在启动代理时恢复；开启后列出 Android 报告为共享网络状态的热点、USB、蓝牙接口，由用户手动勾选，首次使用默认不勾选任何接口，之后保留用户的勾选记录，关闭共享、停止代理或重启应用不会清空，重新开启共享时沿用记录。只有勾选且仍在线的接口会接管，新增接口不会自动共享；取消勾选或关闭共享会撤销共享规则。热点客户端的 IPv4 TCP/UDP 按所选模式经 TUN 或 TProxy 接管，DNS 53 重定向到 Mihomo；在代理模式中开启 IPv6 后，同样接管热点 IPv6 TCP/UDP 和 DNS，关闭时仅阻断所选共享接口的 IPv6 TCP/UDP。热点流量不按本机应用列表过滤。
-- 本应用和 UID 0 的 Root 程序普通数据流量直连，避免透明代理响应和内核出站回环；UID 0 的 DNS 53 仍被接管，以处理系统解析器请求。共享 UID 的应用会共同生效，分应用选择针对当前 Android 用户已安装的应用。
-- “代理模式”中可切换 TUN / TProxy，默认 TProxy，停止代理后修改并保存。选择 TUN 后，下方可选择 mixed、system、gvisor、mips 协议栈，默认 mixed，单独保存选择。TUN 使用独立策略路由，沿用分应用、局域网绕过和手动共享接口设置。
-- 代理模式提供 IPv6 开关，默认关闭。开启后按所选模式使用 TUN 或 IPv6 透明监听、独立的 IPv6 策略路由和 DNS 接管（使用 Mihomo DNS 出口，无需 IPv6 NAT 表），按相同分应用设置接管 IPv6 TCP/UDP；未纳入代理范围的应用保留直连。关闭时阻断纳入代理范围应用的公网 IPv6 TCP/UDP，并阻断非 Root、非本应用的 IPv6 DNS 53。IPv6 链路本地、组播及热点 DHCPv6 保留系统处理；开启“绕过局域网”时也绕过 IPv6 ULA。开关需在停止代理后修改；设备不支持所选接管模式或监听／接口未就绪时，启动失败并回滚接管规则。
-- 本机 IPv4 TCP/UDP DNS 53 除本应用和带内核出站标记的流量外，统一重定向到 Mihomo（包括 UID 0）；系统 DNS 通常由 netd 发出，因此 DNS 不按应用列表过滤。不会改写 Android 的私人 DNS 设置；严格私人 DNS 开启时拒绝启动。应用内 DoH/DoT 作为普通 TCP/UDP 按代理范围处理，不保证获得域名规则信息。
-- 运行时生成独立配置，保留订阅的上游 DNS、节点和规则，固定代理与控制器的本机监听、DNS 监听、`redir-host`、IPv6 开关状态和出站标记，并移除导入配置的 TUN、自定义入站和外部控制监听。原配置文件不变。
-
-### 生命周期与恢复
-
-Root shell 守护进程通过 nohup/setsid 独立管理内核和防火墙，启动时检查并脱离应用的冻结分组；无法脱离时拒绝安装规则。Android 前台服务只承载启停操作，完成后退出且不自动重启。重新打开 App 会校验守护 PID、Root UID、启动时间、工作目录和命令行，再连接原内核。Root 管理器及厂商对强制停止、冻结的行为仍需逐机验证。
-
-Supervisor 正常运行时阻塞等待 Mihomo 退出，不定时检查进程或创建 Shell。未开启共享或未选择共享接口时没有热点监控进程；共享启用后使用网络事件和 60 秒兜底检查，仅实际变化的规则批次写入防火墙。界面流量只在首页可见时采样，App 后台停止状态与流量采样。
-
-端口准备完成后才安装规则。正常停止先撤销规则；清理失败按有限退避重试后保留存活内核，记录失败并等待用户再次停止。内核退出触发清理；如果 Supervisor 遭 SIGKILL、Root 授权被撤销或应用被卸载，无法保证立即自动清理，需恢复授权并重新打开 App 执行残留清理。详细审查、验证及设备命令见 [Root 低功耗说明](root/docs/ROOT_LOW_POWER.md)。
-
-只使用 `MCLASH_R_*` 专用链、路由表 `20230`、优先级 `9000` 和高位 mark 掩码。检测到路由表/优先级冲突时拒绝启动，不清空系统防火墙或替换其他应用路由。标记与 Android/其他 Root 网络软件的兼容性仍需逐机验证。
-
-设置 → TProxy 参数 → 清理残留规则，可在停止状态下清理上次留下的专用规则。启动前也会等待旧守护进程退出并清理残留。应用启动诊断、Mihomo 和守护进程日志可在调试日志中查看。
-
-端口：mixed `17890`、TProxy `17894` 和控制器 `9090` 监听 `127.0.0.1`；
-DNS 监听 `0.0.0.0:11053`，用于本机与热点 DNS 重定向。控制器端口与
-Android VPN 客户端相同；两个客户端同时接管网络的组合尚未验证。
-
-### 本地构建
-
-需要 Flutter、Java 17、Android SDK/NDK、Python 3、unzip 和 sha256sum。
-
-```bash
-cd root
-./build-root-android.sh
-```
-
-默认下载官方 arm64 Mihomo 及 geodata，校验 GitHub Release 资产的 SHA-256，构建已签名的 release APK，执行 Flutter 分析、Flutter 测试及 Kotlin 单元测试。可通过 `MIHOMO_VERSION=v…` 固定内核版本；已准备资源时使用 `PREPARE_RUNTIME=0`。生成的资源、SDK 配置和 APK 不纳入 Git。
-
-产物位于 `root/dist/`，名称包含版本和构建号，旁边有 `.sha256`。默认复用仓库上级目录 `signing/key.properties` 和其中指定的 keystore；也可通过 `root/android/key.properties` 或 `MCLASH_SIGNING_PROPERTIES` 指定。签名材料不复制、不修改、不纳入 Git。签名配置缺失时正式版构建会失败；`BUILD_MODE=debug` 可构建调试版本。
-
-`.github/workflows/build-all.yml` 同时支持 Android VPN、Root 和 Windows 客户端。
-Root 客户端版本参与发布后的自动同步。
-
-### 验证边界
-
-规则生命周期测试在模拟命令环境中覆盖正常停止、重复清理、中途失败及外部路由冲突，不会触碰开发机防火墙。还必须使用有 Root 的 Android 真机验证 TCP/UDP、DNS、分应用、热点接管及接口变化、网络切换、息屏、内核退出、强杀应用和卸载后的规则清理。未完成真机验证前，请将此版本视为开发版本。
-
-参考：[Mihomo 透明代理端口](https://wiki.metacubex.one/config/inbound/port/)、[Linux TProxy 文档](https://cdn.kernel.org/doc/html/latest/networking/tproxy.html)。
-
-## Windows 构建
-
-Windows 10 或更高版本需安装 Flutter 3.44.9（启用 Windows 桌面支持）、Go 1.24.0、
-Visual Studio C++ 构建工具和 Inno Setup 6。请在 PowerShell 中从仓库根目录执行：
-
-```powershell
-.\windows\scripts\build-windows.ps1
-```
-
-脚本会下载并校验 mihomo、GeoSite、GeoIP 和 Country 数据，运行
-Dart 与 Go 检查，并将安装程序写入 `windows\installer\Output\`。Windows
-客户端支持 mihomo/Clash YAML 配置，支持
-TUN 与系统代理模式。
-
-## GitHub 手动构建
-
-GitHub Actions 不会因提交或修改文件自动构建。需要构建时，在仓库的
-**Actions → Build Mclash clients → Run workflow** 中手动启动。参数如下：
-
-- `target`：`all` 构建 Android VPN、Root 和 Windows；`android` 构建两个
-  安卓版，`windows` 只构建 Windows。
-- `version`：版本号，格式为 `x.y.z`；输入框预填最近成功发布的版本号。
-- `build_number`：输入框预填最近成功发布的构建号。保持两个默认值不变运行时，
-  工作流会自动使用下一个构建号；切换为尚未发布的新版本时，
-  默认构建号从 `1` 开始。
-
-工作流结合 `android/pubspec.yaml` 和所选版本已发布 Release 的最高构建号
-确定递增基准。成功发布 Release 后会同步三个客户端的版本和工作流默认值。
-选择单个平台构建
-不会同步这些值，因此重复单端构建可能使用相同的构建号。同一分支的构建
-共用一个并发队列。
-
-Android 的 Release APK 使用以下仓库 Secrets 签名：
-
-```text
-ANDROID_KEYSTORE_BASE64
-ANDROID_KEYSTORE_PASSWORD
-ANDROID_KEY_ALIAS
-ANDROID_KEY_PASSWORD
-```
-
-`ANDROID_KEYSTORE_BASE64` 是 JKS/keystore 文件的 Base64 内容。构建完成后，
-APK、Windows 安装程序及 SHA-256 文件会保存在对应的 Actions Artifacts 中。
-选择 `target=all` 且三个客户端全部构建成功时，工作流还会创建
-`v版本-b构建号` 标签和 GitHub Release，并把全部产物发布到同一个 Release；
-选择单个平台构建时只保留 Artifact，不发布不完整的 Release。Release 发布
-成功后，工作流会用 `[skip ci]` 提交直接更新 `main` 中的版本和构建号默认值，
-不会创建额外分支，也不会触发新的构建。
-
-## 签名与产物
-
-Debug APK 使用 Android 调试证书。分发 Release APK 前必须完成正式签名。
-Android VPN 客户端的签名配置为 `android/android/key.properties`，其
-`storeFile` 可使用绝对路径，相对路径以该文件所在目录解析，必须指向存在的 JKS 或 keystore。
-缺少或不完整的签名配置会使 VPN 客户端生成未签名的 Release APK；Root
-客户端则会拒绝 Release 构建。Root 签名路径见上方本地构建说明。密钥和密码
-不应上传或提交到公开仓库。
-
-`android/build-mclash-android.sh` 在成功或失败退出时，都会删除客户端目录下
-的 `build/`、`.dart_tool/`、`.pub/`、`android/.gradle/` 和 `android/.kotlin/`，
-最终产物默认保留在 `android/dist/`。预先准备的 mihomo、HevSocks5Tunnel
-和 geodata 文件也会在退出时删除。Root 构建脚本保留构建缓存和运行资源。
-
-## 版本信息
-
-三个客户端的版本分别在 `android/pubspec.yaml`、`root/pubspec.yaml` 和
-`windows/mclash/pubspec.yaml` 中维护。Android VPN 客户端的包名为
-`com.liuyihtu.mclash`，最低支持 Android 7.0（API 24）；Root 客户端的包名为
-`com.liuyihtu.mclash.root`，支持独立本地构建及 GitHub 手动构建。
+- [android/](android/)：Android VPN 客户端。
+- [root/](root/)：Android Root 客户端。
+- [windows/](windows/)：Windows 客户端、系统服务与安装程序。
+- [assets/](assets/)：共用资源与默认配置。
 
 ## 开源许可
 
-Mclash 自身源代码依据 [GNU General Public License v3.0](LICENSE) 开源，
-完整条款以仓库中的 `LICENSE` 文件为准。
+Mclash 使用 [GPL-3.0](LICENSE) 许可证。
 
-构建和运行过程中使用的 mihomo、HevSocks5Tunnel、Flutter 及规则
-数据库等第三方项目，仍分别受其上游许可证和版权声明约束。使用或分发构建
-产物时，请同时遵守并保留相应第三方项目的许可证及声明：
-
-- [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo)
-- [heiher/hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel)
-- [Flutter](https://github.com/flutter/flutter)
-- [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat)
-
-## 本地 Mihomo 网页面板
-
-Android、Root 和 Windows 随应用内置 zashboard 网页资源。启动 Mihomo 后，
-在同一设备的浏览器访问 `http://127.0.0.1:9090/ui/`，面板默认连接本机内核。
-无需在线下载网页，也不增加应用界面入口；停止内核后面板服务随之停止。
-控制器只监听本机回环地址，其他设备不能通过局域网访问。
-
-内置资源固定到 Zephyruso/zashboard 的 `v3.29.1` 完整离线预构建版本，原始 MIT 许可证保存在面板资源目录的 `LICENSE` 文件中。
+第三方组件及资源遵循各自的许可证，详见 [第三方许可说明](THIRD_PARTY_NOTICES/)。
