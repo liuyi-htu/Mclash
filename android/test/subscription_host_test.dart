@@ -42,9 +42,18 @@ void main() {
     expect(readSubscriptionHost(editSubscriptionHost(edited, 'second.example')),
         'second.example');
   });
-  test('rejects empty hosts, URLs and header injection', () {
+  test('blank input clears Host headers and local override metadata', () {
+    final edited = editSubscriptionHost(
+        editSubscriptionHost(hostSource, 'test.example'), '   ');
+    expect(readSubscriptionHost(edited), '');
+    expect(edited, isNot(contains('# Mclash HTTP/WS Host:')));
+    final nodes = loadYaml(edited)['proxies'];
+    expect(nodes[0]['http-opts']['headers']['Host'], isNull);
+    expect(nodes[1]['ws-opts']['headers']['Host'], isNull);
+    expect(nodes[0]['http-opts']['headers']['X-Test'], ['keep']);
+  });
+  test('rejects URLs and header injection', () {
     for (final host in [
-      '',
       'http://example.com',
       'example.com/path',
       'example.com\r\nX-Test: bad'

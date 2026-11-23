@@ -63,21 +63,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('添加机场配置'));
       await tester.pumpAndSettle();
-      if (count == 0) {
-        expect(find.text('添加机场订阅'), findsOneWidget);
-        expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
-        await tester.tapAt(const Offset(5, 5));
-      } else {
-        expect(find.text('订阅管理'), findsOneWidget);
-        expect(find.text('机场${count == 2 ? 2 : 1}'), findsOneWidget);
-        expect(find.text('添加机场订阅'), findsNothing);
-        await tester.tap(find.byTooltip('添加机场'));
-        await tester.pumpAndSettle();
-        expect(find.text('添加机场'), findsOneWidget);
-        await tester.tapAt(const Offset(5, 5));
-        await tester.pumpAndSettle();
-        await tester.pageBack();
-      }
+      expect(find.text('添加机场'), findsOneWidget);
+      expect(find.text('订阅管理'), findsNothing);
+      expect(find.widgetWithText(TextField, '机场名称'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '订阅链接'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
+      await tester.tapAt(const Offset(5, 5));
       await tester.pumpAndSettle();
       // Simulate removing the remaining subscriptions, then refresh the list.
       profiles = [_profile(0, 'local')];
@@ -88,7 +79,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('添加机场配置'));
       await tester.pumpAndSettle();
-      expect(find.text('添加机场订阅'), findsOneWidget);
+      expect(find.text('添加机场'), findsOneWidget);
       expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.tapAt(const Offset(5, 5));

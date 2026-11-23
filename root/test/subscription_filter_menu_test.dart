@@ -66,13 +66,13 @@ rules: ["MATCH,DIRECT"]
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.textContaining('拖动调整机场顺序'), findsNothing);
     expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
-    await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '机场甲');
+    await tester.enterText(find.widgetWithText(TextField, '机场名称'), '机场甲');
     await tester.enterText(
-        find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/a');
+        find.widgetWithText(TextField, '订阅链接'), 'https://example.org/a');
     tester.view.viewInsets = const FakeViewPadding(bottom: 260);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('添加并下载'));
+    await tester.tap(find.text('添加'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
@@ -82,7 +82,7 @@ rules: ["MATCH,DIRECT"]
       'subscriptionNames': {'https://example.org/a': '机场甲'},
       'subscriptionResolveDomains': {'https://example.org/a': false},
     });
-    expect(find.text('订阅已添加'), findsOneWidget);
+    expect(find.text('机场已添加'), findsOneWidget);
     expect(find.text('新增（2）'), findsOneWidget);
     expect(find.text('上海'), findsOneWidget);
     expect(find.text('KR'), findsOneWidget);
@@ -167,7 +167,7 @@ rules: ["MATCH,DIRECT"]
     expect(tester.getTopLeft(find.text('修改配置名称')).dy,
         greaterThan(tester.getTopLeft(find.byType(Divider).first).dy));
     expect(tester.getTopLeft(find.text('修改配置名称')).dy,
-        lessThan(tester.getTopLeft(find.text('订阅管理')).dy));
+        lessThan(tester.getTopLeft(find.text('查看当前运行配置')).dy));
     await tester.tap(find.text('修改配置名称'));
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -384,7 +384,7 @@ rules: ["MATCH,DIRECT"]
     expect(saves, 1);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -428,7 +428,7 @@ rules: ["MATCH,DIRECT"]
         'new.example');
     expect(saves, 1);
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     await tester.ensureVisible(find.text('修改 Host'));
     await tester.tap(find.text('修改 Host'));
     await tester.pumpAndSettle();
@@ -437,7 +437,7 @@ rules: ["MATCH,DIRECT"]
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(saves, 1);
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -531,8 +531,8 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('上海手动'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
+    expect(find.text('订阅管理'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -588,7 +588,7 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('链式节点 1'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     await tester.ensureVisible(find.text('链式节点').last);
     await tester.tap(find.text('链式节点').last);
     await tester.pumpAndSettle();
@@ -611,11 +611,11 @@ rules: ["MATCH,DIRECT"]
     expect(find.text('链式节点 1'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     expect(saves, 1);
     expect(find.text('添加后置代理'), findsNothing);
     expect(saves, 1);
-    expect(find.text('订阅管理'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -679,13 +679,9 @@ rules: ["MATCH,DIRECT"]
     await tester
         .pumpWidget(const MaterialApp(home: ConfigPage(proxyRunning: false)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Airport').first);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('订阅管理'));
-    await tester.tap(find.text('订阅管理'));
-    await tester.pumpAndSettle();
+
     expect(find.byType(AlertDialog), findsNothing);
-    expect(find.byTooltip('添加机场'), findsOneWidget);
+    expect(find.text('订阅管理'), findsNothing);
   }
 
   Future<void> confirmAirportUpdate(WidgetTester tester) async {
