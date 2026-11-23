@@ -77,19 +77,17 @@ void main() {
     expect(find.widgetWithText(TextField, '配置名称'), findsNothing);
     final toggle = find.byType(SwitchListTile);
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
-    expect(
-        tester.getTopLeft(toggle).dy,
-        lessThan(
-            tester.getTopLeft(find.widgetWithText(TextField, '机场 1 名称')).dy));
+    expect(tester.getTopLeft(toggle).dy,
+        lessThan(tester.getTopLeft(find.widgetWithText(TextField, '机场名称')).dy));
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '机场 1 名称'), '新机场');
+    await tester.enterText(find.widgetWithText(TextField, '机场名称'), '新机场');
     await tester.enterText(
-        find.widgetWithText(TextField, '机场 1 订阅链接'), 'https://example.org/new');
-    await tester.tap(find.text('添加并下载'));
+        find.widgetWithText(TextField, '订阅链接'), 'https://example.org/new');
+    await tester.tap(find.text('添加'));
     await tester.pumpAndSettle();
     expect(service.addedName, '机场');
-    expect(find.text('订阅已添加'), findsOneWidget);
+    expect(find.text('机场已添加'), findsOneWidget);
     expect(find.text('新增（2）'), findsOneWidget);
     expect(find.text('Changed'), findsOneWidget);
     expect(find.text('Added'), findsOneWidget);
@@ -109,8 +107,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Airport').first);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('订阅管理'));
-    await tester.tap(find.text('订阅管理'));
+    await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('更新机场'));
     await tester.pumpAndSettle();

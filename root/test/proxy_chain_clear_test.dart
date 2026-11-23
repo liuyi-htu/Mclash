@@ -80,7 +80,7 @@ void main() {
       expect(find.text('链式节点 1'), findsNothing);
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('订阅管理'), findsOneWidget);
+      expect(find.text('订阅管理'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

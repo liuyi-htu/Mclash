@@ -138,290 +138,15 @@ class _ConfigPageState extends State<ConfigPage> {
     }
   }
 
-  Future<void> _showSubscriptionEditor({ConfigProfile? existing}) async {
+  Future<void> _showSubscriptionEditor() async {
     if (!_ensureEditable()) return;
-    if (existing == null) {
-      final subscriptions =
-          _profiles.where((profile) => profile.isSubscription).toList();
-      if (subscriptions.isNotEmpty) {
-        final profile = subscriptions.firstWhere((profile) => profile.active,
+    final subscriptions =
+        _profiles.where((profile) => profile.isSubscription).toList();
+    final profile = subscriptions.isEmpty
+        ? null
+        : subscriptions.firstWhere((profile) => profile.active,
             orElse: () => subscriptions.first);
-        await _showSubscriptionActions(profile);
-        return;
-      }
-    }
-
-    final nameController = TextEditingController(text: existing?.name ?? '机场');
-    final urlControllers = (existing?.url ?? '')
-        .split(RegExp(r'\r?\n'))
-        .where((line) => line.trim().isNotEmpty)
-        .map((line) => TextEditingController(text: line.trim()))
-        .toList();
-    if (urlControllers.isEmpty) urlControllers.add(TextEditingController());
-    final airportNameControllers = [
-      for (var i = 0; i < urlControllers.length; i++)
-        TextEditingController(
-            text:
-                existing?.subscriptionNameFor(urlControllers[i].text, i) ?? ''),
-    ];
-    final resolveDomains = [
-      for (final controller in urlControllers)
-        existing?.subscriptionResolveDomains[controller.text] ?? false,
-    ];
-    final removedControllers = <TextEditingController>[];
-    String enteredUrls() =>
-        urlControllers.map((controller) => controller.text).join('\n');
-    String? validationMessage;
-
-    final route = DialogRoute<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => DialogTypography(
-            child: AlertDialog(
-          title: Text(existing == null ? '添加机场订阅' : '修改机场订阅'),
-          content: SizedBox(
-            width: 480,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (existing != null) ...[
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: '配置名称',
-                        hintText: '例如：我的代理配置',
-                      ),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  SizedBox(
-                    width: double.maxFinite,
-                    height: urlControllers.length * 232.0,
-                    child: ReorderableListView(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      onReorderStart: (_) =>
-                          FocusManager.instance.primaryFocus?.unfocus(),
-                      // ignore: deprecated_member_use
-                      onReorder: (oldIndex, newIndex) => setDialogState(() {
-                        if (newIndex > oldIndex) newIndex--;
-                        urlControllers.insert(
-                            newIndex, urlControllers.removeAt(oldIndex));
-                        resolveDomains.insert(
-                            newIndex, resolveDomains.removeAt(oldIndex));
-                        airportNameControllers.insert(newIndex,
-                            airportNameControllers.removeAt(oldIndex));
-                      }),
-                      children: [
-                        for (var i = 0; i < urlControllers.length; i++)
-                          Padding(
-                            key: ObjectKey(urlControllers[i]),
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Row(
-                              children: [
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 12),
-                                    child: Column(children: [
-                                      Text('${i + 1}'),
-                                      const Icon(Icons.drag_handle)
-                                    ]),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SwitchListTile.adaptive(
-                                        contentPadding: EdgeInsets.zero,
-                                        title: const Text('节点域名转 IP',
-                                            style: TextStyle(fontSize: 14)),
-                                        subtitle: const Text('更新时解析，失败保留域名',
-                                            style: TextStyle(fontSize: 12)),
-                                        value: resolveDomains[i],
-                                        onChanged: (value) => setDialogState(
-                                            () => resolveDomains[i] = value),
-                                      ),
-                                      TextField(
-                                        controller: airportNameControllers[i],
-                                        decoration: InputDecoration(
-                                            labelText: '机场 ${i + 1} 名称',
-                                            hintText: '例如：我的机场'),
-                                        textInputAction: TextInputAction.next,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      TextField(
-                                        controller: urlControllers[i],
-                                        decoration: InputDecoration(
-                                            labelText: '机场 ${i + 1} 订阅链接',
-                                            hintText: 'https://...'),
-                                        keyboardType: TextInputType.url,
-                                        autocorrect: false,
-                                        enableSuggestions: false,
-                                        smartDashesType:
-                                            SmartDashesType.disabled,
-                                        smartQuotesType:
-                                            SmartQuotesType.disabled,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (urlControllers.length > 1)
-                                  IconButton(
-                                    tooltip: '删除机场 ${i + 1}',
-                                    icon:
-                                        const Icon(Icons.remove_circle_outline),
-                                    onPressed: () => setDialogState(() {
-                                      resolveDomains.removeAt(i);
-                                      removedControllers
-                                          .add(urlControllers.removeAt(i));
-                                      removedControllers.add(
-                                          airportNameControllers.removeAt(i));
-                                    }),
-                                  ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: AddActionButton(
-                      tooltip: '添加订阅链接',
-                      onPressed: () => setDialogState(() {
-                        urlControllers.add(TextEditingController());
-                        resolveDomains.add(false);
-                        airportNameControllers.add(TextEditingController());
-                      }),
-                    ),
-                  ),
-                  if (validationMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        validationMessage!,
-                        style: TextStyle(
-                          color: Theme.of(dialogContext).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (nameController.text.isEmpty) {
-                  setDialogState(() => validationMessage = '请输入名称');
-                  return;
-                }
-                for (var i = 0; i < urlControllers.length; i++) {
-                  if (airportNameControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的名称');
-                    return;
-                  }
-                  if (urlControllers[i].text.trim().isEmpty) {
-                    setDialogState(
-                        () => validationMessage = '请输入机场 ${i + 1} 的订阅链接');
-                    return;
-                  }
-                }
-                try {
-                  final links = subscriptionLinks(enteredUrls());
-                  if (links.length != urlControllers.length) {
-                    setDialogState(() => validationMessage = '订阅链接重复，请删除重复项');
-                    return;
-                  }
-                } on FormatException catch (error) {
-                  setDialogState(() => validationMessage = error.message);
-                  return;
-                }
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: Text(existing == null ? '添加并下载' : '保存并更新'),
-            ),
-          ],
-        )),
-      ),
-    );
-    final save =
-        await Navigator.of(context, rootNavigator: true).push(route) ?? false;
-    await route.completed;
-
-    final name = nameController.text;
-    final url =
-        save ? normalizeSubscriptionLinks(enteredUrls()) : enteredUrls();
-    final subscriptionNames = {
-      for (var i = 0; i < urlControllers.length; i++)
-        urlControllers[i].text.trim(): airportNameControllers[i].text.trim(),
-    };
-    final subscriptionResolveDomains = {
-      for (var i = 0; i < urlControllers.length; i++)
-        urlControllers[i].text.trim(): resolveDomains[i],
-    };
-    nameController.dispose();
-    for (final controller in [
-      ...urlControllers,
-      ...airportNameControllers,
-      ...removedControllers
-    ]) {
-      controller.dispose();
-    }
-    if (!save) return;
-
-    try {
-      setState(() => _working = true);
-      final previousIds = _profiles.map((profile) => profile.id).toSet();
-      final before = existing == null
-          ? null
-          : await _service.getConfigContent(existing.id);
-      final profiles = existing == null
-          ? await _service.addSubscription(
-              name: name,
-              url: url,
-              subscriptionNames: subscriptionNames,
-              subscriptionResolveDomains: subscriptionResolveDomains)
-          : await _service.updateSubscription(
-              id: existing.id,
-              name: name,
-              url: url,
-              subscriptionNames: subscriptionNames,
-              subscriptionResolveDomains: subscriptionResolveDomains,
-            );
-      if (!mounted) return;
-      setState(() => _profiles = profiles);
-      final updatedId = existing?.id ??
-          profiles
-              .firstWhere((profile) => !previousIds.contains(profile.id))
-              .id;
-      final after = await _service.getConfigContent(updatedId);
-      if (!mounted) return;
-      setState(() => _working = false);
-      _savedNotice();
-      await showSubscriptionChanges(context,
-          message: existing == null ? '订阅已添加' : '订阅已修改并更新',
-          changes: SubscriptionChanges.compare(before ?? 'proxies: []', after));
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error);
-    } finally {
-      if (mounted) setState(() => _working = false);
-    }
+    await _showAirportDialog(profile);
   }
 
   Future<void> _select(ConfigProfile profile) async {
@@ -900,18 +625,32 @@ class _ConfigPageState extends State<ConfigPage> {
       final before = updatedProfileId == null
           ? null
           : await _service.getConfigContent(updatedProfileId);
+      final previousIds = _profiles.map((profile) => profile.id).toSet();
       final profiles = await operation();
       if (!mounted) return;
       setState(() => _profiles = profiles);
       if (updatedProfileId != null && before != null) {
         final after = await _service.getConfigContent(updatedProfileId);
         if (!mounted) return;
+        setState(() => _working = false);
         _savedNotice();
         await showSubscriptionChanges(context,
             message: message ?? '订阅更新成功',
             changes: SubscriptionChanges.compare(before, after));
+      } else if (message == '机场已添加' &&
+          profiles.any((profile) => !previousIds.contains(profile.id))) {
+        final added =
+            profiles.firstWhere((profile) => !previousIds.contains(profile.id));
+        final content = await _service.getConfigContent(added.id);
+        if (!mounted) return;
+        setState(() => _working = false);
+        _savedNotice();
+        await showSubscriptionChanges(context,
+            message: '机场已添加',
+            changes: SubscriptionChanges.compare('proxies: []\n', content));
       } else {
         if (widget.proxyRunning) {
+          setState(() => _working = false);
           _savedNotice();
         } else if (message != null) {
           await _confirmConfigApplied(message);
@@ -951,13 +690,16 @@ class _ConfigPageState extends State<ConfigPage> {
         : _service.editSubscriptionAirport(profile.id, oldUrl: link));
   }
 
-  Future<void> _showAirportDialog(ConfigProfile profile, {String? link}) async {
-    final links = subscriptionLinks(profile.url ?? '');
+  Future<void> _showAirportDialog(ConfigProfile? profile,
+      {String? link}) async {
+    if (!_ensureEditable()) return;
+    final links =
+        profile == null ? <String>[] : subscriptionLinks(profile.url ?? '');
     final index = link == null ? links.length : links.indexOf(link);
     final nameController = TextEditingController(
-        text: link == null ? '' : profile.subscriptionNameFor(link, index));
+        text: link == null ? '' : profile!.subscriptionNameFor(link, index));
     final urlController = TextEditingController(text: link ?? '');
-    var resolveDomains = profile.subscriptionResolveDomains[link] ?? false;
+    var resolveDomains = profile?.subscriptionResolveDomains[link] ?? false;
     String? error;
     final route = DialogRoute<String>(
         context: context,
@@ -1074,20 +816,20 @@ class _ConfigPageState extends State<ConfigPage> {
     if (!mounted) return;
     if (action == 'save') {
       await _applyAirportChange(
-          () => _service.editSubscriptionAirport(profile.id,
-              oldUrl: link,
-              name: name,
-              url: url,
-              resolveDomains: resolveDomains),
-          updatedProfileId: profile.id,
+          () => profile == null
+              ? _service.addSubscription(
+                  name: '机场',
+                  url: url,
+                  subscriptionNames: {url: name},
+                  subscriptionResolveDomains: {url: resolveDomains})
+              : _service.editSubscriptionAirport(profile.id,
+                  oldUrl: link,
+                  name: name,
+                  url: url,
+                  resolveDomains: resolveDomains),
+          updatedProfileId: profile?.id,
           message: link == null ? '机场已添加' : '“$name”已更新');
     }
-  }
-
-  Future<void> _showSubscriptionActions(ConfigProfile profile) async {
-    await Navigator.of(context).push<void>(MaterialPageRoute(
-      builder: (_) => _subscriptionPanel(profile),
-    ));
   }
 
   SubscriptionManagementPage _subscriptionPanel(ConfigProfile profile,
@@ -1196,12 +938,6 @@ class _ConfigPageState extends State<ConfigPage> {
                   enabled: !_loading,
                   onTap: () => Navigator.of(sheetContext).pop('rename'),
                 ),
-                if (profile.isSubscription)
-                  ManagementMenuTile(
-                    icon: Icons.cloud_outlined,
-                    title: '订阅管理',
-                    onTap: () => Navigator.of(sheetContext).pop('subscription'),
-                  ),
                 if (!profile.isSubscription)
                   ManagementMenuTile(
                     icon: Icons.code_outlined,
@@ -1231,10 +967,6 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (!mounted) return;
     switch (action) {
-      case 'subscription':
-        await _showSubscriptionActions(profile);
-        await _returnToActions(profile);
-        return;
       case 'ruleProviders':
         await _manageRuleProviders(profile);
         await _returnToActions(profile);
