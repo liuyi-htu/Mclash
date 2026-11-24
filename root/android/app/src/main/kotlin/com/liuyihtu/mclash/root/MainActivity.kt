@@ -163,6 +163,9 @@ class MainActivity : FlutterActivity() {
                 "getRootSettings" -> result.success(rootSettings())
                 "saveRootSettings" -> saveRootSettings(call, result)
                 "getInstalledApps" -> result.success(getInstalledApps())
+                "getAppIcon" -> runAsync(result, "mclash-app-icon") {
+                    AppIconLoader.load(this, call.argument<String>("packageName") ?: error("缺少应用包名"))
+                }
                 "getMode" -> result.success(preferences.appProxyMode)
                 "getSelectedPackages" -> result.success(preferences.selectedPackages.toList())
                 "saveAppFilter" -> saveAppFilter(call, result)

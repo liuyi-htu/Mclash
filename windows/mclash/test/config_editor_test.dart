@@ -41,7 +41,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final content =
-        'mode: rule\n# ${'long ' * 100}needle\nrules:\n  - MATCH,DIRECT\nproxies:\n  - name: Test node\n    type: http\n    server: example.org\n    port: 80\n';
+        'mode: rule\n# ${'long ' * 100}needle\nrules:\n  - MATCH,DIRECT\nproxies:\n  - name: Test node\n    type: http\n    server: example.org\n    port: 80\n    http-opts:\n      path: ["/"]\n';
     var copied = '';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -62,6 +62,8 @@ void main() {
     final editor = find
         .byWidgetPredicate((widget) => widget is TextField && widget.readOnly);
     final controller = tester.widget<TextField>(editor).controller!;
+    expect(controller.text, contains('"path": ["/"]'));
+    expect(controller.text, isNot(contains(r'\/')));
     final numbers = find.byKey(const ValueKey('config-line-numbers'));
     expect(numbers, findsNothing);
     expect(find.text('保存'), findsNothing);

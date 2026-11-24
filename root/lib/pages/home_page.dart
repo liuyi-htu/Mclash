@@ -37,7 +37,7 @@ class _HomePageState extends State<HomePage>
   final _proxyStatus = ValueNotifier<ProxyStatus>(ProxyStatus.starting);
   ProxyStatus get _status => _proxyStatus.value;
   set _status(ProxyStatus status) => _proxyStatus.value = status;
-  String _rootProxyMode = 'tproxy';
+  String _rootProxyMode = 'tun';
   bool _toggling = false;
   int _transitionGeneration = 0;
   bool _refreshInProgress = false;

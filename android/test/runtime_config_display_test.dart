@@ -32,6 +32,24 @@ rules: [MATCH,Group]
 """;
 
 void main() {
+  test('display compaction does not add slash escapes to HTTP path arrays', () {
+    const text =
+        'proxies:\n  - name: A\n    type: vmess\n    http-opts:\n      path: ["/", "/abc"]\n';
+    final formatted = formatRuntimeConfigForDisplay(text);
+    expect(formatted, contains('"path": ["/", "/abc"]'));
+    expect(formatted, isNot(contains(r'\/')));
+    expect(loadYaml(formatted), loadYaml(text));
+    expect(formatRuntimeConfigForDisplay(formatted), formatted);
+  });
+  test('display compaction also keeps paths clean when aliases are expanded',
+      () {
+    const text =
+        'transport: &transport {path: ["/"]}\nproxies: [{name: A, type: vmess, http-opts: *transport}]\n';
+    final formatted = formatRuntimeConfigForDisplay(text);
+    expect(formatted, contains('"path": ["/"]'));
+    expect(formatted, isNot(contains(r'\/')));
+    expect(loadYaml(formatted), loadYaml(text));
+  });
   test('each proxy occupies one line, preserving options and other sections',
       () {
     final formatted = formatRuntimeConfigForDisplay(source);

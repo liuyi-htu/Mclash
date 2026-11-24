@@ -1,3 +1,4 @@
+import 'yaml_paths.dart';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
 import 'subscription_filter.dart';
@@ -146,10 +147,10 @@ String buildSubscriptionConfig(String template, String subscription,
       editor.toString(), readSubscriptionFilters(configContent));
   final host = readSubscriptionHost(previousConfig ?? template);
   final result = host.isEmpty ? filtered : editSubscriptionHost(filtered, host);
-  return restoreManualNodes(
+  return normalizeYamlPaths(restoreManualNodes(
       applySavedProxyChains(
           writeManualNodeNames(
               result, readManualNodeNames(previousConfig ?? '')),
           previousConfig ?? ''),
-      previousConfig);
+      previousConfig));
 }

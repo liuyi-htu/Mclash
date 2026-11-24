@@ -1,3 +1,4 @@
+import 'yaml_paths.dart';
 import 'dart:collection';
 import 'package:yaml/yaml.dart';
 import 'package:yaml_edit/yaml_edit.dart';
@@ -17,11 +18,11 @@ String formatRuntimeConfigForDisplay(String content) {
             scalarStyle: ScalarStyle.DOUBLE_QUOTED),
     ];
     if (!_hasAliases(document)) {
-      return (YamlEditor(content)
+      return normalizeYamlPaths((YamlEditor(content)
             ..update([
               'proxies'
             ], wrapAsYamlNode(compact, collectionStyle: CollectionStyle.BLOCK)))
-          .toString();
+          .toString());
     } else {
       // Expand aliases together so references outside proxies remain valid.
       final expanded = _plain(document) as Map;
@@ -31,7 +32,8 @@ String formatRuntimeConfigForDisplay(String content) {
           .takeWhile((line) => line.trim().isEmpty || line.startsWith('#'))
           .join('\n');
       final editor = YamlEditor('{}')..update([], expanded);
-      return '${header.isEmpty ? '' : '$header\n'}$editor\n';
+      return normalizeYamlPaths(
+          '${header.isEmpty ? '' : '$header\n'}$editor\n');
     }
   } on FormatException {
     // A broken configuration must remain readable for troubleshooting.

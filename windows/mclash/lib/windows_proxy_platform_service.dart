@@ -1,3 +1,4 @@
+import 'yaml_paths.dart';
 import 'core_connection_settings.dart';
 import 'node_domain_resolver.dart';
 import 'dart:async';
@@ -903,7 +904,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           },
         );
       }
-      return '${editor.toString().trimRight()}\n';
+      return normalizeYamlPaths('${editor.toString().trimRight()}\n');
     } on AliasException {
       return _runtimeConfigWithExpandedAliases(
         document,
@@ -973,7 +974,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         .where((line) => line.startsWith('# Mclash '))
         .map((line) => '${line.trimRight()}\n')
         .join();
-    return '$metadata${editor.toString().trimRight()}\n';
+    return normalizeYamlPaths('$metadata${editor.toString().trimRight()}\n');
   }
 
   Future<String> _runtimeConfigForCurrentMode(String content) async {
@@ -1127,6 +1128,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   Future<void> _replaceConfig(File target, String content) async {
+    content = normalizeYamlPaths(content);
     final temporary = File('${target.path}.tmp');
     try {
       await temporary.writeAsString(content, flush: true);

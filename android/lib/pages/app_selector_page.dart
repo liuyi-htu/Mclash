@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../shared/management_style.dart';
 import 'package:flutter/material.dart';
 
@@ -17,6 +18,7 @@ class AppSelectorPage extends StatefulWidget {
 class _AppSelectorPageState extends State<AppSelectorPage> {
   final _service = NativeProxyService.instance;
   final _searchController = TextEditingController();
+  final _icons = <String, Future<Uint8List?>>{};
 
   List<InstalledApp> _apps = const [];
   Set<String> _selected = <String>{};
@@ -285,12 +287,31 @@ class _AppSelectorPageState extends State<AppSelectorPage> {
                                   : colors.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Icon(
-                              Icons.android_rounded,
-                              size: 20,
-                              color: selected
-                                  ? colors.onPrimaryContainer
-                                  : colors.onSurfaceVariant,
+                            child: FutureBuilder<Uint8List?>(
+                              future: _icons.putIfAbsent(app.packageName,
+                                  () => _service.getAppIcon(app.packageName)),
+                              builder: (context, snapshot) {
+                                final fallback = Icon(Icons.android_rounded,
+                                    size: 20,
+                                    color: selected
+                                        ? colors.onPrimaryContainer
+                                        : colors.onSurfaceVariant);
+                                final bytes = snapshot.data;
+                                if (bytes == null || bytes.isEmpty) {
+                                  return fallback;
+                                }
+                                return ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.memory(bytes,
+                                        width: 36,
+                                        height: 36,
+                                        fit: BoxFit.contain,
+                                        cacheWidth: 128,
+                                        cacheHeight: 128,
+                                        gaplessPlayback: true,
+                                        errorBuilder: (_, __, ___) =>
+                                            fallback));
+                              },
                             ),
                           ),
                           onChanged: _saving

@@ -15,7 +15,7 @@ internal object RootRuntimeConfig {
     const val BYPASS_MARK = 0x40000000
     val TUN_STACKS = setOf("mixed", "system", "gvisor", "mips")
 
-    fun build(source: String, debug: Boolean, mode: String? = null, ipv6: Boolean = false, tun: Boolean = false, tunStack: String = "mixed", connection: CoreConnectionSettings = CoreConnectionSettings()): String {
+    fun build(source: String, debug: Boolean, mode: String? = null, ipv6: Boolean = false, tun: Boolean = false, tunStack: String = "mips", connection: CoreConnectionSettings = CoreConnectionSettings()): String {
         connection.validate()
         require(tunStack in TUN_STACKS) { "TUN 协议栈无效" }
         val loader = Yaml(SafeConstructor(LoaderOptions().apply {

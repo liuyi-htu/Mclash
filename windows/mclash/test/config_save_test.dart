@@ -142,6 +142,22 @@ void main() {
     });
   }
 
+  test('saving removes optional path slash escapes in source and runtime',
+      () async {
+    await File('${dir.path}\\settings.json')
+        .writeAsString('{"activeProfile":"test.yaml"}');
+    final service = WindowsProxyPlatformService(
+        dataDir: dir.path,
+        serviceProcessRunner: (_, __) async =>
+            ProcessResult(1, 0, '{"state":"stopped"}', ''));
+    const content =
+        r'proxies: [{name: A, type: vmess, http-opts: {path: ["\/"]}}]';
+    await service.saveConfigContent(id: 'test.yaml', content: content);
+    final saved = await profile.readAsString();
+    expect(saved, contains('path: ["/"]'));
+    expect(loadYaml(saved), loadYaml(content));
+    expect(await service.getRuntimeConfigContent(), isNot(contains(r'\/')));
+  });
   test('controller override preserves nested secret and YAML comments',
       () async {
     final config = File('${dir.path}\\config.yaml');
