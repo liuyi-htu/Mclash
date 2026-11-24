@@ -75,14 +75,14 @@ internal class AppPreferences(context: Context) {
         }
 
     var rootTunStack: String
-        get() = preferences.getString("root_tun_stack", "mixed")?.takeIf { it in RootRuntimeConfig.TUN_STACKS } ?: "mixed"
+        get() = preferences.getString("root_tun_stack", "mips")?.takeIf { it in RootRuntimeConfig.TUN_STACKS } ?: "mips"
         set(value) {
             require(value in RootRuntimeConfig.TUN_STACKS) { "TUN 协议栈无效" }
             check(preferences.edit().putString("root_tun_stack", value).commit()) { "无法保存 TUN 协议栈" }
         }
 
     var rootProxyMode: String
-        get() = preferences.getString("root_proxy_mode", "tproxy")?.takeIf { it in setOf("tun", "tproxy") } ?: "tproxy"
+        get() = preferences.getString("root_proxy_mode", "tun")?.takeIf { it in setOf("tun", "tproxy") } ?: "tun"
         set(value) {
             require(value in setOf("tun", "tproxy")) { "代理模式无效" }
             check(preferences.edit().putString("root_proxy_mode", value).commit()) { "无法保存代理模式" }

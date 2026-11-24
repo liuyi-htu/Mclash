@@ -8,6 +8,23 @@ import java.io.File
 class SubscriptionConfigTest {
     private val template = File("../../../assets/default-config.yaml").readText()
 
+    @Test fun generatedAirportPathsHaveNoOptionalSlashEscapes() {
+        val source = """
+            proxies:
+              - {name: Node, type: vmess, server: example.org, port: 80, uuid: test, network: http, http-opts: {path: ["/"]}}
+              - {name: WS, type: vmess, server: example.org, port: 80, uuid: test, network: ws, ws-opts: {path: "/ws"}}
+        """.trimIndent()
+        var previous: String? = null
+        repeat(3) {
+            val generated = SubscriptionConfig.build(template, source, previous)
+            assertFalse(generated.contains("\\/"))
+            val nodes = Yaml().load<Map<String, Any>>(generated)["proxies"] as List<*>
+            assertEquals(listOf("/"), ((nodes[0] as Map<*, *>)["http-opts"] as Map<*, *>)["path"])
+            assertEquals("/ws", ((nodes[1] as Map<*, *>)["ws-opts"] as Map<*, *>)["path"])
+            previous = generated
+        }
+    }
+
     @Test fun extractsOriginalNodesBeforeLocalOverrides() {
         val source = """
             proxies:

@@ -13,6 +13,8 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       switch (call.method) {
+        case 'getAppIcon':
+          return null;
         case 'getInstalledApps':
           return [
             {

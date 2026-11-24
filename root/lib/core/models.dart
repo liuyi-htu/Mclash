@@ -130,17 +130,17 @@ class RootProxySettings {
   const RootProxySettings(
       {required this.bypassLan,
       this.ipv6 = false,
-      this.proxyMode = 'tproxy',
-      this.tunStack = 'mixed'});
+      this.proxyMode = 'tun',
+      this.tunStack = 'mips'});
 
   factory RootProxySettings.fromMap(Map<Object?, Object?> map) {
     return RootProxySettings(
       bypassLan: map['bypassLan'] as bool? ?? true,
       ipv6: map['ipv6'] as bool? ?? false,
-      proxyMode: map['proxyMode'] == 'tun' ? 'tun' : 'tproxy',
+      proxyMode: map['proxyMode'] == 'tproxy' ? 'tproxy' : 'tun',
       tunStack: tunStacks.contains(map['tunStack'])
           ? map['tunStack'] as String
-          : 'mixed',
+          : 'mips',
     );
   }
 

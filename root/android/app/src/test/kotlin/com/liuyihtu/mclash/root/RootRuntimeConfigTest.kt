@@ -5,6 +5,11 @@ import org.junit.Test
 import org.yaml.snakeyaml.Yaml
 
 class RootRuntimeConfigTest {
+    @Test fun defaultTunStackIsMips() {
+        val runtime = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build("proxies: []\n", false, tun = true))
+        assertEquals("mips", (runtime["tun"] as Map<*, *>)["stack"])
+    }
+
     @Test fun ipv6EnablesDualStackDnsAndLoopbackOnlyTransparentListener() {
         val config = Yaml().load<Map<String, Any>>(RootRuntimeConfig.build("rules: ['MATCH,DIRECT']", false, ipv6 = true))
         assertEquals(true, config["ipv6"])

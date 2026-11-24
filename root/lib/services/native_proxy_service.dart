@@ -1,3 +1,4 @@
+import '../shared/yaml_paths.dart';
 import 'package:flutter/services.dart';
 import '../core/core_connection_settings.dart';
 
@@ -180,7 +181,7 @@ class NativeProxyService {
   }) async {
     final result = await _channel.invokeListMethod<Object?>(
           'saveConfigContent',
-          <String, Object>{'id': id, 'content': content},
+          <String, Object>{'id': id, 'content': normalizeYamlPaths(content)},
         ) ??
         const [];
     return result
@@ -288,6 +289,17 @@ class NativeProxyService {
       if (tunStack != null) 'tunStack': tunStack,
     });
     return RootProxySettings.fromMap(result ?? const <Object?, Object?>{});
+  }
+
+  Future<Uint8List?> getAppIcon(String packageName) async {
+    try {
+      return await _channel
+          .invokeMethod<Uint8List>('getAppIcon', {'packageName': packageName});
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
   }
 
   Future<List<InstalledApp>> getInstalledApps() async {
