@@ -48,7 +48,7 @@ class _PulseBottomBarState extends State<PulseBottomBar> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final floating =
-        AppearanceScope.maybeOf(context)?.floatingBottomBar ?? false;
+        AppearanceScope.maybeOf(context)?.floatingBottomBar ?? true;
     final height = math.max(floating ? 54.0 : 44.0,
         26 + MediaQuery.textScalerOf(context).scale(11) * 1.45);
     final duration =

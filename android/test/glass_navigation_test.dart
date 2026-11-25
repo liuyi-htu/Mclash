@@ -30,13 +30,14 @@ void main() {
         AppearanceController(fileProvider: () async => fail ? null : file);
     addTearDown(controller.dispose);
     await controller.load();
-    expect(controller.floatingBottomBar, isFalse);
+    expect(controller.floatingBottomBar, isTrue);
     expect(controller.color, const Color(0xFF26745A));
-    await controller.setFloatingBottomBar(true);
+    await controller.setFloatingBottomBar(false);
     final reopened = AppearanceController(fileProvider: () async => file);
     addTearDown(reopened.dispose);
     await reopened.load();
-    expect(reopened.floatingBottomBar, isTrue);
+    expect(reopened.floatingBottomBar, isFalse);
+    await controller.setFloatingBottomBar(true);
     fail = true;
     await expectLater(controller.setFloatingBottomBar(false),
         throwsA(isA<FileSystemException>()));
@@ -301,18 +302,18 @@ void main() {
     await tester.ensureVisible(toggle);
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(controller.floatingBottomBar, isFalse);
+    expect(controller.floatingBottomBar, isTrue);
     expect(find.text('主题设置保存失败，请重试'), findsOneWidget);
     controller.fail = false;
     await tester.tap(toggle);
     await tester.pumpAndSettle();
-    expect(controller.floatingBottomBar, isTrue);
+    expect(controller.floatingBottomBar, isFalse);
     final reset = find.text('恢复默认');
     await tester.ensureVisible(reset);
     await tester.tap(reset);
     await tester.pumpAndSettle();
-    expect(controller.floatingBottomBar, isFalse);
-    expect(controller.savedFloating, isFalse);
+    expect(controller.floatingBottomBar, isTrue);
+    expect(controller.savedFloating, isTrue);
   });
 
   testWidgets('glass surfaces preserve theme colors and bound backdrop blur',
