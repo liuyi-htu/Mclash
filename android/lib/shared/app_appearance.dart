@@ -137,7 +137,7 @@ class AppearanceController extends ChangeNotifier {
   double fontScale = 1;
   double get effectiveFontScale => fontScale * fontSizeBaseline;
   ThemeMode themeMode = ThemeMode.system;
-  bool floatingBottomBar = false;
+  bool floatingBottomBar = true;
   bool savingFloatingBottomBar = false;
   bool _disposed = false;
   @override
@@ -171,7 +171,7 @@ class AppearanceController extends ChangeNotifier {
       final savedMode = data['themeMode'];
       floatingBottomBar = data['floatingBottomBar'] is bool
           ? data['floatingBottomBar'] as bool
-          : false;
+          : true;
       themeMode = ThemeMode.values.firstWhere(
         (mode) => mode.name == savedMode,
         orElse: () => ThemeMode.system,
@@ -428,11 +428,11 @@ class _AppearanceSheet extends StatelessWidget {
                         color: AppearanceController.defaultColor,
                         fontScale: 1,
                         themeMode: ThemeMode.system);
-                    if (!controller.floatingBottomBar) {
+                    if (controller.floatingBottomBar) {
                       await save();
                     } else {
                       try {
-                        await controller.setFloatingBottomBar(false);
+                        await controller.setFloatingBottomBar(true);
                       } catch (_) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
